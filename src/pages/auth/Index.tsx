@@ -1,5 +1,5 @@
 import logo from "../../assets/ptclogo.png";
-import Login from "./Login";
+import LoginAuth from "./Login";
 import { useState } from "react";
 
 export default function Home() {
@@ -8,7 +8,7 @@ export default function Home() {
   return (
     <div className="home">
       {showLogin ? (
-        <Login />
+        <LoginAuth />
       ) : (
         <div className="home-card">
           <div className="logo">

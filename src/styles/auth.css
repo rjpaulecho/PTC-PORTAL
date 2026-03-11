@@ -1,0 +1,116 @@
+.auth-card {
+  width: 900px;
+  height: 480px;
+  background: white;
+  border-radius: 22px;
+  display: flex;
+  overflow: hidden;
+  margin: 80px auto;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+} /* LEFT PANEL */
+.auth-left {
+  flex: 1;
+  background:
+    linear-gradient(135deg, rgba(108, 92, 231, 0.9), rgba(0, 173, 23, 0.9)),
+    url("../assets/ptcbackground.jpg") no-repeat center/cover;
+  color: white;
+  padding: 50px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.auth-left h2 {
+  font-size: 2.3rem;
+  margin-bottom: 10px;
+}
+.auth-left p {
+  font-size: 1.1rem;
+  opacity: 0.9;
+} /* RIGHT PANEL */
+.auth-right {
+  flex: 1;
+  padding: 50px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.auth-right h2 {
+  font-size: 1.8rem;
+  color: var(--primary-green);
+  margin-bottom: 25px;
+} /* INPUTS */
+.auth-right input,
+.auth-right select {
+  padding: 14px 16px;
+  margin-bottom: 15px;
+  border-radius: 14px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  transition: 0.3s;
+}
+.auth-right input:focus,
+.auth-right select:focus {
+  outline: none;
+  border-color: var(--primary-green);
+  box-shadow: 0 0 0 3px rgba(0, 173, 23, 0.15);
+} /* BUTTON */
+.auth-right button {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--primary-green);
+  background: linear-gradient(
+    135deg,
+    var(--primary-green),
+    var(--accent-purple)
+  );
+  color: rgb(0, 94, 16);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.35s;
+}
+.auth-right button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
+} /* LINKS */
+.auth-links {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.auth-links a {
+  text-decoration: none;
+  color: var(--accent-purple);
+  font-weight: 500;
+}
+.auth-links a:hover {
+  text-decoration: underline;
+} /* ERROR & SUCCESS */
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 15px;
+}
+.success-message {
+  background: #d4edda;
+  color: #155724;
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 15px;
+} /* RESPONSIVE AUTH */
+@media (max-width: 900px) {
+  .auth-card {
+    flex-direction: column;
+    width: 95%;
+    height: auto;
+  }
+  .auth-left {
+    height: 220px;
+    text-align: center;
+    align-items: center;
+  }
+}

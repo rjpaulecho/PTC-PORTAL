@@ -9,7 +9,7 @@ body {
   justify-content: center;
   align-items: center;
 
-  background: url("./assets/bgptcfront.png") center/cover no-repeat;
+  background: url("../assets/ptcbackground.jpg") center/cover no-repeat;
 }
 
 .home-card {
