@@ -1,6 +1,6 @@
 .auth-card {
   width: 900px;
-  height: 480px;
+  height: 580px;
   background: white;
   border-radius: 22px;
   display: flex;
@@ -9,6 +9,7 @@
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
 } /* LEFT PANEL */
 .auth-left {
+  flex-basis: 35%;
   flex: 1;
   background:
     linear-gradient(135deg, rgba(108, 92, 231, 0.9), rgba(0, 173, 23, 0.9)),
@@ -102,7 +103,7 @@
     var(--primary-green)
   );
   color: rgb(0, 0, 0);
-  border: none;
+  border: 1.5px solid #00000052;
   border-radius: 10px;
   cursor: pointer;
   font-size: 1rem;
