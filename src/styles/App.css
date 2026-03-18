@@ -1,6 +1,6 @@
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .home {
@@ -48,8 +48,8 @@ body {
 /* SIDEBAR */
 .sidebar {
   width: 240px;
-  background: #1a1a2e;
-  color: white;
+  background: #cdffd6;
+  color: rgb(0, 0, 0);
   display: flex;
   flex-direction: column;
   padding: 20px 0;
@@ -57,33 +57,40 @@ body {
 }
 
 .sidebar-logo {
-  padding: 0 20px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+}
+
+.sidebar-logo img {
+  width: 50px;
+  height: auto;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
   margin-top: 20px;
-  gap: 4px;
+  gap: 5px;
 }
 
 .sidebar-link {
   padding: 12px 20px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(51, 214, 30, 0.7);
   text-decoration: none;
   font-size: 0.95rem;
   transition: 0.2s;
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(10, 238, 10);
   color: white;
 }
 
 .sidebar-link.active {
   background: var(--primary-green);
-  color: white;
+  color: rgb(33, 233, 83);
   font-weight: 600;
 }
 
@@ -101,7 +108,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: white;
+  background: rgb(49, 85, 58);
   border-bottom: 1px solid #eee;
   flex-shrink: 0;
 }

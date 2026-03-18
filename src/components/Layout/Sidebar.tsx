@@ -1,18 +1,19 @@
 import { NavLink } from "react-router-dom";
 import { authService } from "../../services/auth.service";
+import logo from "../../assets/ptclogo.png";
 
 const studentLinks = [
-  { label: "🏠 Dashboard", path: "/student/dashboard" },
-  { label: "📋 My Admission", path: "/student/admission" },
-  { label: "📢 Announcements", path: "/student/announcements" },
-  { label: "📁 My Records", path: "/student/records" },
+  { label: " Dashboard", path: "/student/dashboard" },
+  { label: " My Admission", path: "/student/admission" },
+  { label: " Announcements", path: "/student/announcements" },
+  { label: " My Records", path: "/student/records" },
 ];
 
 const adminLinks = [
-  { label: "🏠 Dashboard", path: "/admin/dashboard" },
-  { label: "📋 Admissions", path: "/admin/admissions" },
-  { label: "👥 Students", path: "/admin/students" },
-  { label: "📢 Announcements", path: "/admin/announcements" },
+  { label: " Dashboard", path: "/admin/dashboard" },
+  { label: " Admissions", path: "/admin/admissions" },
+  { label: " Students", path: "/admin/students" },
+  { label: " Announcements", path: "/admin/announcements" },
 ];
 
 export default function Sidebars() {
@@ -22,6 +23,7 @@ export default function Sidebars() {
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
+        <img src={logo} alt="PTC Logo" />
         <h3>PTC</h3>
       </div>
       <nav className="sidebar-nav">

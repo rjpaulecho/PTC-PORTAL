@@ -16,7 +16,7 @@ export default function Header() {
         <h2 className="header-title">PTC Portal</h2>
       </div>
       <div className="header-right">
-        <span className="header-user">👤 {user?.username}</span>
+        <span className="header-user"> {user?.username}</span>
         <span className="header-role">{user?.role}</span>
         <button className="header-logout" onClick={handleLogout}>
           Logout
