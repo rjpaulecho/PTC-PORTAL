@@ -2,7 +2,7 @@ import DashboardLayout from "../../components/Layout/DashboardLayout";
 import { authService } from "../../services/auth.service";
 import { useNavigate } from "react-router-dom";
 
-export default function ManageAdmissions() {
+export default function ManageAnnouncements() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
@@ -13,8 +13,8 @@ export default function ManageAdmissions() {
 
   return (
     <DashboardLayout>
-      <div className="admin-Admissions">
-        <p>This is your admin dashboard.</p>
+      <div className="admin-Announcement">
+        <p> Announcement for student</p>
       </div>
     </DashboardLayout>
   );

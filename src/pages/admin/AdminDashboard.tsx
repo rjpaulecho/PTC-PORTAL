@@ -13,8 +13,10 @@ export default function AdminDashboard() {
 
   return (
     <DashboardLayout>
-      <h1>Welcome, {user.username} 👨‍💼</h1>
-      <p>This is your admin dashboard.</p>
+      <div className="admin-dashboard">
+        <h1>Welcome, {user.username} </h1>
+        <p>This is your admin dashboard.</p>
+      </div>
     </DashboardLayout>
   );
 }

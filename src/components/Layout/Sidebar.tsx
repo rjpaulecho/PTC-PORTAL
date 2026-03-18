@@ -7,11 +7,13 @@ const studentLinks = [
   { label: " My Admission", path: "/student/admission" },
   { label: " Announcements", path: "/student/announcements" },
   { label: " My Records", path: "/student/records" },
+  { label: " Schedule", path: "/student/schedule" },
+  { label: " Profile", path: "/student/profile" },
 ];
 
 const adminLinks = [
   { label: " Dashboard", path: "/admin/dashboard" },
-  { label: " Admissions", path: "/admin/admissions" },
+  { label: " Admissions", path: "/admin/Admissions" },
   { label: " Students", path: "/admin/students" },
   { label: " Announcements", path: "/admin/announcements" },
 ];

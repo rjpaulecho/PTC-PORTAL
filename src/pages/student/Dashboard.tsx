@@ -13,8 +13,10 @@ export default function StudentDashboard() {
 
   return (
     <DashboardLayout>
-      <h1>Welcome, {user.username} 🎓</h1>
-      <p>This is your student dashboard.</p>
+      <div className="student-dashboard">
+        <h1>Welcome, {user.username} </h1>
+        <p>This is your student dashboard.</p>
+      </div>
     </DashboardLayout>
   );
 }
