@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import styles from "../../styles/auth.module.css";
 
 type Props = {
   onBackToLogin: () => void; // ✅ renamed from setShowRegister
@@ -39,28 +40,28 @@ export default function RegistrationForm({ onBackToLogin }: Props) {
   }
 
   return (
-    <>
-      <div className="auth-left">
+    <div className={styles.authcard}>
+      <div className={styles.authleft}>
         <h2>Create Account</h2>
         <p>Join us today and start your journey with us!</p>
       </div>
 
-      <div className="auth-right">
+      <div className={styles.authright}>
         <h2>Register</h2>
 
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
+          <div className={styles.inputgroup}>
             <label>Email</label>
             <input
               type="email"
               name="email"
-              placeholder="you@email.com"
+              placeholder="r@ptc.edu.ph"
               value={formData.email}
               onChange={handleChange}
             />
           </div>
 
-          <div className="input-group">
+          <div className={styles.inputgroup}>
             <label>Username</label>
             <input
               type="text"
@@ -71,7 +72,7 @@ export default function RegistrationForm({ onBackToLogin }: Props) {
             />
           </div>
 
-          <div className="input-group">
+          <div className={styles.inputgroup}>
             <label>Password</label>
             <input
               type="password"
@@ -82,7 +83,7 @@ export default function RegistrationForm({ onBackToLogin }: Props) {
             />
           </div>
 
-          <div className="input-group">
+          <div className={styles.inputgroup}>
             <label>Verify Password</label>
             <input
               type="password"
@@ -98,7 +99,7 @@ export default function RegistrationForm({ onBackToLogin }: Props) {
           <button type="submit">Register</button>
         </form>
 
-        <div className="auth-links">
+        <div className={styles.authlinks}>
           <a
             href="#"
             onClick={(e) => {
@@ -110,6 +111,6 @@ export default function RegistrationForm({ onBackToLogin }: Props) {
           </a>
         </div>
       </div>
-    </>
+    </div>
   );
 }

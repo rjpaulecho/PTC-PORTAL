@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "../../services/auth.service";
+import styles from "../../styles/auth.module.css";
 
 export default function LoginForm() {
-  const [name, setName] = useState("");
+  const [email, setName] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const user = authService.login(name, password); // ✅ using service now
+    const user = authService.login(email, password); // ✅ using service now
 
     if (!user) {
       alert("Invalid credentials");
@@ -27,27 +28,27 @@ export default function LoginForm() {
   }
 
   return (
-    <>
-      <div className="auth-left">
+    <div className={styles.authcard}>
+      <div className={styles.authleft}>
         <h2>Welcome Back</h2>
         <p>Login to access your portal dashboard.</p>
       </div>
 
-      <div className="auth-right">
+      <div className={styles.authright}>
         <h2>Login</h2>
 
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label>Username</label>
+          <div className={styles.inputgroup}>
+            <label>Email</label>
             <input
-              type="text"
-              placeholder="Enter username"
-              value={name}
+              type="email"
+              placeholder="r@ptc.edu.ph"
+              value={email}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
 
-          <div className="input-group">
+          <div className={styles.inputgroup}>
             <label>Password</label>
             <input
               type="password"
@@ -60,11 +61,11 @@ export default function LoginForm() {
           <button type="submit">Login</button>
         </form>
 
-        <div className="auth-links">
+        <div className={styles.authlinks}>
           <a href="/register">Create an account</a>
           <a href="#">Forgot password?</a>
         </div>
       </div>
-    </>
+    </div>
   );
 }

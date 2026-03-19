@@ -1,4 +1,4 @@
-.auth-card {
+.authcard {
   width: 900px;
   height: 580px;
   background: white;
@@ -8,7 +8,7 @@
   margin: 80px auto;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
 } /* LEFT PANEL */
-.auth-left {
+.authleft {
   flex-basis: 35%;
   flex: 1;
   background:
@@ -20,16 +20,16 @@
   flex-direction: column;
   justify-content: center;
 }
-.auth-left h2 {
+.authleft h2 {
   font-size: 2.3rem;
   margin-bottom: 10px;
 }
-.auth-left p {
+.authleft p {
   font-size: 1.1rem;
   opacity: 0.9;
 } /* RIGHT PANEL */
 /* RIGHT PANEL - main container */
-.auth-right {
+.authright {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -39,7 +39,7 @@
 }
 
 /* Title */
-.auth-right h2 {
+.authright h2 {
   font-size: 1.8rem;
   font-weight: 700;
   color: #1a1a1a;
@@ -47,7 +47,7 @@
 }
 
 /* Subtitle under the title */
-.auth-right p {
+.authright p {
   font-size: 0.95rem;
   color: #888;
   margin-bottom: 28px;
@@ -55,7 +55,7 @@
 }
 
 /* FORM - stacks everything vertically */
-.auth-right form {
+.authright form {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -63,20 +63,20 @@
 }
 
 /* Input label style (small text above input) */
-.auth-right .input-group {
+.authright .inputgroup {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.auth-right .input-group label {
+.authright .inputgroup label {
   font-size: 0.75rem;
   color: #aaa;
   padding-left: 4px;
 }
 
 /* INPUTS */
-.auth-right input {
+.authright input {
   padding: 14px 16px;
   border-radius: 10px;
   border: 1.5px solid #ddd;
@@ -86,14 +86,14 @@
   box-sizing: border-box;
 }
 
-.auth-right input:focus {
+.authright input:focus {
   outline: none;
   border-color: var(--primary-green);
   box-shadow: 0 0 0 3px rgba(0, 173, 23, 0.15);
 }
 
 /* BUTTON */
-.auth-right button[type="submit"] {
+.authright button[type="submit"] {
   width: 100%;
   padding: 14px;
   margin-top: 6px;
@@ -112,25 +112,25 @@
   transition: opacity 0.2s;
 }
 
-.auth-right button[type="submit"]:hover {
+.authright button[type="submit"]:hover {
   opacity: 0.9;
   text-decoration: none;
 }
 
 /* LINKS ROW - "Create an account" and "Forgot password?" */
-.auth-links {
+.authlinks {
   margin-top: 20px;
   display: flex;
   justify-content: space-between;
   font-size: 0.875rem;
 }
 
-.auth-links a {
+.authlinks a {
   text-decoration: none;
   color: var(--accent-purple);
   font-weight: 500;
 }
 
-.auth-links a:hover {
+.authlinks a:hover {
   text-decoration: underline;
 }
