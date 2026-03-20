@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { authService } from "../../services/auth.service";
-import logo from "../../assets/ptclogo.png";
+import logo from "../../assets/ptclogo.jpg";
 
 const studentLinks = [
   { label: " Dashboard", path: "/student/dashboard" },
