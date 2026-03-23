@@ -4,24 +4,28 @@ import { authService } from "../../services/auth.service";
 import styles from "../../styles/auth.module.css";
 
 export default function LoginForm() {
-  const [email, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const user = authService.login(email, password); // ✅ using service now
+    const user = authService.login(email, password);
 
     if (!user) {
       alert("Invalid credentials");
       return;
     }
 
-    authService.saveSession(user); // ✅ save session
+    authService.saveSession(user);
 
+    // Route each role to their own dashboard
     if (user.role === "admin") {
       navigate("/admin/dashboard");
+    } else if (user.role === "faculty") {
+      // ← added
+      navigate("/faculty/dashboard");
     } else {
       navigate("/student/dashboard");
     }
@@ -44,7 +48,7 @@ export default function LoginForm() {
               type="email"
               placeholder="r@ptc.edu.ph"
               value={email}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 

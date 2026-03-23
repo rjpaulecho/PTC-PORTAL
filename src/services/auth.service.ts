@@ -6,9 +6,14 @@ const USERS = [
     password: "5678",
     role: "student" as const,
   },
+  {
+    username: "faculty@ptc.edu.ph",
+    password: "9012",
+    role: "faculty" as const,
+  }, // ← added
 ];
 
-export type UserRole = "admin" | "student";
+export type UserRole = "admin" | "student" | "faculty"; // ← added faculty
 
 export type User = {
   username: string;
@@ -16,7 +21,6 @@ export type User = {
 };
 
 export const authService = {
-  // Login function - returns user or null
   login(username: string, password: string): User | null {
     const user = USERS.find(
       (u) => u.username === username && u.password === password,
@@ -25,18 +29,15 @@ export const authService = {
     return { username: user.username, role: user.role };
   },
 
-  // Save logged in user to sessionStorage
   saveSession(user: User): void {
     sessionStorage.setItem("user", JSON.stringify(user));
   },
 
-  // Get current logged in user
   getSession(): User | null {
     const data = sessionStorage.getItem("user");
     return data ? JSON.parse(data) : null;
   },
 
-  // Logout - clear session
   logout(): void {
     sessionStorage.removeItem("user");
   },
