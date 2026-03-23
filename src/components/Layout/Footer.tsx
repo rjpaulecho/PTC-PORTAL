@@ -1,44 +1,49 @@
 export default function Footer() {
   return (
-    <footer className="bg-dark text-light mt-auto">
-      <div className="container-fluid py-4">
-        <div className="row text-center text-md-start">
-          
+    <footer className="footer">
+      <div className="container py-5">
+        <div className="row gy-4">
           {/* Portal Info */}
-          <div className="col-12 col-md-4 mb-3">
-            <h6 className="fw-bold">PTC Portal</h6>
-            <p className="small mb-0">
-              Online Admission, Scheduling, and Student Information System.
+          <div className="col-md-4">
+            <h5 className="footer-title">PTC Portal</h5>
+            <p className="footer-text">
+              Online Admission, Scheduling, and Student Information System for
+              Pateros Technological College.
             </p>
           </div>
 
           {/* Quick Links */}
-          <div className="col-12 col-md-4 mb-3">
-            <h6 className="fw-bold">Quick Links</h6>
-            <ul className="list-unstyled small">
-              <li>Student Dashboard</li>
-              <li>Admin Panel</li>
-              <li>Contact Support</li>
+          <div className="col-md-4">
+            <h6 className="footer-subtitle">Quick Links</h6>
+            <ul className="footer-links">
+              <li>
+                <a href="/dashboard">Student Dashboard</a>
+              </li>
+              <li>
+                <a href="/admin">Admin Panel</a>
+              </li>
+              <li>
+                <a href="/support">Contact Support</a>
+              </li>
             </ul>
           </div>
 
           {/* Contact */}
-          <div className="col-12 col-md-4 mb-3">
-            <h6 className="fw-bold">Contact</h6>
-            <p className="small mb-0">
-              Email: support@ptcportal.com <br />
-              Phone: +63 912 345 6789
+          <div className="col-md-4">
+            <h6 className="footer-subtitle">Contact</h6>
+            <p className="footer-text">
+              support@ptcportal.com <br />
+              +63 912 345 6789
             </p>
           </div>
-
         </div>
 
-        <hr className="border-secondary" />
+        <hr />
 
-        <div className="text-center small">
+        <div className="text-center footer-bottom">
           © {new Date().getFullYear()} PTC Portal. All rights reserved.
         </div>
       </div>
     </footer>
-  )
+  );
 }
