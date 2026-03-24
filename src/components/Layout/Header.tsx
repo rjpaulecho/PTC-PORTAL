@@ -11,17 +11,21 @@ export default function Header() {
   }
 
   return (
-    <div className="header">
+    <header className="app-header">
       <div className="header-left">
-        <h2 className="header-title">PTC Portal</h2>
+        <h2 className="logo">PTC Portal</h2>
       </div>
+
       <div className="header-right">
-        <span className="header-user"> {user?.username}</span>
-        <span className="header-role">{user?.role}</span>
-        <button className="header-logout" onClick={handleLogout}>
+        <div className="user-info">
+          <span className="user-name">{user?.username}</span>
+          <span className="user-role">{user?.role}</span>
+        </div>
+
+        <button className="logout-btn" onClick={handleLogout}>
           Logout
         </button>
       </div>
-    </div>
+    </header>
   );
 }

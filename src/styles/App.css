@@ -101,41 +101,60 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-
-/* HEADER */
-.header {
+.app-header {
+  height: 70px;
+  background: #cdd6c9;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
-  background: rgb(168, 168, 168);
-  border-bottom: 1px solid #eee;
-  flex-shrink: 0;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.header-role {
-  background: var(--primary-green);
-  color: white;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  text-transform: capitalize;
+.user-info {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
 }
 
-.header-logout {
-  background: #e74c3c;
-  color: white;
+.user-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.logout-btn {
+  background: #ef4444;
   border: none;
-  padding: 8px 16px;
+  color: white;
+  padding: 6px 14px;
   border-radius: 8px;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 0.85rem;
+  transition: 0.2s;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
 }
 
 /* CONTENT */
@@ -145,14 +164,48 @@ body {
   overflow-y: auto;
   background: #f5f6fa;
 }
-
-/* FOOTER */
 .footer {
-  padding: 12px 24px;
-  background: white;
-  border-top: 1px solid #eee;
-  font-size: 0.8rem;
-  color: #aaa;
-  text-align: center;
-  flex-shrink: 0;
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+.footer-title {
+  font-weight: 700;
+  color: #fff;
+}
+
+.footer-subtitle {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #e2e8f0;
+}
+
+.footer-text {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+}
+
+.footer-links li {
+  margin-bottom: 6px;
+}
+
+.footer-links a {
+  text-decoration: none;
+  color: #cbd5e1;
+  transition: 0.2s;
+}
+
+.footer-links a:hover {
+  color: #38bdf8;
+  padding-left: 4px;
+}
+
+.footer-bottom {
+  font-size: 13px;
+  opacity: 0.7;
 }
