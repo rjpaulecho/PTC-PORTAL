@@ -1,24 +1,8 @@
 export default function Footer() {
   return (
-
-    <footer className="bg-dark text-light mt-auto">
-      <div className="container-fluid py-1">
-        <div className="row text-center">
-          <div className="col-12 col-md-4">
-            <small>PTC Portal - Online Admission & Student System</small>
-          </div>
-          <div className="col-12 col-md-4">
-            <small>Quick Links: Dashboard | Admin | Support</small>
-          </div>
-          <div className="col-12 col-md-4">
-            <small>Contact: support@ptcportal.com | +63 912 345 6789</small>
-          </div>
-        </div>
-        <div className="text-center small mt-1">
-
-    <footer className="footer">
-      <div className="container py-5">
-        <div className="row gy-4">
+    <footer className="bg-dark text-light mt-auto footer">
+      <div className="container py-3">
+        <div className="row gy-1">
           {/* Portal Info */}
           <div className="col-md-4">
             <h5 className="footer-title">PTC Portal</h5>
@@ -57,7 +41,6 @@ export default function Footer() {
         <hr />
 
         <div className="text-center footer-bottom">
-
           © {new Date().getFullYear()} PTC Portal. All rights reserved.
         </div>
       </div>
