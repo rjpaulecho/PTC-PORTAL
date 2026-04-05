@@ -69,7 +69,7 @@ export default function OtpForm() {
             <label>Enter OTP</label>
             <input
               type="text"
-              placeholder="000000"
+              placeholder="******"
               maxLength={6}
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
