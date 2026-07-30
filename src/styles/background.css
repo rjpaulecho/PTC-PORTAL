@@ -1,0 +1,50 @@
+.geo-background {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #010402;
+  overflow: hidden;
+}
+ 
+.geo-background::before,
+.geo-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+ 
+/* Main diffused glow: bright green top-right, fading through a soft
+   diagonal band, into black at the bottom-left */
+.geo-background::before {
+  background:
+    radial-gradient(ellipse 80% 70% at 85% 10%, rgba(30, 200, 110, 0.95), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 100% 35%, rgba(20, 170, 95, 0.8), transparent 65%),
+    radial-gradient(ellipse 65% 55% at 15% 75%, rgba(15, 140, 75, 0.55), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 5% 95%, rgba(10, 110, 60, 0.4), transparent 60%);
+  filter: blur(40px);
+  z-index: 0;
+}
+ 
+/* Grain / noise texture layer for that slightly gritty photographic look */
+.geo-background::after {
+  z-index: 2;
+  opacity: 0.18;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-repeat: repeat;
+}
+ 
+/* Content sits above the glow and grain */
+.geo-background > *:not(.geo-shapes) {
+  position: relative;
+  z-index: 3;
+}
+ 
+/* Legacy shard container kept for backwards compatibility but hidden,
+   since the new design uses soft gradients instead of angular shapes.
+   Remove the .geo-shapes div from your markup if you no longer need it. */
+.geo-shapes {
+  display: none;
+}

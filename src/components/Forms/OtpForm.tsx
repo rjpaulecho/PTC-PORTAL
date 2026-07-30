@@ -8,7 +8,6 @@ export default function OtpForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
   const email = authService.getPendingEmail();
 
   // Guard: redirect to login if no pending email

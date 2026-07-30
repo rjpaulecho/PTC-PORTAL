@@ -3,6 +3,11 @@ import "../../styles/herolayout.css";
 import logo from "../../assets/ptclogo.jpg";
 
 import ptcBackground from "../../assets/ptcbackground.jpg";
+import campusExterior from "../../assets/campus.webp";
+import classroom from "../../assets/classrooms.webp";
+import assembly from "../../assets/student activities.png";
+import library from "../../assets/library.webp";
+import studentsWalking from "../../assets/BG.png";
 
 // ── Types ──────────────────────────────────────────
 interface GalleryImage {
@@ -19,23 +24,23 @@ const IMAGES: GalleryImage[] = [
     caption: "Campus Life",
   },
   {
-    url: "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?w=900&q=80",
+    url: campusExterior,
     caption: "Our Campus",
   },
   {
-    url: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=900&q=80",
+    url: classroom,
     caption: "Modern Classrooms",
   },
   {
-    url: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=900&q=80",
+    url: assembly,
     caption: "Student Activities",
   },
   {
-    url: "https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=900&q=80",
+    url: library,
     caption: "Research Facilities",
   },
   {
-    url: "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?w=900&q=80",
+    url: studentsWalking,
     caption: "Student Community",
   },
 ];
