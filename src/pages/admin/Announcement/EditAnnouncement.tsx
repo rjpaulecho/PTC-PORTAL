@@ -4,7 +4,7 @@ import DashboardLayout from "../../../components/Layout/DashboardLayout";
 import { authService } from "../../../services/auth.service";
 import "../../../styles/announcementedit.css";
 
-const API_BASE_URL = "http://localhost:3000/api/announcements";
+const API_BASE_URL = "http://localhost:3000/api/admin/announcements";
 const ROLE_API_URL = "http://localhost:3000/api/roles";
 const FILE_UPLOAD_URL = "http://localhost:3000/api/files/upload";
 

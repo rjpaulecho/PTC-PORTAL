@@ -1,17 +1,27 @@
 import express from "express";
-import db from "../db.js";
-import { logActivity } from "../utils/activityLogger.js";
+import db from "../../db.js";
+import { logActivity } from "../../utils/activityLogger.js";
 
 const router = express.Router();
 
-// ==========================================
+// ======================================================
+// PERMISSION CHECK
+// ADMIN = 1
+// REGISTRAR = 5
+// ======================================================
+
+function hasAnnouncementPermission(role_id) {
+  return Number(role_id) === 1 || Number(role_id) === 2;
+}
+
+// ======================================================
 // GET ALL ANNOUNCEMENTS
-// GET /api/announcements
-// ==========================================
+// GET /api/announcements/manage
+// ======================================================
+
 router.get("/", async (req, res) => {
   try {
     const [rows] = await db.execute(`
-
       SELECT
 
         a.announcement_id,
@@ -44,26 +54,23 @@ router.get("/", async (req, res) => {
 
 
       LEFT JOIN users u
-        ON a.created_by = u.user_id
+      ON u.user_id = a.created_by
 
 
       LEFT JOIN announcement_recipients ar
-        ON a.announcement_id = ar.announcement_id
+      ON ar.announcement_id = a.announcement_id
 
 
       LEFT JOIN roles r
-        ON ar.role_id = r.role_id
-
+      ON r.role_id = ar.role_id
 
 
       LEFT JOIN announcement_attachments aa
-        ON a.announcement_id = aa.announcement_id
-
+      ON aa.announcement_id = a.announcement_id
 
 
       LEFT JOIN files f
-        ON aa.file_id = f.file_id
-
+      ON f.file_id = aa.file_id
 
 
       GROUP BY
@@ -78,17 +85,13 @@ router.get("/", async (req, res) => {
         a.created_at
 
 
-
-      ORDER BY a.publish_date DESC
-
-
-      LIMIT 50
+      ORDER BY a.created_at DESC
 
     `);
 
     res.json(rows);
-  } catch (err) {
-    console.error("GET ANNOUNCEMENTS ERROR:", err);
+  } catch (error) {
+    console.error("GET MANAGE ANNOUNCEMENTS ERROR:", error);
 
     res.status(500).json({
       error: "Failed to load announcements.",
@@ -96,10 +99,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ==========================================
+// ======================================================
 // GET SINGLE ANNOUNCEMENT
-// GET /api/announcements/:id
-// ==========================================
+// GET /api/announcements/manage/:id
+// ======================================================
 
 router.get("/:id", async (req, res) => {
   try {
@@ -126,10 +129,10 @@ FROM announcements a
 
 LEFT JOIN users u
 
-ON a.created_by = u.user_id
+ON u.user_id=a.created_by
 
 
-WHERE a.announcement_id = ?
+WHERE a.announcement_id=?
 
 `,
       [id],
@@ -155,11 +158,10 @@ FROM announcement_recipients ar
 
 INNER JOIN roles r
 
-ON ar.role_id = r.role_id
+ON r.role_id=ar.role_id
 
 
-
-WHERE ar.announcement_id = ?
+WHERE ar.announcement_id=?
 
 `,
       [id],
@@ -182,11 +184,10 @@ FROM announcement_attachments aa
 
 INNER JOIN files f
 
-ON aa.file_id = f.file_id
+ON f.file_id=aa.file_id
 
 
-
-WHERE aa.announcement_id = ?
+WHERE aa.announcement_id=?
 
 `,
       [id],
@@ -199,18 +200,20 @@ WHERE aa.announcement_id = ?
 
       attachments: attachmentRows,
     });
-  } catch (err) {
-    console.error("GET SINGLE ANNOUNCEMENT ERROR:", err);
+  } catch (error) {
+    console.error("GET SINGLE MANAGE ANNOUNCEMENT ERROR:", error);
 
     res.status(500).json({
       error: "Failed to load announcement.",
     });
   }
 });
-// ==========================================
+
+// ======================================================
 // CREATE ANNOUNCEMENT
-// POST /api/announcements
-// ==========================================
+// POST /api/announcements/manage
+// ======================================================
+
 router.post("/", async (req, res) => {
   const connection = await db.getConnection();
 
@@ -219,29 +222,44 @@ router.post("/", async (req, res) => {
 
     const {
       title,
+
       content,
+
       created_by,
+
+      role_id,
+
       publish_date,
+
       expiry_date,
+
       is_active,
+
       recipients,
+
       attachments,
     } = req.body;
 
-    // ===============================
-    // CREATE ANNOUNCEMENT
-    // ===============================
+    if (!hasAnnouncementPermission(role_id)) {
+      return res.status(403).json({
+        error: "No permission to create announcement.",
+      });
+    }
 
     const [result] = await connection.execute(
       `
+
 INSERT INTO announcements
+
 (
- title,
- content,
- created_by,
- publish_date,
- expiry_date,
- is_active
+
+title,
+content,
+created_by,
+publish_date,
+expiry_date,
+is_active
+
 )
 
 VALUES (?,?,?,?,?,?)
@@ -253,36 +271,30 @@ VALUES (?,?,?,?,?,?)
 
     const announcementId = result.insertId;
 
-    // ===============================
-    // SAVE RECIPIENT ROLES
-    // ===============================
-
-    if (Array.isArray(recipients) && recipients.length > 0) {
-      for (const roleId of recipients) {
+    if (Array.isArray(recipients)) {
+      for (const recipient of recipients) {
         await connection.execute(
           `
 
 INSERT INTO announcement_recipients
 
 (
- announcement_id,
- role_id
+
+announcement_id,
+role_id
+
 )
 
 VALUES (?,?)
 
 `,
 
-          [announcementId, roleId],
+          [announcementId, recipient],
         );
       }
     }
 
-    // ===============================
-    // SAVE ATTACHMENTS
-    // ===============================
-
-    if (Array.isArray(attachments) && attachments.length > 0) {
+    if (Array.isArray(attachments)) {
       for (const fileId of attachments) {
         await connection.execute(
           `
@@ -290,8 +302,10 @@ VALUES (?,?)
 INSERT INTO announcement_attachments
 
 (
- announcement_id,
- file_id
+
+announcement_id,
+file_id
+
 )
 
 VALUES (?,?)
@@ -320,22 +334,22 @@ VALUES (?,?)
 
       announcement_id: announcementId,
     });
-  } catch (err) {
+  } catch (error) {
     await connection.rollback();
 
-    console.error("CREATE ANNOUNCEMENT ERROR:", err);
+    console.error("CREATE ANNOUNCEMENT ERROR:", error);
 
     res.status(500).json({
-      error: err.message,
+      error: error.message,
     });
   } finally {
     connection.release();
   }
 });
-// ==========================================
+// ======================================================
 // UPDATE ANNOUNCEMENT
-// PUT /api/announcements/:id
-// ==========================================
+// PUT /api/announcements/manage/:id
+// ======================================================
 
 router.put("/:id", async (req, res) => {
   const connection = await db.getConnection();
@@ -347,115 +361,131 @@ router.put("/:id", async (req, res) => {
 
     const {
       title,
+
       content,
+
       publish_date,
+
       expiry_date,
+
       is_active,
+
       recipients,
+
       attachments,
+
       updated_by,
+
+      role_id,
     } = req.body;
 
-    // ===============================
-    // UPDATE ANNOUNCEMENT DATA
-    // ===============================
+    if (!hasAnnouncementPermission(role_id)) {
+      return res.status(403).json({
+        error: "No permission to update announcement.",
+      });
+    }
 
     await connection.execute(
       `
 
-UPDATE announcements
+      UPDATE announcements
 
-SET
+      SET
 
-title=?,
-content=?,
-publish_date=?,
-expiry_date=?,
-is_active=?
+      title=?,
 
-WHERE announcement_id=?
+      content=?,
 
-`,
+      publish_date=?,
+
+      expiry_date=?,
+
+      is_active=?
+
+
+      WHERE announcement_id=?
+
+      `,
 
       [title, content, publish_date, expiry_date, is_active, id],
     );
 
-    // ===============================
-    // UPDATE RECIPIENTS
-    // ===============================
-
-    // remove old recipients
+    // REMOVE OLD RECIPIENTS
 
     await connection.execute(
       `
 
-DELETE FROM announcement_recipients
+      DELETE FROM announcement_recipients
 
-WHERE announcement_id=?
+      WHERE announcement_id=?
 
-`,
+      `,
 
       [id],
     );
 
-    // insert new recipients
+    // INSERT NEW RECIPIENTS
 
-    if (Array.isArray(recipients) && recipients.length > 0) {
+    if (Array.isArray(recipients)) {
       for (const roleId of recipients) {
         await connection.execute(
           `
 
-INSERT INTO announcement_recipients
+          INSERT INTO announcement_recipients
 
-(
-announcement_id,
-role_id
-)
+          (
 
-VALUES (?,?)
+          announcement_id,
 
-`,
+          role_id
+
+          )
+
+
+          VALUES (?,?)
+
+          `,
 
           [id, roleId],
         );
       }
     }
 
-    // ===============================
-    // UPDATE ATTACHMENTS
-    // ===============================
-
-    // remove old attachment links
+    // REMOVE OLD ATTACHMENTS
 
     await connection.execute(
       `
 
-DELETE FROM announcement_attachments
+      DELETE FROM announcement_attachments
 
-WHERE announcement_id=?
+      WHERE announcement_id=?
 
-`,
+      `,
 
       [id],
     );
 
-    // insert new attachments
+    // INSERT NEW ATTACHMENTS
 
-    if (Array.isArray(attachments) && attachments.length > 0) {
+    if (Array.isArray(attachments)) {
       for (const fileId of attachments) {
         await connection.execute(
           `
 
-INSERT INTO announcement_attachments
+          INSERT INTO announcement_attachments
 
-(
-announcement_id,
-file_id
-)
+          (
 
-VALUES (?,?)
+          announcement_id,
 
-`,
+          file_id
+
+          )
+
+
+          VALUES (?,?)
+
+          `,
 
           [id, fileId],
         );
@@ -477,22 +507,28 @@ VALUES (?,?)
     res.json({
       message: "Announcement updated successfully.",
     });
-  } catch (err) {
+  } catch (error) {
     await connection.rollback();
 
-    console.error("UPDATE ANNOUNCEMENT ERROR:", err);
+    console.error(
+      "UPDATE ANNOUNCEMENT ERROR:",
+
+      error,
+    );
 
     res.status(500).json({
-      error: err.message || "Failed to update announcement.",
+      error: error.message,
     });
   } finally {
     connection.release();
   }
 });
-// ==========================================
+
+// ======================================================
 // DELETE ANNOUNCEMENT
-// DELETE /api/announcements/:id
-// ==========================================
+// DELETE /api/announcements/manage/:id
+// ======================================================
+
 router.delete("/:id", async (req, res) => {
   const connection = await db.getConnection();
 
@@ -500,15 +536,30 @@ router.delete("/:id", async (req, res) => {
     await connection.beginTransaction();
 
     const { id } = req.params;
-    const { deleted_by } = req.body;
 
-    // Get announcement title for activity log
+    const {
+      deleted_by,
+
+      role_id,
+    } = req.body;
+
+    if (!hasAnnouncementPermission(role_id)) {
+      return res.status(403).json({
+        error: "No permission to delete announcement.",
+      });
+    }
+
     const [rows] = await connection.execute(
       `
-      SELECT title
-      FROM announcements
-      WHERE announcement_id = ?
-      `,
+
+SELECT title
+
+FROM announcements
+
+WHERE announcement_id=?
+
+`,
+
       [id],
     );
 
@@ -522,36 +573,39 @@ router.delete("/:id", async (req, res) => {
 
     const title = rows[0].title;
 
-    // ==========================================
-    // DELETE ATTACHMENT CONNECTIONS
-    // ==========================================
     await connection.execute(
       `
-      DELETE FROM announcement_attachments
-      WHERE announcement_id = ?
-      `,
+
+DELETE FROM announcement_attachments
+
+WHERE announcement_id=?
+
+`,
+
       [id],
     );
 
-    // ==========================================
-    // DELETE RECIPIENT CONNECTIONS
-    // ==========================================
     await connection.execute(
       `
-      DELETE FROM announcement_recipients
-      WHERE announcement_id = ?
-      `,
+
+DELETE FROM announcement_recipients
+
+WHERE announcement_id=?
+
+`,
+
       [id],
     );
 
-    // ==========================================
-    // DELETE ANNOUNCEMENT
-    // ==========================================
     await connection.execute(
       `
-      DELETE FROM announcements
-      WHERE announcement_id = ?
-      `,
+
+DELETE FROM announcements
+
+WHERE announcement_id=?
+
+`,
+
       [id],
     );
 
@@ -559,55 +613,95 @@ router.delete("/:id", async (req, res) => {
 
     await logActivity(
       deleted_by,
+
       "Delete",
+
       "Announcements",
+
       `Deleted announcement "${title}".`,
     );
 
     res.json({
       message: "Announcement deleted successfully.",
     });
-  } catch (err) {
+  } catch (error) {
     await connection.rollback();
 
-    console.error("DELETE ANNOUNCEMENT ERROR:", err);
+    console.error(
+      "DELETE ANNOUNCEMENT ERROR:",
+
+      error,
+    );
 
     res.status(500).json({
-      error: "Failed to delete announcement.",
+      error: error.message,
     });
   } finally {
     connection.release();
   }
 });
-// ==========================================
+
+// ======================================================
 // CHANGE STATUS
-// PATCH /api/announcements/:id/status
-// ==========================================
+// PATCH /api/announcements/manage/:id/status
+// ======================================================
+
 router.patch("/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { is_active } = req.body;
+    const {
+      is_active,
+
+      role_id,
+
+      updated_by,
+    } = req.body;
+
+    if (!hasAnnouncementPermission(role_id)) {
+      return res.status(403).json({
+        error: "No permission to change status.",
+      });
+    }
 
     await db.execute(
       `
+
 UPDATE announcements
+
 SET is_active=?
+
 WHERE announcement_id=?
+
 `,
 
       [is_active, id],
     );
 
+    await logActivity(
+      updated_by,
+
+      "Update",
+
+      "Announcements",
+
+      `Changed announcement status.`,
+    );
+
     res.json({
       message: "Announcement status updated.",
     });
-  } catch (err) {
-    console.error("STATUS UPDATE ERROR:", err);
+  } catch (error) {
+    console.error(
+      "STATUS UPDATE ERROR:",
+
+      error,
+    );
 
     res.status(500).json({
       error: "Failed to update status.",
     });
   }
 });
+
 export default router;

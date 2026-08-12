@@ -50,5 +50,5 @@ export const studentNavGroups = [
 export const studentSoloLinks = [
   { label: "Dashboard", path: "/student/dashboard", icon: "" },
   { label: "Profile", path: "/student/profile", icon: "" },
-  { label: "Announcement", path: "/announcement/student", icon: "" },
+  { label: "Announcement", path: "/student/announcement", icon: "" },
 ];

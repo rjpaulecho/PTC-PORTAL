@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
 import { authService } from "../../../services/auth.service";
-import "../../../styles/announcementcreate.css";
+import "../../../styles/announcementcreateR.css";
 
 const API_BASE_URL = "http://localhost:3000/api/admin/announcements";
 const ROLE_API_URL = "http://localhost:3000/api/roles";
@@ -13,7 +13,7 @@ type Role = {
   role_name: string;
 };
 
-export default function CreateAnnouncement() {
+export default function AnnouncementCreateR() {
   const navigate = useNavigate();
 
   const session = authService.getSession();
@@ -29,14 +29,12 @@ export default function CreateAnnouncement() {
 
   const [isActive, setIsActive] = useState(true);
 
-  // FILE STATES
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!session || session.role !== "Admin") {
+    if (!session || session.role !== "Registrar") {
       navigate("/login");
       return;
     }
@@ -51,8 +49,8 @@ export default function CreateAnnouncement() {
       const data = await response.json();
 
       setRoles(data);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
 
       alert("Unable to load roles.");
     }
@@ -87,41 +85,33 @@ export default function CreateAnnouncement() {
     e.preventDefault();
 
     if (!title.trim()) {
-      alert("Title is required.");
+      alert("Title required.");
       return;
     }
 
     if (!content.trim()) {
-      alert("Content is required.");
+      alert("Content required.");
       return;
     }
 
     if (!publishDate) {
-      alert("Publish date is required.");
+      alert("Publish date required.");
       return;
     }
 
     if (recipients.length === 0) {
-      alert("Select recipient.");
+      alert("Select recipients.");
       return;
     }
 
     try {
       setLoading(true);
 
-      // ============================
-      // UPLOAD FILE FIRST
-      // ============================
-
-      let uploadedFileId = fileId;
+      let fileId = null;
 
       if (selectedFile) {
-        uploadedFileId = await uploadFile();
+        fileId = await uploadFile();
       }
-
-      // ============================
-      // CREATE ANNOUNCEMENT
-      // ============================
 
       const announcementData = {
         title: title.trim(),
@@ -129,6 +119,8 @@ export default function CreateAnnouncement() {
         content: content.trim(),
 
         created_by: session?.user_id,
+
+        role_id: session?.role_id, // <-- ADD THIS
 
         publish_date: `${publishDate} 00:00:00`,
 
@@ -138,7 +130,7 @@ export default function CreateAnnouncement() {
 
         recipients,
 
-        attachments: uploadedFileId ? [uploadedFileId] : [],
+        attachments: fileId ? [fileId] : [],
       };
 
       const response = await fetch(API_BASE_URL, {
@@ -154,33 +146,33 @@ export default function CreateAnnouncement() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create announcement.");
+        throw new Error(data.error || "Failed creating announcement.");
       }
 
-      alert("Announcement created successfully!");
+      alert("Announcement created successfully.");
 
-      navigate("/admin/announcement/list");
-    } catch (err) {
-      console.error(err);
+      navigate("/registrar/announcement/listR");
+    } catch (error) {
+      console.error(error);
 
-      if (err instanceof Error) {
-        alert(err.message);
+      if (error instanceof Error) {
+        alert(error.message);
       }
     } finally {
       setLoading(false);
     }
   }
 
-  if (!session || session.role !== "Admin") {
+  if (!session || session.role !== "Registrar") {
     return null;
   }
 
   return (
     <DashboardLayout>
-      <div className="admin-announcement-create">
+      <div className="registrar-announcement-createR">
         <h1>Create Announcement</h1>
 
-        <form className="announcement-form" onSubmit={handleSubmit}>
+        <form className="announcement-formR" onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Title</label>
 
@@ -188,6 +180,7 @@ export default function CreateAnnouncement() {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              placeholder="Announcement title"
             />
           </div>
 
@@ -198,6 +191,7 @@ export default function CreateAnnouncement() {
               rows={8}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              placeholder="Write announcement..."
             />
           </div>
 
@@ -234,6 +228,13 @@ export default function CreateAnnouncement() {
               type="file"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
             />
+
+            {selectedFile && (
+              <p>
+                Selected:
+                {selectedFile.name}
+              </p>
+            )}
           </div>
 
           <div className="form-row">
@@ -273,7 +274,7 @@ export default function CreateAnnouncement() {
             </div>
           </div>
 
-          <button disabled={loading} className="save-btn">
+          <button className="save-btn" disabled={loading}>
             {loading ? "Creating..." : "Create Announcement"}
           </button>
         </form>

@@ -15,7 +15,7 @@ type Announcement = {
   created_at: string;
   recipients: string | null;
 };
-const API_BASE_URL = "http://localhost:3000/api/announcements";
+const API_BASE_URL = "http://localhost:3000/api/admin/announcements";
 
 export default function AnnouncementList() {
   const navigate = useNavigate();

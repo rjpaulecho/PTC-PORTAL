@@ -4,7 +4,7 @@ import DashboardLayout from "../../../components/Layout/DashboardLayout";
 import { authService } from "../../../services/auth.service";
 import "../../../styles/announcementdetails.css";
 
-const API_BASE_URL = "http://localhost:3000/api/announcements";
+const API_BASE_URL = "http://localhost:3000/api/admin/announcements";
 const FILE_BASE_URL = "http://localhost:3000";
 
 type Recipient = {
