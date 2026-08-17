@@ -23,6 +23,11 @@ export const registrarNavGroups = [
         label: "Student List",
         path: "/registrar/student/listR",
       },
+      {
+        label: "Student Enrollment",
+        path: "/registrar/enrollment/management",
+        icon: "👨‍🎓",
+      },
     ],
   },
 ];
