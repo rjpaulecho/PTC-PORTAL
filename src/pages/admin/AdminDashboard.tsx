@@ -8,7 +8,7 @@ import {
   Calendar,
   Megaphone,
   UserCheck,
-  CheckCircle
+  CheckCircle,
 } from "lucide-react";
 import Notifications from "./dashboard/Notifications";
 import DashboardAnnouncements from "./dashboard/Announcements";
@@ -18,7 +18,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "admin") {
+  if (!user || user.role !== "Admin") {
     navigate("/login");
     return null;
   }
@@ -124,7 +124,9 @@ export default function AdminDashboard() {
                 <CheckCircle size={20} />
               </div>
               <div className="activity-content">
-                <p><strong>3 new admissions approved</strong></p>
+                <p>
+                  <strong>3 new admissions approved</strong>
+                </p>
                 <small>2 hours ago • Automated approval system</small>
               </div>
             </div>
@@ -134,7 +136,9 @@ export default function AdminDashboard() {
                 <Calendar size={20} />
               </div>
               <div className="activity-content">
-                <p><strong>Entrance Exam scheduled</strong> for March 25, 2026</p>
+                <p>
+                  <strong>Entrance Exam scheduled</strong> for March 25, 2026
+                </p>
                 <small>4 hours ago • Mathematics Department</small>
               </div>
             </div>
@@ -144,7 +148,10 @@ export default function AdminDashboard() {
                 <Megaphone size={20} />
               </div>
               <div className="activity-content">
-                <p><strong>Announcement posted:</strong> "Semester Break Extended"</p>
+                <p>
+                  <strong>Announcement posted:</strong> "Semester Break
+                  Extended"
+                </p>
                 <small>1 day ago • Administration</small>
               </div>
             </div>
@@ -154,7 +161,9 @@ export default function AdminDashboard() {
                 <UserCheck size={20} />
               </div>
               <div className="activity-content">
-                <p><strong>15 new students registered</strong> in the portal</p>
+                <p>
+                  <strong>15 new students registered</strong> in the portal
+                </p>
                 <small>2 days ago • Registration system</small>
               </div>
             </div>
@@ -170,7 +179,10 @@ export default function AdminDashboard() {
                 <FileText size={32} />
               </div>
               <h3>Admission Process</h3>
-              <p>Streamlined online application system with automated document verification and status tracking.</p>
+              <p>
+                Streamlined online application system with automated document
+                verification and status tracking.
+              </p>
               <div className="overview-metrics">
                 <span>245 Applications</span>
                 <span>95% Approval Rate</span>
@@ -182,7 +194,10 @@ export default function AdminDashboard() {
                 <Calendar size={32} />
               </div>
               <h3>Entrance Examination</h3>
-              <p>Comprehensive testing system with real-time monitoring and instant result generation.</p>
+              <p>
+                Comprehensive testing system with real-time monitoring and
+                instant result generation.
+              </p>
               <div className="overview-metrics">
                 <span>8 Active Exams</span>
                 <span>1,200+ Test Takers</span>
@@ -194,7 +209,10 @@ export default function AdminDashboard() {
                 <Calendar size={32} />
               </div>
               <h3>Scheduling System</h3>
-              <p>Intelligent scheduling platform for exams, classes, and events with conflict detection.</p>
+              <p>
+                Intelligent scheduling platform for exams, classes, and events
+                with conflict detection.
+              </p>
               <div className="overview-metrics">
                 <span>50+ Events</span>
                 <span>Auto-conflict Resolution</span>
@@ -206,7 +224,10 @@ export default function AdminDashboard() {
                 <Users size={32} />
               </div>
               <h3>Student Portal</h3>
-              <p>Complete student information system with grade tracking, announcements, and academic records.</p>
+              <p>
+                Complete student information system with grade tracking,
+                announcements, and academic records.
+              </p>
               <div className="overview-metrics">
                 <span>1,250 Active Users</span>
                 <span>24/7 Access</span>

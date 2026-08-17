@@ -1,35 +1,50 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { authService } from "../../services/auth.service";
+import { authService, type UserRole } from "../../services/auth.service";
 import styles from "../../styles/auth.module.css";
+
+// Central place to map each role to its dashboard route.
+// NOTE: adjust these paths if your actual routes differ —
+// I only had /admin, /faculty, and /student confirmed from the
+// original code, so I'm guessing at Registrar / Program Head.
+const ROLE_ROUTES: Record<UserRole, string> = {
+  Admin: "/admin/dashboard",
+  Registrar: "/registrar/dashboard",
+  "Program Head": "/programhead/dashboard",
+  Faculty: "/faculty/dashboard",
+  Student: "/student/dashboard",
+};
 
 export default function OtpForm() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const email = authService.getPendingEmail();
+
+  const username = authService.getPendingUsername();
 
   // Guard: redirect to login if no pending email
   useEffect(() => {
-    if (!email) navigate("/login");
+    if (!username) navigate("/login");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!email) return null;
+  if (!username) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const currentEmail = authService.getPendingEmail(); // ← read fresh inside the function
+    const currentUsername = authService.getPendingUsername();
 
-    if (!currentEmail) {
+    if (!currentUsername) {
+      setLoading(false);
       navigate("/login");
       return;
     }
 
-    const user = await authService.verifyOtp(currentEmail, otp); // ← use currentEmail, guaranteed string
+    const user = await authService.verifyOtp(currentUsername, otp); // ← use currentEmail, guaranteed string
 
     setLoading(false);
 
@@ -38,16 +53,40 @@ export default function OtpForm() {
       return;
     }
 
-    authService.clearPendingEmail();
+    authService.clearPendingUsername();
     authService.saveSession(user);
+    switch (user.role) {
+      case "Admin":
+        navigate("/admin/dashboard");
+        break;
 
-    if (user.role === "admin") {
-      navigate("/admin/dashboard");
-    } else if (user.role === "faculty") {
-      navigate("/faculty/dashboard");
-    } else {
-      navigate("/student/dashboard");
+      case "Faculty":
+        navigate("/faculty/dashboard");
+        break;
+
+      case "Student":
+        navigate("/student/dashboard");
+        break;
+
+      case "Program Head":
+        navigate("/programhead/dashboard");
+        break;
+
+      case "Registrar":
+        navigate("/registrar/dashboard");
+        break;
+
+      default:
+        navigate("/login");
     }
+
+    // FIX: previously compared against lowercase "admin" / "faculty",
+    // but UserRole values are capitalized ("Admin", "Faculty", ...),
+    // so this check never matched and everyone landed on
+    // /student/dashboard regardless of actual role. Also added the
+    // missing Registrar / Program Head branches.
+    const destination = ROLE_ROUTES[user.role] ?? "/student/dashboard";
+    navigate(destination);
   }
 
   return (
@@ -55,8 +94,10 @@ export default function OtpForm() {
       <div className={styles.authleft}>
         <h2>Check Your Email</h2>
         <p>
-          We sent a 6-digit OTP to <strong>{email}</strong>. It expires in 5
-          minutes.
+          A 6-digit OTP has been sent to the email address associated with your
+          account.
+          <br />
+          <strong>Username: {username}</strong>
         </p>
       </div>
 

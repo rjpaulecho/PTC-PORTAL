@@ -12,12 +12,12 @@ export default function StudentRecord() {
 
   // Redirect if not student
   useEffect(() => {
-    if (!user || user.role !== "student") {
+    if (!user || user.role !== "Student") {
       navigate("/login");
     }
   }, [user, navigate]);
 
-  if (!user || user.role !== "student") return null;
+  if (!user || user.role !== "Student") return null;
 
   // Define student data
   const students: Record<

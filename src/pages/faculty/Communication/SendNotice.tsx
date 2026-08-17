@@ -6,7 +6,7 @@ export default function SendNotice() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "faculty") {
+  if (!user || user.role !== "Faculty") {
     navigate("/login");
     return null;
   }

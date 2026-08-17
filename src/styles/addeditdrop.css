@@ -1,217 +1,297 @@
+/* Import bold, modern fonts — Sora for headings, Inter for body text */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+
 /* ==========================
-   Manage Students
+Manage Students
 ========================== */
 
 .admin-manage-students {
-  padding: 30px;
-  background: #f5f7fb;
-  min-height: 100vh;
+padding: 30px;
+background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
+min-height: 100vh;
+font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+font-weight: 500;
 }
 
 /* Header */
 
 .admin-manage-students__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 20px;
+color: red
 }
 
 .admin-manage-students__header h1 {
-  font-size: 38px;
-  font-weight: 700;
-  color: #1b1b1b;
-  margin: 0;
+font-family: 'Sora', 'Inter', sans-serif;
+font-size: 38px;
+font-weight: 800;
+color: #1b1b1b;
+margin: 0;
+letter-spacing: -0.8px;
 }
 
 /* Search */
 
 .admin-manage-students__search {
-  width: 350px;
-  max-width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #35e026;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  outline: none;
-  transition: 0.3s;
-  font-size: 15px;
+width: 350px;
+max-width: 100%;
+padding: 12px 16px;
+border: 1px solid #d9d9d9;
+border-radius: 8px;
+margin-bottom: 20px;
+outline: none;
+transition: 0.3s;
+font-size: 15px;
+font-weight: 600;
+font-family: inherit;
 }
 
 .admin-manage-students__search:focus {
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+border-color: #0d6efd;
+box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
 }
 
 /* Table */
 
 .admin-manage-students__table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+width: 100%;
+border-collapse: collapse;
+background: linear-gradient(180deg, #d4d4db 0%, #d0ec80 100%);
+border-radius: 12px;
+overflow: hidden;
+box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+font-family: inherit;
+animation: tableFadeIn 0.5s ease-out both;
 }
 
 .admin-manage-students__table thead {
-  background: #0d6efd;
-  color: white;
+background: linear-gradient(180deg, #1e7e3b 0%, #000a04 100%);
+background-size: 200% 200%;
+color: rgb(243, 239, 239);
+animation: headerGlow 6s ease-in-out infinite;
 }
 
 .admin-manage-students__table th {
-  padding: 15px;
-  text-align: left;
-  font-size: 15px;
-  font-weight: 600;
+font-family: 'Sora', 'Inter', sans-serif;
+padding: 15px;
+text-align: left;
+font-size: 14px;
+font-weight: 800;
+text-transform: uppercase;
+letter-spacing: 0.6px;
 }
 
 .admin-manage-students__table td {
-  padding: 15px;
-  border-bottom: 1px solid #ececec;
-  font-size: 14px;
-  color: #444;
+padding: 15px;
+border-bottom: 1px solid #181616;
+font-size: 14px;
+color: #000000;
+font-weight: 600;
 }
 
 .admin-manage-students__table tbody tr {
-  transition: 0.25s;
+transition: background 0.25s ease, transform 0.25s ease;
+animation: rowSlideIn 0.4s ease-out both;
 }
 
+.admin-manage-students__table tbody tr:nth-child(1) { animation-delay: 0.05s; }
+.admin-manage-students__table tbody tr:nth-child(2) { animation-delay: 0.1s; }
+.admin-manage-students__table tbody tr:nth-child(3) { animation-delay: 0.15s; }
+.admin-manage-students__table tbody tr:nth-child(4) { animation-delay: 0.2s; }
+.admin-manage-students__table tbody tr:nth-child(5) { animation-delay: 0.25s; }
+.admin-manage-students__table tbody tr:nth-child(n+6) { animation-delay: 0.3s; }
+
 .admin-manage-students__table tbody tr:hover {
-  background: #f8fbff;
+background: #f7f7f88f;
+transform: scale(1.005);
 }
 
 /* Action buttons */
 
 .admin-manage-students__table td:last-child {
-  white-space: nowrap;
+white-space: nowrap;
 }
 
 .admin-manage-students__table .btn {
-  margin-right: 8px;
+margin-right: 8px;
 }
 
 /* ===================
-   Buttons
+Animations
+=================== */
+
+@keyframes tableFadeIn {
+from {
+    opacity: 0;
+    transform: translateY(15px);
+}
+to {
+    opacity: 1;
+    transform: translateY(0);
+}
+}
+
+@keyframes rowSlideIn {
+from {
+    opacity: 0;
+    transform: translateX(-12px);
+}
+to {
+    opacity: 1;
+    transform: translateX(0);
+}
+}
+
+@keyframes headerGlow {
+0%, 100% {
+    background-position: 0% 50%;
+}
+50% {
+    background-position: 100% 50%;
+}
+}
+
+/* ===================
+Buttons
 =================== */
 
 .btn {
-  border: none;
-  padding: 10px 18px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: 0.3s;
-  font-weight: 500;
+border: none;
+padding: 10px 18px;
+border-radius: 8px;
+cursor: pointer;
+font-size: 14px;
+transition: 0.3s;
+font-weight: 700;
+font-family: inherit;
+letter-spacing: 0.2px;
 }
 
 .btn:hover {
-  transform: translateY(-2px);
+transform: translateY(-2px);
 }
 
 .btn-primary {
-  background: #0d6efd;
-  color: white;
+background: #0d6efd;
+color: white;
 }
 
 .btn-primary:hover {
-  background: #0b5ed7;
+background: #0b5ed7;
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+background: #6c757d;
+color: white;
 }
 
 .btn-secondary:hover {
-  background: #5b636a;
+background: #5b636a;
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+background: #dc3545;
+color: white;
 }
 
 .btn-danger:hover {
-  background: #bb2d3b;
+background: #bb2d3b;
 }
 
 /* =====================
-   Modal Form
+Modal Form
 ====================== */
 
+Thailand for mine sexti sanford twenty six dedical
+.admin-editstudents-students-table {
+  padding: 30px;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
 .admin-student-form {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-top: 20px;
+display: flex;
+flex-direction: column;
+gap: 18px;
+margin-top: 20px;
 }
 
 .admin-student-form label {
-  display: flex;
-  flex-direction: column;
-  font-weight: 600;
-  color: #444;
-  font-size: 14px;
+display: flex;
+flex-direction: column;
+font-weight: 700;
+color: #000000;
+font-size: 14px;
 }
 
 .admin-student-form input,
 .admin-student-form select {
-  margin-top: 6px;
-  padding: 12px;
-  border: 1px solid #d6d6d6;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: 0.3s;
+margin-top: 6px;
+padding: 12px;
+border: 1px solid #000000;
+border-radius: 8px;
+font-size: 14px;
+font-weight: 600;
+outline: none;
+transition: 0.3s;
+font-family: inherit;
 }
 
 .admin-student-form input:focus,
 .admin-student-form select:focus {
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+border-color: #0d6efd;
+box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
 }
 
+.admin-student-form {
+  padding: 30px;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  }
 .admin-student-form__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 15px;
+display: flex;
+justify-content: flex-end;
+gap: 12px;
+margin-top: 15px;
 }
 
 /* ===================
-   Responsive
+Responsive
 =================== */
 
 @media (max-width: 992px) {
-  .admin-manage-students__header {
+.admin-manage-students__header {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
-  }
+}
 
-  .admin-manage-students__search {
+.admin-manage-students__search {
     width: 100%;
-  }
+}
 
-  .admin-manage-students {
+.admin-manage-students {
     padding: 20px;
-  }
+}
 }
 
 @media (max-width: 768px) {
-  .admin-manage-students__table {
+.admin-manage-students__table {
     display: block;
     overflow-x: auto;
     white-space: nowrap;
-  }
+}
 
-  .admin-manage-students__header h1 {
+.admin-manage-students__header h1 {
     font-size: 28px;
-  }
+}
 
-  .btn {
+.btn {
     padding: 8px 14px;
     font-size: 13px;
-  }
+}
 }

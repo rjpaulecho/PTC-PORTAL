@@ -2,10 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "../../services/auth.service";
 import styles from "../../styles/auth.module.css";
-import "../../styles/background.css";
 
 export default function LoginForm() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -13,70 +12,35 @@ export default function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     setError("");
     setLoading(true);
 
-    const result = await authService.login(email, password);
+    try {
+      await authService.login(username, password);
 
-    setLoading(false);
-
-    if (!result) {
-      setError("Invalid email or password.");
-      return;
+      authService.savePendingUsername(username);
+      navigate("/otp");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed.");
+    } finally {
+      setLoading(false);
     }
-
-    authService.savePendingEmail(email);
-    navigate("/otp");
   }
 
   return (
-    <div className="geo-background">
-      <div className="geo-shapes">
-        <div className="geo-shape shape-1"></div>
-        <div className="geo-shape shape-2"></div>
-        <div className="geo-shape shape-3"></div>
-        <div className="geo-shape shape-4"></div>
-        <div className="geo-shape shape-5"></div>
-        <div className="geo-shape shape-6"></div>
-        <div className="geo-shape shape-7"></div>
-      </div>
+    <div className={styles.authPage}>
+      <div className={`${styles.authcard} ${styles.fadeIn}`}>
+        <button
+          type="button"
+          className={styles.backBtn}
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+        >
+          ←
+        </button>
 
-      <div className={styles.authcard} style={{ position: "relative", zIndex: 2 }}>
-        <div className={styles.authleft} style={{ position: "relative" }}>
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            style={{
-              position: "absolute",
-              top: "16px",
-              left: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              color: "inherit",
-              cursor: "pointer",
-              padding: "6px",
-              borderRadius: "50%",
-            }}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-          </button>
-
+        <div className={styles.authleft}>
           <h2>Welcome Back</h2>
           <p>Login to access your portal dashboard.</p>
         </div>
@@ -85,88 +49,146 @@ export default function LoginForm() {
           <h2>Login</h2>
 
           <form onSubmit={handleSubmit}>
+            {/* --- input BEFORE label, needed for the floating-label CSS --- */}
             <div className={styles.inputgroup}>
-              <label>Email</label>
               <input
-                type="email"
-                placeholder="r@ptc.edu.ph"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                placeholder=" "
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toUpperCase())}
                 required
               />
+              <label>Student Number / Username</label>
             </div>
 
             <div className={styles.inputgroup}>
-              <label>Password</label>
               <input
                 type="password"
-                placeholder="••••••••"
+                placeholder=" "
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <label>Password</label>
             </div>
+            {/* --- end reordered inputs --- */}
 
             {error && (
-              <p style={{ color: "red", fontSize: "13px", marginBottom: "8px" }}>
+              <p key={error} className={styles.errorMsg}>
                 {error}
               </p>
             )}
 
-            <button type="submit" disabled={loading}>
-              {loading ? "Verifying..." : "Login"}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`${styles.submitBtn} ${loading ? styles.loading : ""}`}
+            >
+              {loading ? (
+                <>
+                  <span className={styles.spinner} />
+                  Verifying...
+                </>
+              ) : (
+                "Login"
+              )}
             </button>
           </form>
 
           <div className={styles.authlinks}>
+            <a href="/register">Create an account</a>
             <a href="#">Forgot password?</a>
           </div>
+
           <div style={{ marginTop: "20px" }}>
             <h4>Development Access</h4>
 
-            <button
-              type="button"
-              onClick={() => {
-                authService.saveSession({
-                  username: "admin",
-                  role: "admin",
-                });
+            <div className={styles.devButtons}>
+              <button
+                type="button"
+                className={styles.devBtn}
+                onClick={() => {
+                  authService.saveSession({
+                    user_id: 1,
+                    username: "admin",
+                    email: "admin@ptc.edu.ph",
+                    role: "Admin",
+                    role_id: 1,
+                  });
+                  navigate("/admin/dashboard");
+                }}
+              >
+                Login as Admin
+              </button>
 
-                navigate("/admin/dashboard");
-              }}
-            >
-              Login as Admin
-            </button>
+              <button
+                type="button"
+                className={styles.devBtn}
+                onClick={() => {
+                  authService.saveSession({
+                    user_id: 2,
+                    username: "faculty",
+                    email: "faculty@ptc.edu.ph",
+                    role: "Faculty",
+                    role_id: 2,
+                  });
+                  navigate("/faculty/dashboard");
+                }}
+              >
+                Login as Faculty
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                authService.saveSession({
-                  username: "faculty",
-                  role: "faculty",
-                });
+              <button
+                type="button"
+                className={styles.devBtn}
+                onClick={() => {
+                  authService.saveSession({
+                    user_id: 3,
+                    username: "student",
+                    email: "student@ptc.edu.ph",
+                    role: "Student",
+                    role_id: 3,
+                  });
+                  navigate("/student/dashboard");
+                }}
+              >
+                Login as Student
+              </button>
 
-                navigate("/faculty/dashboard");
-              }}
-              style={{ marginLeft: "10px" }}
-            >
-              Login as Faculty
-            </button>
+              <button
+                type="button"
+                className={styles.devBtn}
+                onClick={() => {
+                  authService.saveSession({
+                    user_id: 4,
+                    username: "programhead",
+                    email: "programhead@ptc.edu.ph",
+                    role: "Program Head",
+                    role_id: 4,
+                  });
+                  navigate("/programhead/dashboard");
+                }}
+              >
+                Login as Program Head
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                authService.saveSession({
-                  username: "student",
-                  role: "student",
-                });
-
-                navigate("/student/dashboard");
-              }}
-              style={{ marginLeft: "10px" }}
-            >
-              Login as Student
-            </button>
+              <button
+                type="button"
+                className={styles.devBtn}
+                onClick={() => {
+                  authService.saveSession({
+                    user_id: 5,
+                    username: "registrar",
+                    email: "registrar@ptc.edu.ph",
+                    role: "Registrar",
+                    role_id: 5,
+                  });
+                  navigate("/registrar/dashboard");
+                }}
+              >
+                Login as Registrar
+              </button>
+            </div>
           </div>
         </div>
       </div>

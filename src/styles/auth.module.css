@@ -1,15 +1,42 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap");
 
+.authcard,
+.authcard * {
+  font-family: "Poppins", sans-serif;
+  box-sizing: border-box;
+}
+
+/* PAGE BACKGROUND (behind the auth card) */
+.authPage {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: url("../assets/loginbg.png") no-repeat center center / cover;
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* optional dark/tint overlay so the card pops */
+.authPage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 0;
+}
 
 .authcard {
   width: 900px;
   height: 580px;
-  background: rgb(230, 236, 234);
+  background: rgb(241, 243, 240);
   border-radius: 22px;
   display: flex;
   overflow: hidden;
-  margin: 150px auto;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
   position: relative;
+  z-index: 1;
 }
 
 /* Background overlay for extra depth */
@@ -17,19 +44,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(
-      900px 500px at 10% 10%,
-      rgba(24, 236, 5, 0.842),
-      transparent 60%
-    ),
-    radial-gradient(
-      700px 450px at 90% 80%,
-      rgba(226, 66, 2, 0.18),
-      transparent 55%
-    );
-  pointer-events: none;
-  z-index: 0;
+  background: linear-gradient(180deg, #79be67 0%, #f4f5f1 100%);
 }
 
 .authcard > * {
@@ -42,7 +57,7 @@
   flex-basis: 35%;
   flex: 1;
   background:
-    linear-gradient(135deg, rgba(108, 92, 231, 0.9), rgba(0, 173, 23, 0.9)),
+    linear-gradient(135deg, rgba(1, 175, 7, 0.863), rgba(3, 43, 8, 0.9)),
     url("../assets/ptcbackground.jpg") no-repeat center/cover;
   color: rgb(20, 20, 20);
   padding: 50px;
@@ -57,8 +72,9 @@
 .authleft p {
   font-size: 1.1rem;
   opacity: 0.9;
-} /* RIGHT PANEL */
-/* RIGHT PANEL - main container */
+}
+
+/* RIGHT PANEL */
 .authright {
   display: flex;
   flex-direction: column;
@@ -68,7 +84,6 @@
   background: #ffffff36;
 }
 
-/* Title */
 .authright h2 {
   font-size: 1.8rem;
   font-weight: 700;
@@ -76,7 +91,6 @@
   margin-bottom: 8px;
 }
 
-/* Subtitle under the title */
 .authright p {
   font-size: 0.95rem;
   color: #888;
@@ -84,7 +98,6 @@
   text-align: center;
 }
 
-/* FORM - stacks everything vertically */
 .authright form {
   display: flex;
   flex-direction: column;
@@ -92,34 +105,53 @@
   width: 100%;
 }
 
-/* Input label style (small text above input) */
-.authright .inputgroup {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+/* ============================
+   Floating-label inputs
+   NOTE: requires <input> BEFORE <label> in the JSX — see note below
+   ============================ */
+.inputgroup {
+  position: relative;
+  margin: 12px 0;
 }
 
-.authright .inputgroup label {
-  font-size: 0.75rem;
-  color: #aaa;
-  padding-left: 4px;
-}
-
-/* INPUTS */
-.authright input {
-  padding: 14px 16px;
-  border-radius: 10px;
-  border: 1.5px solid #ddd;
-  font-size: 1rem;
-  transition: 0.3s;
+.inputgroup input {
   width: 100%;
-  box-sizing: border-box;
+  height: 50px;
+  background: transparent;
+  border: 1.5px solid #ddd;
+  outline: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #1a1a1a;
+  padding: 0 16px;
+  transition: 0.3s ease;
 }
 
-.authright input:focus {
-  outline: none;
-  border-color: var(--primary-green);
+.inputgroup input:focus,
+.inputgroup input:valid {
+  border-color: var(--primary-green, #00ad17);
   box-shadow: 0 0 0 3px rgba(0, 173, 23, 0.15);
+}
+
+.inputgroup label {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  color: #888;
+  pointer-events: none;
+  transition: 0.3s ease;
+  background: transparent;
+}
+
+.inputgroup input:focus ~ label,
+.inputgroup input:valid ~ label {
+  top: 0;
+  font-size: 0.75rem;
+  background: rgb(230, 236, 234);
+  padding: 0 6px;
+  color: var(--primary-green, #00ad17);
 }
 
 /* BUTTON */
@@ -129,10 +161,10 @@
   margin-top: 6px;
   background: linear-gradient(
     135deg,
-    var(--accent-purple),
-    var(--primary-green)
+    var(--accent-purple, #6c5ce7),
+    var(--primary-green, #00ad17)
   );
-  color: rgb(0, 0, 0);
+  color: #000;
   border: 1.5px solid #00000052;
   border-radius: 10px;
   cursor: pointer;
@@ -144,10 +176,9 @@
 
 .authright button[type="submit"]:hover {
   opacity: 0.9;
-  text-decoration: none;
 }
 
-/* LINKS ROW - "Create an account" and "Forgot password?" */
+/* LINKS ROW */
 .authlinks {
   margin-top: 20px;
   display: flex;
@@ -157,7 +188,7 @@
 
 .authlinks a {
   text-decoration: none;
-  color: var(--accent-purple);
+  color: var(--accent-purple, #6c5ce7);
   font-weight: 500;
 }
 
@@ -165,5 +196,126 @@
   text-decoration: underline;
 }
 
+/* ===================
+   Animations
+   =================== */
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes animateBlink {
+  0% { background: #0ef; }
+  25% { background: #2c4766; }
+}
+
+.fadeIn {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.errorMsg {
+  color: #d92d20;
+  font-size: 13px;
+  margin-bottom: 8px;
+  animation: shake 0.35s ease-in-out;
+}
+
+/* Submit button loading state */
+.submitBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Dev access buttons */
+.devButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.devBtn {
+  padding: 8px 14px;
+  border: 1px solid #585757;
+  border-radius: 6px;
+  background: #f4f5f7;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.devBtn:hover {
+  background: #6cbd3e;
+  border-color: #d3d8df;
+  transform: translateY(-2px);
+}
+
+/* ============================
+   Radial "loading clock" spinner
+   NOTE: needs 50 <span> elements in JSX with inline --i var — see note below
+   ============================ */
+.loaderContainer {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+}
+
+.loaderContainer span {
+  position: absolute;
+  left: 0;
+  width: 12px;
+  height: 3px;
+  background: #2c4766;
+  border-radius: 8px;
+  transform-origin: 48px;
+  transform: rotate(calc(var(--i) * (360deg / 50)));
+  animation: animateBlink 3s linear infinite;
+  animation-delay: calc(var(--i) * (3s / 50));
+}
+
+/* Back button */
+.backBtn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgb(156, 204, 152);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: 0.85rem;
+  font-weight: 1000;
+  color: #1a1a1a;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.backBtn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateX(-2px);
+}

@@ -1,14 +1,18 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import bcrypt from "bcrypt";
-import nodemailer from "nodemailer";
-import crypto from "crypto";
-import db from "./db.js"; // CHANGED: shared connection, moved out of this file
-import studentsRouter from "./routes/students.routes.js"; // ADDED
+import path from "path";
+
+import authRouter from "./routes/auth.routes.js";
+import studentsRouter from "./routes/students.routes.js";
+import usersRouter from "./routes/users.routes.js";
+import activityRouter from "./routes/activity.routes.js";
 
 const app = express();
 
+// =======================
+// Middleware
+// =======================
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
@@ -17,167 +21,56 @@ app.use(
 
 app.use(express.json());
 
-// ADDED: mount the students CRUD routes
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+// =======================
+// API Routes
+// =======================
+app.use("/auth", authRouter);
+
 app.use("/api/students", studentsRouter);
 
+app.use("/api/users", usersRouter);
+
+app.use("/api/activity-logs", activityRouter);
+
 // =======================
-// Nodemailer
+// Root Route
 // =======================
-const transporter = nodemailer.createTransport({
-  host: "smtp.ethereal.email",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.ETHEREAL_USER,
-    pass: process.env.ETHEREAL_PASS,
-  },
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "PTC Student Portal API is running.",
+  });
 });
 
 // =======================
-// Login
+// 404 Handler
 // =======================
-app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({
-      error: "Email and password are required.",
-    });
-  }
-
-  try {
-    const [rows] = await db.execute("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
-
-    if (rows.length === 0) {
-      return res.status(401).json({
-        error: "Invalid email or password.",
-      });
-    }
-
-    const user = rows[0];
-
-    const match = await bcrypt.compare(password, user.password_hash);
-
-    if (!match) {
-      return res.status(401).json({
-        error: "Invalid email or password.",
-      });
-    }
-
-    // Generate OTP
-    const otp = crypto.randomInt(100000, 999999).toString();
-
-    // Remove previous OTP
-    await db.execute("DELETE FROM otp_codes WHERE email = ?", [email]);
-
-    // Expires in 5 minutes
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-    // Save OTP
-    await db.execute(
-      `INSERT INTO otp_codes
-      (email, otp, expires_at)
-      VALUES (?, ?, ?)`,
-      [email, otp, expiresAt],
-    );
-
-    // Send Email
-    const info = await transporter.sendMail({
-      from: '"PTC Portal" <noreply@ptc.edu.ph>',
-      to: email,
-      subject: "PTC Portal OTP",
-
-      text: `Your OTP is ${otp}. It expires in 5 minutes.`,
-
-      html: `
-        <div style="font-family:Arial">
-          <h2>PTC Portal</h2>
-
-          <p>Your One-Time Password is:</p>
-
-          <h1 style="letter-spacing:6px;color:#4f46e5;">
-            ${otp}
-          </h1>
-
-          <p>This code expires in <b>5 minutes</b>.</p>
-        </div>
-      `,
-    });
-
-    console.log("Preview URL:", nodemailer.getTestMessageUrl(info));
-
-    res.json({
-      message: "OTP sent successfully.",
-    });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      error: "Server error.",
-    });
-  }
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found.",
+  });
 });
 
 // =======================
-// Verify OTP
+// Global Error Handler
 // =======================
-app.post("/auth/verify-otp", async (req, res) => {
-  const { email, otp } = req.body;
+app.use((err, req, res, next) => {
+  console.error(err);
 
-  if (!email || !otp) {
-    return res.status(400).json({
-      error: "Email and OTP are required.",
-    });
-  }
-
-  try {
-    const [otpRows] = await db.execute(
-      `SELECT *
-       FROM otp_codes
-       WHERE email = ?
-       AND otp = ?
-       AND expires_at > NOW()`,
-      [email, otp],
-    );
-
-    if (otpRows.length === 0) {
-      return res.status(401).json({
-        error: "Invalid or expired OTP.",
-      });
-    }
-
-    // Delete OTP after success
-    await db.execute("DELETE FROM otp_codes WHERE email = ?", [email]);
-
-    const [userRows] = await db.execute(
-      "SELECT email, role FROM users WHERE email = ?",
-      [email],
-    );
-
-    if (userRows.length === 0) {
-      return res.status(404).json({
-        error: "User not found.",
-      });
-    }
-
-    res.json({
-      email: userRows[0].email,
-      role: userRows[0].role,
-    });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      error: "Server error.",
-    });
-  }
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error",
+  });
 });
 
 // =======================
 // Start Server
 // =======================
-app.listen(3000, () => {
-  console.log("🚀 Backend running at http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running at http://localhost:${PORT}`);
 });

@@ -10,14 +10,14 @@ import {
   Calendar,
   FileText,
   User,
-  Award
+  Award,
 } from "lucide-react";
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "student") {
+  if (!user || user.role !== "Student") {
     navigate("/login");
     return null;
   }
@@ -29,7 +29,10 @@ export default function StudentDashboard() {
           <div className="header-content">
             <div>
               <h1>Welcome, {user.username}!</h1>
-              <p>Student Portal - View your schedule, grades, announcements, and admission status</p>
+              <p>
+                Student Portal - View your schedule, grades, announcements, and
+                admission status
+              </p>
             </div>
             <div className="header-stats">
               <div className="header-stat">
@@ -170,7 +173,10 @@ export default function StudentDashboard() {
               <div className="announcement-date">Mar 21</div>
               <div className="announcement-content">
                 <h4>Midterm Examination Schedule Released</h4>
-                <p>Check the academic portal for the complete midterm exam schedule for this semester.</p>
+                <p>
+                  Check the academic portal for the complete midterm exam
+                  schedule for this semester.
+                </p>
               </div>
             </div>
 
@@ -178,7 +184,10 @@ export default function StudentDashboard() {
               <div className="announcement-date">Mar 19</div>
               <div className="announcement-content">
                 <h4>Library Extended Hours</h4>
-                <p>The library will be open until 10:00 PM on weekdays during exam season.</p>
+                <p>
+                  The library will be open until 10:00 PM on weekdays during
+                  exam season.
+                </p>
               </div>
             </div>
 
@@ -186,7 +195,10 @@ export default function StudentDashboard() {
               <div className="announcement-date">Mar 17</div>
               <div className="announcement-content">
                 <h4>Student Services Office Closed</h4>
-                <p>The Student Services office will be closed on March 24 for maintenance.</p>
+                <p>
+                  The Student Services office will be closed on March 24 for
+                  maintenance.
+                </p>
               </div>
             </div>
           </div>

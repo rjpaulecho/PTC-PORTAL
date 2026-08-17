@@ -2,19 +2,19 @@ import DashboardLayout from "../../../components/Layout/DashboardLayout";
 import { authService } from "../../../services/auth.service";
 import { useNavigate } from "react-router-dom";
 
-export default function FeesSetup() {
+export default function Scholarship() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "admin") {
+  if (!user || user.role !== "Admin") {
     navigate("/login");
     return null;
   }
 
   return (
     <DashboardLayout>
-      <div className="admin-fees-setup">
-        <h1>Fees Setup</h1>
+      <div className="admin-scholarship-financial">
+        <h1>Scholarship</h1>
         <p>This page is under construction.</p>
       </div>
     </DashboardLayout>

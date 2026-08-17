@@ -1,10 +1,4 @@
-import {
-  useState,
-  useMemo,
-  useEffect,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
 import Modal from "../../../components/modal";
 import { authService } from "../../../services/auth.service";
@@ -14,51 +8,20 @@ import "../../../styles/addeditdrop.css";
 type Student = {
   id: string;
   firstName: string;
+  middleName: string;
   lastName: string;
   email: string;
+  gender: string;
+  birthDate: string;
+  contactNumber: string;
   course: string;
   yearLevel: string;
   section: string;
+  semesterId: string;
 };
 
 // Point this at wherever your Node server actually runs.
 const API_BASE_URL = "http://localhost:3000/api/students";
-
-// --- Reusable option sources -------------------------------------------
-
-const COURSES = ["BSIT", "BSOA", "COA", "CSS"] as const;
-
-const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year"] as const;
-
-// Maps "1st Year" -> "1", "2nd Year" -> "2", etc.
-const yearLevelToDigit = (yearLevel: string): string => {
-  const match = yearLevel.match(/^(\d+)/);
-  return match ? match[1] : "";
-};
-
-// Generates ["BSIT-1A", "BSIT-1B", ..., "BSIT-1Z"] for a given course + year level.
-// Returns [] if either course or yearLevel is not yet selected.
-const generateSectionOptions = (
-  course: string,
-  yearLevel: string,
-): string[] => {
-  const yearDigit = yearLevelToDigit(yearLevel);
-  if (!course || !yearDigit) return [];
-
-  return Array.from({ length: 26 }, (_, index) => {
-    const letter = String.fromCharCode(65 + index); // A-Z
-    return `${course}-${yearDigit}${letter}`;
-  });
-};
-
-const emptyForm = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  course: "",
-  yearLevel: "1st Year",
-  section: "",
-};
 
 export default function AddEditDrop() {
   const navigate = useNavigate();
@@ -67,19 +30,8 @@ export default function AddEditDrop() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
-  const [formState, setFormState] = useState<Omit<Student, "id">>(emptyForm);
 
-  // Section options always derive from the currently selected course + year level.
-  // This must run before any early return so hook order stays stable across renders.
-  const sectionOptions = useMemo(
-    () => generateSectionOptions(formState.course, formState.yearLevel),
-    [formState.course, formState.yearLevel],
-  );
-
-  // Load students from the database once on mount.
   useEffect(() => {
     const loadStudents = async () => {
       setIsLoading(true);
@@ -101,8 +53,13 @@ export default function AddEditDrop() {
     loadStudents();
   }, []);
 
-  if (!user || user.role !== "admin") {
-    navigate("/login");
+  useEffect(() => {
+    if (!user || user.role !== "Admin") {
+      navigate("/login");
+    }
+  }, [user, navigate]);
+
+  if (!user || user.role !== "Admin") {
     return null;
   }
 
@@ -117,107 +74,11 @@ export default function AddEditDrop() {
     );
   });
 
-  const openAddStudent = () => {
-    setEditingStudent(null);
-    setFormState(emptyForm);
-    setIsModalOpen(true);
-  };
-
-  const openEditStudent = (student: Student) => {
-    setEditingStudent(student);
-    setFormState({
-      firstName: student.firstName,
-      lastName: student.lastName,
-      email: student.email,
-      course: student.course,
-      yearLevel: student.yearLevel,
-      section: student.section,
-    });
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingStudent(null);
-    setFormState(emptyForm);
-  };
-
-  const handleInputChange = (
-    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value } = event.target;
-
-    setFormState((current) => {
-      const updated = { ...current, [name]: value };
-
-      // Whenever Course or Year Level changes, the list of valid sections
-      // changes too, so re-validate the currently selected section.
-      if (name === "course" || name === "yearLevel") {
-        const validSections = generateSectionOptions(
-          updated.course,
-          updated.yearLevel,
-        );
-        if (!validSections.includes(updated.section)) {
-          updated.section = "";
-        }
-      }
-
-      return updated;
-    });
-  };
-
-  const handleSaveStudent = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (
-      !formState.firstName.trim() ||
-      !formState.lastName.trim() ||
-      !formState.email.trim() ||
-      !formState.course.trim() ||
-      !formState.yearLevel.trim() ||
-      !formState.section.trim()
-    ) {
-      return;
-    }
-
-    setErrorMessage(null);
-
-    try {
-      if (editingStudent) {
-        // Update existing student on the server, then update local state.
-        const response = await fetch(`${API_BASE_URL}/${editingStudent.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formState),
-        });
-        if (!response.ok) throw new Error("Failed to update student");
-        const updated: Student = await response.json();
-
-        setStudents((current) =>
-          current.map((student) =>
-            student.id === editingStudent.id ? updated : student,
-          ),
-        );
-      } else {
-        // Create a new student on the server, then add it to local state.
-        const response = await fetch(API_BASE_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formState),
-        });
-        if (!response.ok) throw new Error("Failed to add student");
-        const newStudent: Student = await response.json();
-
-        setStudents((current) => [newStudent, ...current]);
-      }
-
-      closeModal();
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to save student",
-      );
-    }
-  };
+  // Add/Edit no longer open a modal — they navigate to their own dedicated pages.
+  // TODO: adjust these paths to match your actual router config if different.
+  const goToAddStudent = () => navigate("/admin/students/createstudents");
+  const goToEditStudent = (student: Student) =>
+    navigate(`/admin/students/editstudents/${student.id}`);
 
   const confirmDeleteStudent = (student: Student) => {
     setDeleteTarget(student);
@@ -257,7 +118,7 @@ export default function AddEditDrop() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={openAddStudent}
+            onClick={goToAddStudent}
           >
             + Add Student
           </button>
@@ -282,6 +143,7 @@ export default function AddEditDrop() {
               <th>First Name</th>
               <th>Last Name</th>
               <th>Email</th>
+              <th>Contact Number</th>
               <th>Course</th>
               <th>Year Level</th>
               <th>Section</th>
@@ -291,13 +153,13 @@ export default function AddEditDrop() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center" }}>
+                <td colSpan={9} style={{ textAlign: "center" }}>
                   Loading students...
                 </td>
               </tr>
             ) : filteredStudents.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center" }}>
+                <td colSpan={9} style={{ textAlign: "center" }}>
                   No students found.
                 </td>
               </tr>
@@ -308,6 +170,7 @@ export default function AddEditDrop() {
                   <td>{student.firstName}</td>
                   <td>{student.lastName}</td>
                   <td>{student.email}</td>
+                  <td>{student.contactNumber || "—"}</td>
                   <td>{student.course}</td>
                   <td>{student.yearLevel}</td>
                   <td>{student.section}</td>
@@ -315,7 +178,7 @@ export default function AddEditDrop() {
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => openEditStudent(student)}
+                      onClick={() => goToEditStudent(student)}
                     >
                       Edit
                     </button>
@@ -333,108 +196,7 @@ export default function AddEditDrop() {
           </tbody>
         </table>
 
-        {/* Add / Edit modal */}
-        {isModalOpen && (
-          <Modal isOpen={isModalOpen} onClose={closeModal}>
-            <h2>{editingStudent ? "Edit Student" : "Add Student"}</h2>
-            <form onSubmit={handleSaveStudent} className="admin-student-form">
-              <label>
-                First Name
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formState.firstName}
-                  onChange={handleInputChange}
-                  required
-                />
-              </label>
-
-              <label>
-                Last Name
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formState.lastName}
-                  onChange={handleInputChange}
-                  required
-                />
-              </label>
-
-              <label>
-                Email
-                <input
-                  type="email"
-                  name="email"
-                  value={formState.email}
-                  onChange={handleInputChange}
-                  required
-                />
-              </label>
-
-              <label>
-                Course
-                <select
-                  name="course"
-                  value={formState.course}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="">Select course</option>
-                  {COURSES.map((course) => (
-                    <option key={course} value={course}>
-                      {course}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Year Level
-                <select
-                  name="yearLevel"
-                  value={formState.yearLevel}
-                  onChange={handleInputChange}
-                  required
-                >
-                  {YEAR_LEVELS.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Section
-                <select
-                  name="section"
-                  value={formState.section}
-                  onChange={handleInputChange}
-                  required
-                  disabled={sectionOptions.length === 0}
-                >
-                  <option value="">Select section</option>
-                  {sectionOptions.map((section) => (
-                    <option key={section} value={section}>
-                      {section}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="admin-student-form__actions">
-                <button type="button" className="btn" onClick={closeModal}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingStudent ? "Save Changes" : "Add Student"}
-                </button>
-              </div>
-            </form>
-          </Modal>
-        )}
-
-        {/* Delete confirmation modal */}
+        {/* Delete confirmation stays as a modal — it's a quick yes/no, not a form */}
         {deleteTarget && (
           <Modal isOpen={Boolean(deleteTarget)} onClose={cancelDelete}>
             <h2>Delete Student</h2>

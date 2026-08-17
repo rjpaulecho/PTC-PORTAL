@@ -5,7 +5,6 @@ export const adminNavGroups = [
     icon: "",
     children: [
       { label: "Student List", path: "/admin/students/manage" },
-      { label: "Student Record", path: "/admin/students/records" },
       { label: "Student Management", path: "/admin/students/addeditdrop" },
     ],
   },
@@ -15,7 +14,7 @@ export const adminNavGroups = [
     icon: "",
     children: [
       { label: "Approve Enrollment", path: "/admin/enrollment/approve" },
-      { label: "Class Scheduling", path: "/admin/enrollment/scheduling" },
+      { label: "EnrollmentRequest", path: "/admin/enrollment/request" },
     ],
   },
   {
@@ -23,8 +22,10 @@ export const adminNavGroups = [
     label: "Financial Management",
     icon: "",
     children: [
-      { label: "Fees Setup", path: "/admin/financial/fees" },
       { label: "Payment Monitoring", path: "/admin/financial/payments" },
+      { label: "Billing", path: "/admin/financial/billing" },
+      { label: "Scholarship", path: "/admin/financial/scholarship" },
+      { label: "Reports", path: "/admin/financial/freport" },
     ],
   },
   {
@@ -32,19 +33,33 @@ export const adminNavGroups = [
     label: "System Management",
     icon: "",
     children: [
-      { label: "User Accounts", path: "/admin/system/accounts" },
-      { label: "Roles & Permissions", path: "/admin/system/roles" },
-      { label: "System Settings", path: "/admin/system/settings" },
+      { label: "backup", path: "/admin/system/backup" },
+      { label: "Acadsetting", path: "/admin/system/acadsetting" },
+      { label: "Settings", path: "/admin/system/Gsettings" },
+      { label: "Security", path: "/admin/system/security" },
+      { label: "Email", path: "/admin/system/email" },
+    ],
+  },
+
+  {
+    id: "report-management",
+    label: "Report Management",
+    icon: "",
+    children: [
+      { label: "Dashboard", path: "/admin/reports/dashboard" },
+      { label: "Export Reports", path: "/admin/reports/export" },
+      { label: "Audit Logs", path: "/admin/reports/auditlog" },
+      { label: "Usage Analytics", path: "/admin/reports/analytics" },
     ],
   },
   {
-    id: "reports",
-    label: "Reports & Analytics",
+    id: "user-management",
+    label: "User Management",
     icon: "",
     children: [
-      { label: "Student Reports", path: "/admin/reports/students" },
-      { label: "Financial Reports", path: "/admin/reports/financial" },
-      { label: "Usage Analytics", path: "/admin/reports/analytics" },
+      { label: "User List", path: "/admin/user/list" },
+      { label: "UserActivity", path: "/admin/user/activity" },
+      { label: "User Roles", path: "/admin/user/roles" },
     ],
   },
 ];

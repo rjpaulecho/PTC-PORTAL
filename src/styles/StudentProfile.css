@@ -1,0 +1,226 @@
+/* =====================================================
+STUDENT PROFILE PAGE
+===================================================== */
+
+.admin-profile-students {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+/* =====================================================
+PAGE HEADER
+===================================================== */
+
+.profile-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.profile-back-button,
+.profile-edit-button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.profile-back-button {
+  background: #f1f1f1;
+  color: #333;
+}
+
+.profile-back-button:hover {
+  background: #e2e2e2;
+}
+
+.profile-edit-button {
+  background: #2563eb;
+  color: white;
+}
+
+.profile-edit-button:hover {
+  background: #1d4ed8;
+}
+
+.profile-back-button:active,
+.profile-edit-button:active {
+  transform: scale(0.98);
+}
+
+/* =====================================================
+PROFILE CARDS
+===================================================== */
+
+.profile-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.profile-card h2 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  color: #1f2937;
+}
+
+/* =====================================================
+PROFILE HEADER CARD
+===================================================== */
+
+.profile-header-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 28px;
+}
+
+.profile-header-card h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  color: #111827;
+}
+
+.profile-header-card p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 15px;
+}
+
+/* =====================================================
+AVATAR
+===================================================== */
+
+.profile-avatar {
+  width: 76px;
+  height: 76px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 24px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* =====================================================
+INFORMATION GRID
+===================================================== */
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-field span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-field strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.profile-full-width {
+  grid-column: 1 / -1;
+}
+
+/* =====================================================
+ERROR MESSAGE
+===================================================== */
+
+.profile-error {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* =====================================================
+RESPONSIVE
+===================================================== */
+
+@media (max-width: 768px) {
+  .admin-profile-students {
+    padding: 20px;
+  }
+
+  .profile-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-back-button,
+  .profile-edit-button {
+    width: 100%;
+  }
+
+  .profile-header-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-full-width {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-profile-students {
+    padding: 14px;
+  }
+
+  .profile-card {
+    padding: 18px;
+  }
+
+  .profile-header-card h1 {
+    font-size: 23px;
+  }
+
+  .profile-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 20px;
+  }
+}

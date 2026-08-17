@@ -1,0 +1,154 @@
+/* StudentRecord.css */
+
+.student-record-container {
+  padding: 30px;
+  background: #f5f7fb;
+  min-height: 100vh;
+  font-family: "Poppins", sans-serif;
+}
+
+.student-record-container h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 25px;
+  color: #1f2937;
+}
+
+/* CARD DESIGN */
+
+.record-card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.record-card h2 {
+  font-size: 20px;
+  color: #111827;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 10px;
+}
+
+/* STUDENT INFORMATION */
+
+.student-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.student-info div {
+  background: #f9fafb;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.student-info label {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.student-info p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* TABLE DESIGN */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table thead {
+  background: #1d4ed8;
+  color: white;
+}
+
+table th {
+  padding: 14px;
+  text-align: left;
+  font-size: 14px;
+}
+
+table td {
+  padding: 13px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+  color: #374151;
+}
+
+table tbody tr:hover {
+  background: #f3f4f6;
+}
+
+/* ACTION BUTTONS */
+
+.record-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.record-actions button {
+  border: none;
+  padding: 12px 20px;
+
+  border-radius: 8px;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  cursor: pointer;
+
+  transition: 0.3s;
+
+  background: #2563eb;
+  color: white;
+}
+
+.record-actions button:hover {
+  background: #1e40af;
+
+  transform: translateY(-2px);
+}
+
+/* RESPONSIVE DESIGN */
+
+@media (max-width: 1024px) {
+  .student-info {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .student-record-container {
+    padding: 15px;
+  }
+
+  .student-info {
+    grid-template-columns: 1fr;
+  }
+
+  .record-actions {
+    flex-direction: column;
+  }
+
+  .record-actions button {
+    width: 100%;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}

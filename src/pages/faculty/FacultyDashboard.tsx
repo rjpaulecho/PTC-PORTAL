@@ -13,7 +13,7 @@ export default function FacultyDashboard() {
 
   // Safety net: ProtectedRoute already blocks wrong roles,
   // but this catches any edge case where the component is used outside the router.
-  if (!user || user.role !== "faculty") {
+  if (!user || user.role !== "Faculty") {
     // ← lowercase "faculty" — was "Faculty" before
     navigate("/login");
     return null;

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";import type { ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authService } from "../../services/auth.service";
 import logo from "../../assets/ptclogo.jpg";
@@ -6,6 +7,14 @@ import { studentNavGroups, studentSoloLinks } from "../../config/studentNav";
 import { adminNavGroups, adminSoloLinks } from "../../config/adminNav";
 import { facultyNavGroups, facultySoloLinks } from "../../config/facultyNav";
 import "../../styles/sidebar.css";
+import {
+  registrarNavGroups,
+  registrarSoloLinks,
+} from "../../config/registrarNav";
+import {
+  programHeadNavGroups,
+  programHeadSoloLinks,
+} from "../../config/progheadNav";
 
 /* ────────────────────────────────────────────────────────────────────────
  * Types
@@ -89,23 +98,53 @@ function ChevronIcon({
     </svg>
   );
 }
-
 function getNavByRole(role: string) {
   switch (role) {
-    case "student":
-      return { groups: studentNavGroups, soloLinks: studentSoloLinks };
-    case "faculty":
-      return { groups: facultyNavGroups, soloLinks: facultySoloLinks };
-    case "admin":
-      return { groups: adminNavGroups, soloLinks: adminSoloLinks };
+    case "Student":
+      return {
+        groups: studentNavGroups,
+        soloLinks: studentSoloLinks,
+      };
+
+    case "Faculty":
+      return {
+        groups: facultyNavGroups,
+        soloLinks: facultySoloLinks,
+      };
+
+    case "Admin":
+      return {
+        groups: adminNavGroups,
+        soloLinks: adminSoloLinks,
+      };
+
+    case "Registrar":
+      return {
+        groups: registrarNavGroups,
+        soloLinks: registrarSoloLinks,
+      };
+
+    case "Program Head":
+      return {
+        groups: programHeadNavGroups,
+        soloLinks: programHeadSoloLinks,
+      };
+
     default:
-      return { groups: [], soloLinks: [] };
+      return {
+        groups: [],
+        soloLinks: [],
+      };
   }
 }
 
 /** Recursively assigns a stable id to a config child and its descendants,
  * so config files never have to supply ids by hand. */
-function normalizeNode(node: NavChild, parentId: string, index: number): NavItem {
+function normalizeNode(
+  node: NavChild,
+  parentId: string,
+  index: number,
+): NavItem {
   const id = node.id ?? node.path ?? `${parentId}-${index}`;
   return {
     id,
@@ -134,7 +173,9 @@ function buildNavTree(soloLinks: SoloLink[], groups: NavGroup[]): NavItem[] {
     label: group.label,
     icon: group.icon,
     badge: group.badge,
-    children: group.children.map((child, i) => normalizeNode(child, group.id, i)),
+    children: group.children.map((child, i) =>
+      normalizeNode(child, group.id, i),
+    ),
   }));
 
   return [...soloItems, ...groupItems];
@@ -189,14 +230,18 @@ function NavLevel({
   onNavigatePage,
 }: NavLevelProps) {
   const selectedId = activePath[levelIndex]?.id;
-  const selectedIndex = selectedId ? items.findIndex((i) => i.id === selectedId) : -1;
+  const selectedIndex = selectedId
+    ? items.findIndex((i) => i.id === selectedId)
+    : -1;
 
   // Root level (levelIndex 0) always shows every item — Dashboard, Student
   // Management, Financial Management, etc. are independent top-level
   // entries, not part of whatever group is open, so opening one of them
   // shouldn't hide the rest. Nested levels still truncate as before.
   const visibleItems =
-    levelIndex === 0 || selectedIndex === -1 ? items : items.slice(0, selectedIndex + 1);
+    levelIndex === 0 || selectedIndex === -1
+      ? items
+      : items.slice(0, selectedIndex + 1);
 
   return (
     <>
@@ -228,7 +273,9 @@ function NavLevel({
             <div key={item.id} className="nav-group">
               <button
                 className={`group-btn ${isOpen ? "open" : ""}`}
-                onClick={() => onToggleFolder(levelIndex, isOpen ? undefined : item)}
+                onClick={() =>
+                  onToggleFolder(levelIndex, isOpen ? undefined : item)
+                }
                 aria-expanded={isOpen}
               >
                 <span className="icon">{item.icon}</span>
@@ -279,7 +326,9 @@ function NavLevel({
             <button
               className={`nav-item ${isOpen ? "folder-open" : ""}`}
               style={style}
-              onClick={() => onToggleFolder(levelIndex, isOpen ? undefined : item)}
+              onClick={() =>
+                onToggleFolder(levelIndex, isOpen ? undefined : item)
+              }
               aria-expanded={isOpen}
             >
               {item.label}
@@ -328,41 +377,44 @@ export default function Sidebars({ groups, soloLinks }: SidebarProps) {
   // Replaces the old `const [openGroup, setOpenGroup] = useState<string | null>(...)`.
   // activePath is the stack of currently-selected FOLDERS (never pages),
   // root to deepest.
-const [activePath, setActivePath] = useState<NavItem[]>(() => {
-  const chain = findOpenChain(navItems, location.pathname);
-  return chain ? chain.slice(0, -1) : [];
-});
+  const [activePath, setActivePath] = useState<NavItem[]>(() => {
+    const chain = findOpenChain(navItems, location.pathname);
+    return chain ? chain.slice(0, -1) : [];
+  });
 
-// Tracks the pathname activePath was last synced to. Adjusting state
-// directly during render (React's supported pattern for state derived
-// from a changed prop) instead of in an effect avoids the extra
-// commit-then-re-render pass the linter is flagging.
-const [syncedPathname, setSyncedPathname] = useState(location.pathname);
-if (location.pathname !== syncedPathname) {
-  setSyncedPathname(location.pathname);
-  const chain = findOpenChain(navItems, location.pathname);
-  if (chain) setActivePath(chain.slice(0, -1));
-}
+  // Tracks the pathname activePath was last synced to. Adjusting state
+  // directly during render (React's supported pattern for state derived
+  // from a changed prop) instead of in an effect avoids the extra
+  // commit-then-re-render pass the linter is flagging.
+  const [syncedPathname, setSyncedPathname] = useState(location.pathname);
+  if (location.pathname !== syncedPathname) {
+    setSyncedPathname(location.pathname);
+    const chain = findOpenChain(navItems, location.pathname);
+    if (chain) setActivePath(chain.slice(0, -1));
+  }
 
-const handleToggleFolder = useCallback((levelIndex: number, item?: NavItem) => {
-  setActivePath((prev) =>
-    item ? [...prev.slice(0, levelIndex), item] : prev.slice(0, levelIndex),
+  const handleToggleFolder = useCallback(
+    (levelIndex: number, item?: NavItem) => {
+      setActivePath((prev) =>
+        item ? [...prev.slice(0, levelIndex), item] : prev.slice(0, levelIndex),
+      );
+    },
+    [],
   );
-}, []);
 
-const handleNavigatePage = useCallback(
-  (item: NavItem) => {
-    if (item.path) navigate(item.path);
-  },
-  [navigate],
-);
+  const handleNavigatePage = useCallback(
+    (item: NavItem) => {
+      if (item.path) navigate(item.path);
+    },
+    [navigate],
+  );
 
-// ✅ Early return AFTER all hooks
-if (!user) return null;
+  // ✅ Early return AFTER all hooks
+  if (!user) return null;
 
-function isActive(path?: string) {
-  return !!path && location.pathname.startsWith(path);
-}
+  function isActive(path?: string) {
+    return !!path && location.pathname.startsWith(path);
+  }
 
   return (
     <nav className="sidebar">

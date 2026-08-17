@@ -55,28 +55,48 @@ import SendNotice from "../pages/faculty/Communication/SendNotice";
 
 // ── Admin: Student Management ──
 import AdminDashboard from "../pages/admin/AdminDashboard";
-import ManageStudentsNew from "../pages/admin/Students/ManageStudents";
-import RecordsManagement from "../pages/admin/Students/Recordmanagement";
+import ManageStudentsNew from "../pages/admin/Students/StudentLists";
 import AddEditDrop from "../pages/admin/Students/AddEditDrop";
+import CreateStudent from "../pages/admin/Students/createstudent";
+import EditStudent from "../pages/admin/Students/editstudent";
+import Sprofile from "../pages/admin/Students/Sprofile";
+
 // ── Admin: Enrollment Management ──
 import ApproveEnrollment from "../pages/admin/Enrollment/ApproveEnrollment";
-import ClassScheduling from "../pages/admin/Enrollment/ClassScheduling";
+import EnrollmentRequests from "../pages/admin/Enrollment/EnrollmentRequests";
+import EnrollmentHistory from "../pages/admin/Enrollment/EnrollmentHistory";
+import EnrollmentAnalytics from "../pages/admin/Enrollment/EnrollmentAnalytics";
 // ── Admin: Financial Management ──
-import FeesSetup from "../pages/admin/FinancialManagement/FeesSetup";
-import PaymentMonitoring from "../pages/admin/FinancialManagement/PaymentMonitoring";
+import Payment from "../pages/admin/FinancialManagement/Payments";
+import Billing from "../pages/admin/FinancialManagement/Billings";
+import Scholarship from "../pages/admin/FinancialManagement/Scholarship";
+import FinancialReport from "../pages/admin/FinancialManagement/FinancialReport";
 // ── Admin: System Management ──
-import UserAccounts from "../pages/admin/System/UserAccounts";
-import RolesPermissions from "../pages/admin/System/Rolespermissions";
-import SystemSettings from "../pages/admin/System/SystemSettings";
+import BackupManagement from "../pages/admin/System/BackupManagement";
+import AcademicSetting from "../pages/admin/System/AcademicSetting";
+import GeneralSettings from "../pages/admin/System/GeneralSetting";
+import SecuritySetting from "../pages/admin/System/SecuritySetting";
+import EmailSetting from "../pages/admin/System/EmailSetting";
 // ── Admin: Reports ──
-import StudentReports from "../pages/admin/Reports/StudentReport";
-import FinancialReports from "../pages/admin/Reports/FinancialReport";
+import DashboardReport from "../pages/admin/Reports/DashboardReport";
+import ExportReports from "../pages/admin/Reports/ExportReport";
+import AuditlogReport from "../pages/admin/Reports/AuditlogReport";
 import UsageAnalytics from "../pages/admin/Reports/UsageAnalytics";
+// ── Admin: USER ──
+import UserList from "../pages/admin/UserManagement/Userlist";
+import CreateUser from "../pages/admin/UserManagement/CreateUser";
+import UserActivity from "../pages/admin/UserManagement/UserActivity";
+import UserRoles from "../pages/admin/UserManagement/UserRoles";
+import EditUser from "../pages/admin/UserManagement/EditUser";
+
+import ProgramHeadDashboard from "../pages/programhead/dashboard/Dashboard";
+import RegistrarDashboard from "../pages/registrar/Dashboard";
 
 import type { ReactElement } from "react";
+import PendingGrades from "../pages/programhead/GradeApproval/PendingGrades";
+import RStudentRecord from "../pages/registrar/GradeApproval/Studentrecord";
 
 // ─── Role guard ───────────────────────────────────────────────
-
 function ProtectedRoute({
   children,
   allowedRole,
@@ -90,28 +110,37 @@ function ProtectedRoute({
 
   if (user.role !== allowedRole) {
     const fallback: Record<UserRole, string> = {
-      admin: "/admin/dashboard",
-      faculty: "/faculty/dashboard",
-      student: "/student/dashboard",
+      Admin: "/admin/dashboard",
+      Registrar: "/registrar/dashboard",
+      Student: "/student/dashboard",
+      Faculty: "/faculty/dashboard",
+      "Program Head": "/programhead/dashboard",
     };
+
     return <Navigate to={fallback[user.role]} replace />;
   }
 
   return children;
 }
-
-// Helper to reduce boilerplate for protected student routes
 function StudentRoute({ element }: { element: ReactElement }) {
-  return <ProtectedRoute allowedRole="student">{element}</ProtectedRoute>;
-}
-// ── add a FacultyRoute helper beside StudentRoute ──
-function FacultyRoute({ element }: { element: ReactElement }) {
-  return <ProtectedRoute allowedRole="faculty">{element}</ProtectedRoute>;
-}
-function AdminRoute({ element }: { element: ReactElement }) {
-  return <ProtectedRoute allowedRole="admin">{element}</ProtectedRoute>;
+  return <ProtectedRoute allowedRole="Student">{element}</ProtectedRoute>;
 }
 
+function FacultyRoute({ element }: { element: ReactElement }) {
+  return <ProtectedRoute allowedRole="Faculty">{element}</ProtectedRoute>;
+}
+
+function AdminRoute({ element }: { element: ReactElement }) {
+  return <ProtectedRoute allowedRole="Admin">{element}</ProtectedRoute>;
+}
+
+function ProgramHeadRoute({ element }: { element: ReactElement }) {
+  return <ProtectedRoute allowedRole="Program Head">{element}</ProtectedRoute>;
+}
+
+function RegistrarRoute({ element }: { element: ReactElement }) {
+  return <ProtectedRoute allowedRole="Registrar">{element}</ProtectedRoute>;
+}
 // ─── Routes ───────────────────────────────────────────────────
 export default function AppRoutes() {
   return (
@@ -201,16 +230,6 @@ export default function AppRoutes() {
         path="/student/financial/pay"
         element={<StudentRoute element={<OnlinePayment />} />}
       />
-      {/* ── Faculty ── */}
-      <Route
-        path="/faculty/dashboard"
-        element={
-          <ProtectedRoute allowedRole="faculty">
-            <FacultyDashboard />
-          </ProtectedRoute>
-        }
-      />
-      // ── replace the single faculty route block with these ──
       {/* ── Faculty: Solo links ── */}
       <Route
         path="/faculty/dashboard"
@@ -284,11 +303,7 @@ export default function AppRoutes() {
       {/* ── Admin ── */}
       <Route
         path="/admin/dashboard"
-        element={
-          <ProtectedRoute allowedRole="admin">
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
+        element={<AdminRoute element={<AdminDashboard />} />}
       />
       {/* ── Admin: Student Management ── */}
       <Route
@@ -296,12 +311,20 @@ export default function AppRoutes() {
         element={<AdminRoute element={<ManageStudentsNew />} />}
       />
       <Route
-        path="/admin/students/records"
-        element={<AdminRoute element={<RecordsManagement />} />}
-      />
-       <Route
         path="/admin/students/addeditdrop"
         element={<AdminRoute element={<AddEditDrop />} />}
+      />
+      <Route
+        path="/admin/students/createstudents"
+        element={<AdminRoute element={<CreateStudent />} />}
+      />
+      <Route
+        path="/admin/students/editstudents/:id"
+        element={<AdminRoute element={<EditStudent />} />}
+      />
+      <Route
+        path="/admin/students/profile/:id"
+        element={<AdminRoute element={<Sprofile />} />}
       />
       {/* ── Admin: Enrollment Management ── */}
       <Route
@@ -309,43 +332,112 @@ export default function AppRoutes() {
         element={<AdminRoute element={<ApproveEnrollment />} />}
       />
       <Route
-        path="/admin/enrollment/scheduling"
-        element={<AdminRoute element={<ClassScheduling />} />}
+        path="/admin/enrollment/request"
+        element={<AdminRoute element={<EnrollmentRequests />} />}
+      />
+      <Route
+        path="/admin/enrollment/history"
+        element={<AdminRoute element={<EnrollmentHistory />} />}
+      />
+      <Route
+        path="/admin/enrollment/analytics"
+        element={<AdminRoute element={<EnrollmentAnalytics />} />}
       />
       {/* ── Admin: Financial Management ── */}
       <Route
-        path="/admin/financial/fees"
-        element={<AdminRoute element={<FeesSetup />} />}
+        path="/admin/financial/payments"
+        element={<AdminRoute element={<Payment />} />}
       />
       <Route
-        path="/admin/financial/payments"
-        element={<AdminRoute element={<PaymentMonitoring />} />}
+        path="/admin/financial/billing"
+        element={<AdminRoute element={<Billing />} />}
+      />
+      <Route
+        path="/admin/financial/scholarship"
+        element={<AdminRoute element={<Scholarship />} />}
+      />
+      <Route
+        path="/admin/financial/freport"
+        element={<AdminRoute element={<FinancialReport />} />}
       />
       {/* ── Admin: System Management ── */}
       <Route
-        path="/admin/system/accounts"
-        element={<AdminRoute element={<UserAccounts />} />}
+        path="/admin/system/backup"
+        element={<AdminRoute element={<BackupManagement />} />}
       />
       <Route
-        path="/admin/system/roles"
-        element={<AdminRoute element={<RolesPermissions />} />}
+        path="/admin/system/acadsetting"
+        element={<AdminRoute element={<AcademicSetting />} />}
       />
       <Route
-        path="/admin/system/settings"
-        element={<AdminRoute element={<SystemSettings />} />}
+        path="/admin/system/Gsettings"
+        element={<AdminRoute element={<GeneralSettings />} />}
+      />
+      <Route
+        path="/admin/system/security"
+        element={<AdminRoute element={<SecuritySetting />} />}
+      />
+      <Route
+        path="/admin/system/email"
+        element={<AdminRoute element={<EmailSetting />} />}
       />
       {/* ── Admin: Reports & Analytics ── */}
       <Route
-        path="/admin/reports/students"
-        element={<AdminRoute element={<StudentReports />} />}
+        path="/admin/reports/Dashboard"
+        element={<AdminRoute element={<DashboardReport />} />}
       />
       <Route
-        path="/admin/reports/financial"
-        element={<AdminRoute element={<FinancialReports />} />}
+        path="/admin/reports/export"
+        element={<AdminRoute element={<ExportReports />} />}
+      />
+      <Route
+        path="/admin/reports/auditlog"
+        element={<AdminRoute element={<AuditlogReport />} />}
       />
       <Route
         path="/admin/reports/analytics"
         element={<AdminRoute element={<UsageAnalytics />} />}
+      />
+      {/* ── Admin: User Management ── */}
+      <Route
+        path="/admin/user/list"
+        element={<AdminRoute element={<UserList />} />}
+      />
+      <Route
+        path="/admin/user/create"
+        element={<AdminRoute element={<CreateUser />} />}
+      />
+
+      <Route
+        path="/admin/user/activity"
+        element={<AdminRoute element={<UserActivity />} />}
+      />
+      <Route
+        path="/admin/user/roles"
+        element={<AdminRoute element={<UserRoles />} />}
+      />
+      <Route
+        path="/admin/user/edit/:id"
+        element={<AdminRoute element={<EditUser />} />}
+      />
+      {/* ── programhead: Dashboard ── */}
+      <Route
+        path="/programhead/dashboard"
+        element={<ProgramHeadRoute element={<ProgramHeadDashboard />} />}
+      />
+      <Route
+        path="/programhead/gradeapproval/pending"
+        element={<ProgramHeadRoute element={<PendingGrades />} />}
+      />
+
+      <Route
+        path="/registrar/dashboard"
+        element={<RegistrarRoute element={<RegistrarDashboard />} />}
+      />
+
+      <Route
+        path="/registrar/student/records"
+        element={<RegistrarRoute element={<RStudentRecord />} />}
       />
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

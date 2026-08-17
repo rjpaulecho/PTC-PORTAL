@@ -6,7 +6,7 @@ export default function ApproveEnrollment() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "admin") {
+  if (!user || user.role !== "Admin") {
     navigate("/login");
     return null;
   }

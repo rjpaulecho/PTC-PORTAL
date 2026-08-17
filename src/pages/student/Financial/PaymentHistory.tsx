@@ -6,7 +6,7 @@ export default function PaymentHistory() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "student") {
+  if (!user || user.role !== "Student") {
     navigate("/login");
     return null;
   }

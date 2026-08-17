@@ -2,40 +2,104 @@ import "dotenv/config";
 import mysql from "mysql2/promise";
 import bcrypt from "bcrypt";
 
-const db = await mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-});
+async function seed() {
+  const db = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+  });
 
-await db.execute(`
-  CREATE TABLE IF NOT EXISTS users (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    email         VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role          ENUM('admin','student','faculty') NOT NULL,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-await db.execute("DELETE FROM users");
-console.log("Cleared existing users.");
+  try {
+    console.log("Connected to database.");
 
-const users = [
-  { email: "admin@ptc.edu.ph", password: "12345", role: "admin" },
-  { email: "student@ptc.edu.ph", password: "12345", role: "student" },
-  { email: "faculty@ptc.edu.ph", password: "12345", role: "faculty" },
-];
+    // Get all roles
+    const [roles] = await db.execute("SELECT role_id, role_name FROM roles");
 
-for (const u of users) {
-  const hash = await bcrypt.hash(u.password, 10);
-  await db.execute(
-    "INSERT IGNORE INTO users (email, password_hash, role) VALUES (?, ?, ?)",
-    [u.email, hash, u.role],
-  );
-  console.log(`Seeded: ${u.email}`);
+    const roleMap = {};
+
+    for (const role of roles) {
+      roleMap[role.role_name] = role.role_id;
+    }
+
+    const users = [
+      {
+        username: "admin",
+        email: "admin@ptc.edu.ph",
+        password: "12345",
+        role: "Admin",
+      },
+      {
+        username: "registrar",
+        email: "registrar@ptc.edu.ph",
+        password: "12345",
+        role: "Registrar",
+      },
+      {
+        username: "proghead",
+        email: "proghead@ptc.edu.ph",
+        password: "12345",
+        role: "Program Head",
+      },
+      {
+        username: "faculty",
+        email: "faculty@ptc.edu.ph",
+        password: "12345",
+        role: "Faculty",
+      },
+      {
+        username: "student",
+        email: "student@ptc.edu.ph",
+        password: "12345",
+        role: "Student",
+      },
+    ];
+
+    for (const user of users) {
+      const passwordHash = await bcrypt.hash(user.password, 10);
+
+      const [existing] = await db.execute(
+        "SELECT user_id FROM users WHERE username = ?",
+        [user.username],
+      );
+
+      if (existing.length > 0) {
+        console.log(`${user.username} already exists. Skipping...`);
+        continue;
+      }
+
+      await db.execute(
+        `
+    INSERT INTO users
+    (
+      username,
+      email,
+      password_hash,
+      role_id,
+      is_verified,
+      is_active
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    `,
+        [
+          user.username,
+          user.email,
+          passwordHash,
+          roleMap[user.role],
+          true,
+          true,
+        ],
+      );
+
+      console.log(`Seeded ${user.role}: ${user.email}`);
+    }
+    console.log("Database seeding completed successfully.");
+  } catch (err) {
+    console.error(err);
+  } finally {
+    await db.end();
+  }
 }
 
-console.log("Done.");
-await db.end();
+seed();

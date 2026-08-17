@@ -6,14 +6,14 @@ export default function UsageAnalytics() {
   const navigate = useNavigate();
   const user = authService.getSession();
 
-  if (!user || user.role !== "admin") {
+  if (!user || user.role !== "Admin") {
     navigate("/login");
     return null;
   }
 
   return (
     <DashboardLayout>
-      <div className="admin-usage-analytics">
+      <div className="admin-analytics-reports">
         <h1>Usage Analytics</h1>
         <p>This page is under construction.</p>
       </div>
