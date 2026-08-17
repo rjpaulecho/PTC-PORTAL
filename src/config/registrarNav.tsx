@@ -30,4 +30,21 @@ export const registrarNavGroups = [
       },
     ],
   },
+  {
+    id: "academic",
+    label: "Academic",
+    icon: "👨‍🎓",
+    children: [
+      {
+        label: "Curriculum",
+        path: "/registrar/curriculum/management",
+        icon: "👨‍🎓",
+      },
+      {
+        label: "Subjects",
+        path: "/registrar/subjects/management",
+        icon: "👨‍🎓",
+      },
+    ],
+  },
 ];

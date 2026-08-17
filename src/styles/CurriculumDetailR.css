@@ -1,0 +1,875 @@
+/* =========================================================
+   REGISTRAR - CURRICULUM DETAIL
+   CurriculumDetailR.tsx
+   ========================================================= */
+
+.registrar-curriculum-detail {
+  width: 100%;
+  min-height: 100vh;
+  padding: 28px;
+  box-sizing: border-box;
+
+  background: #f5f7fb;
+  color: #1f2937;
+}
+
+/* =========================================================
+   PAGE HEADER
+   ========================================================= */
+
+.curriculum-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.curriculum-detail-header > div:first-child {
+  min-width: 0;
+}
+
+.curriculum-detail-header h1 {
+  margin: 8px 0 6px;
+
+  color: #111827;
+
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+
+  word-break: break-word;
+}
+
+.curriculum-detail-header p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   BACK BUTTON
+   ========================================================= */
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 0;
+
+  border: none;
+  background: transparent;
+
+  color: #2563eb;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.back-button:hover {
+  color: #1d4ed8;
+  transform: translateX(-2px);
+}
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+.curriculum-status {
+  flex-shrink: 0;
+}
+
+.status-active,
+.status-inactive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 72px;
+
+  padding: 7px 13px;
+
+  border-radius: 999px;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+.curriculum-summary {
+  display: grid;
+
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+
+  gap: 16px;
+
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  min-width: 0;
+
+  padding: 18px 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.summary-card span {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.summary-card strong {
+  display: block;
+
+  color: #111827;
+
+  font-size: 22px;
+  font-weight: 700;
+
+  line-height: 1.2;
+}
+
+/* =========================================================
+   SUBJECT SECTION
+   ========================================================= */
+
+.curriculum-subject-section {
+  width: 100%;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  overflow: hidden;
+
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* =========================================================
+   SECTION HEADER
+   ========================================================= */
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 22px 24px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.section-header h2 {
+  margin: 0 0 5px;
+
+  color: #111827;
+
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.section-header p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   ADD SUBJECT BUTTON
+   ========================================================= */
+
+.add-subject-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  min-height: 40px;
+
+  padding: 0 16px;
+
+  border: none;
+  border-radius: 7px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.1s ease;
+}
+
+.add-subject-button:hover {
+  background: #1d4ed8;
+
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
+}
+
+.add-subject-button:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   YEARS
+   ========================================================= */
+
+.curriculum-years {
+  width: 100%;
+}
+
+.curriculum-year {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.curriculum-year:last-child {
+  border-bottom: none;
+}
+
+/* =========================================================
+   YEAR HEADER
+   ========================================================= */
+
+.year-header {
+  display: flex;
+  align-items: center;
+
+  padding: 15px 24px;
+
+  background: #f8fafc;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.year-header h3 {
+  margin: 0;
+
+  color: #1f2937;
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   SEMESTER
+   ========================================================= */
+
+.semester-section {
+  width: 100%;
+
+  border-bottom: 1px solid #eef0f3;
+}
+
+.semester-section:last-child {
+  border-bottom: none;
+}
+
+.semester-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 13px 24px;
+
+  background: #ffffff;
+}
+
+.semester-header h4 {
+  margin: 0;
+
+  color: #374151;
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.semester-header span {
+  color: #9ca3af;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+   ========================================================= */
+
+.subject-table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+/* =========================================================
+   SUBJECT TABLE
+   ========================================================= */
+
+.subject-table {
+  width: 100%;
+
+  min-width: 900px;
+
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.subject-table thead th {
+  padding: 11px 14px;
+
+  background: #f9fafb;
+
+  border-top: 1px solid #eef0f3;
+  border-bottom: 1px solid #e5e7eb;
+
+  color: #6b7280;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-align: left;
+  text-transform: uppercase;
+
+  letter-spacing: 0.35px;
+
+  white-space: nowrap;
+}
+
+.subject-table tbody td {
+  padding: 13px 14px;
+
+  border-bottom: 1px solid #f0f1f3;
+
+  color: #4b5563;
+
+  font-size: 13px;
+
+  vertical-align: middle;
+}
+
+.subject-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.subject-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.subject-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* =========================================================
+   TABLE COLUMNS
+   ========================================================= */
+
+.subject-table th:first-child,
+.subject-table td:first-child {
+  width: 50px;
+
+  color: #9ca3af;
+
+  text-align: center;
+}
+
+.subject-table th:nth-child(2) {
+  width: 120px;
+}
+
+.subject-table td:nth-child(2) strong {
+  color: #1d4ed8;
+
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+.subject-table th:nth-child(3) {
+  min-width: 260px;
+}
+
+.subject-table td:nth-child(3) {
+  color: #374151;
+
+  font-weight: 500;
+}
+
+.subject-table th:nth-child(4),
+.subject-table th:nth-child(5),
+.subject-table th:nth-child(6) {
+  width: 90px;
+
+  text-align: center;
+}
+
+.subject-table td:nth-child(4),
+.subject-table td:nth-child(5),
+.subject-table td:nth-child(6) {
+  color: #374151;
+
+  font-weight: 600;
+
+  text-align: center;
+}
+
+.subject-table th:nth-child(7) {
+  width: 110px;
+}
+
+.subject-table th:nth-child(8) {
+  width: 170px;
+}
+
+/* =========================================================
+   SUBJECT TYPE
+   ========================================================= */
+
+.subject-table td:nth-child(7) {
+  font-weight: 600;
+}
+
+.subject-table td:nth-child(7)::first-letter {
+  color: inherit;
+}
+
+/* =========================================================
+   ACTION BUTTONS
+   ========================================================= */
+
+.edit-subject-button,
+.delete-subject-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 32px;
+
+  padding: 0 10px;
+
+  border-radius: 6px;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.edit-subject-button {
+  margin-right: 6px;
+
+  border: 1px solid #dbeafe;
+
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.edit-subject-button:hover {
+  background: #dbeafe;
+
+  border-color: #bfdbfe;
+
+  color: #1d4ed8;
+}
+
+.delete-subject-button {
+  border: 1px solid #fecaca;
+
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.delete-subject-button:hover {
+  background: #fee2e2;
+
+  border-color: #fca5a5;
+
+  color: #b91c1c;
+}
+
+/* =========================================================
+   EMPTY SUBJECTS
+   ========================================================= */
+
+.empty-subjects {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 260px;
+
+  padding: 40px 20px;
+
+  text-align: center;
+}
+
+.empty-subjects h3 {
+  margin: 0 0 7px;
+
+  color: #374151;
+
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.empty-subjects p {
+  margin: 0;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.curriculum-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 500px;
+
+  padding: 40px;
+
+  text-align: center;
+}
+
+.curriculum-loading h2 {
+  margin: 18px 0 7px;
+
+  color: #374151;
+
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.curriculum-loading p {
+  margin: 0;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   LOADING SPINNER
+   ========================================================= */
+
+.loading-spinner {
+  width: 36px;
+  height: 36px;
+
+  border: 3px solid #e5e7eb;
+  border-top-color: #2563eb;
+
+  border-radius: 50%;
+
+  animation: curriculum-spinner 0.8s linear infinite;
+}
+
+@keyframes curriculum-spinner {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.curriculum-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 450px;
+
+  padding: 40px;
+
+  text-align: center;
+}
+
+.curriculum-error h2 {
+  margin: 0 0 10px;
+
+  color: #b91c1c;
+
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.curriculum-error p {
+  max-width: 550px;
+
+  margin: 0 0 20px;
+
+  color: #6b7280;
+
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.curriculum-error button {
+  min-height: 40px;
+
+  padding: 0 16px;
+
+  border: none;
+  border-radius: 7px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+.curriculum-error button:hover {
+  background: #1d4ed8;
+}
+
+/* =========================================================
+   RESPONSIVE - 1200px
+   ========================================================= */
+
+@media (max-width: 1200px) {
+  .curriculum-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* =========================================================
+   RESPONSIVE - 900px
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .registrar-curriculum-detail {
+    padding: 22px;
+  }
+
+  .curriculum-detail-header {
+    flex-direction: column;
+  }
+
+  .curriculum-status {
+    align-self: flex-start;
+  }
+
+  .curriculum-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-header {
+    align-items: flex-start;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE - 650px
+   ========================================================= */
+
+@media (max-width: 650px) {
+  .registrar-curriculum-detail {
+    padding: 15px;
+  }
+
+  .curriculum-detail-header h1 {
+    font-size: 22px;
+  }
+
+  .curriculum-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    padding: 15px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+
+    padding: 18px;
+  }
+
+  .add-subject-button {
+    width: 100%;
+  }
+
+  .year-header {
+    padding: 13px 18px;
+  }
+
+  .semester-header {
+    padding: 12px 18px;
+  }
+
+  .subject-table {
+    min-width: 850px;
+  }
+}
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+.subject-table-wrapper::-webkit-scrollbar {
+  height: 7px;
+}
+
+.subject-table-wrapper::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.subject-table-wrapper::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+
+  border-radius: 10px;
+}
+
+.subject-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+/* =========================================================
+   SUBJECT ACTIONS
+   ========================================================= */
+
+.subject-actions {
+  white-space: nowrap;
+  min-width: 170px;
+}
+
+.subject-actions .edit-subject-button,
+.subject-actions .delete-subject-button {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+/* =========================================================
+   REFRESHING INDICATOR
+   ========================================================= */
+
+.curriculum-refreshing {
+  padding: 9px 24px;
+
+  background: #eff6ff;
+  border-bottom: 1px solid #dbeafe;
+
+  color: #2563eb;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  text-align: center;
+}
+
+/* =========================================================
+   EMPTY STATE ADD BUTTON
+   ========================================================= */
+
+.empty-add-subject-button {
+  margin-top: 18px;
+
+  min-height: 38px;
+
+  padding: 0 16px;
+
+  border: none;
+  border-radius: 7px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.1s ease;
+}
+
+.empty-add-subject-button:hover {
+  background: #1d4ed8;
+}
+
+.empty-add-subject-button:active {
+  transform: translateY(1px);
+}

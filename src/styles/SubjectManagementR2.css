@@ -1,0 +1,894 @@
+/* =========================================================
+   REGISTRAR SUBJECT MANAGEMENT
+   ========================================================= */
+
+.registrar-subjects-management {
+  width: 100%;
+  min-height: 100vh;
+  padding: 28px;
+  box-sizing: border-box;
+
+  background: #f5f7fb;
+  color: #1f2937;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.subjects-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.subjects-page-header h1 {
+  margin: 0 0 6px;
+
+  color: #111827;
+
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.subjects-page-header p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 14px;
+}
+
+/* =========================================================
+   ADD SUBJECT BUTTON
+   ========================================================= */
+
+.add-subject-main-button {
+  min-height: 42px;
+
+  padding: 0 17px;
+
+  border: none;
+  border-radius: 7px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.1s ease,
+    box-shadow 0.2s ease;
+}
+
+.add-subject-main-button:hover {
+  background: #1d4ed8;
+
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
+.add-subject-main-button:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+.subjects-summary {
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 16px;
+
+  margin-bottom: 20px;
+}
+
+.subject-summary-card {
+  padding: 18px 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.subject-summary-card span {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.subject-summary-card strong {
+  color: #111827;
+
+  font-size: 23px;
+}
+
+/* =========================================================
+   MAIN CARD
+   ========================================================= */
+
+.subjects-management-card {
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
+.subjects-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 21px 24px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.subjects-toolbar h2 {
+  margin: 0 0 5px;
+
+  color: #111827;
+
+  font-size: 19px;
+}
+
+.subjects-toolbar p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+.subject-search {
+  width: 300px;
+  max-width: 100%;
+}
+
+.subject-search input {
+  width: 100%;
+  height: 39px;
+
+  padding: 0 12px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  outline: none;
+
+  color: #111827;
+  background: #ffffff;
+
+  font-family: inherit;
+  font-size: 13px;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.subject-search input::placeholder {
+  color: #9ca3af;
+}
+
+.subject-search input:hover {
+  border-color: #9ca3af;
+}
+
+.subject-search input:focus {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+.subjects-table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+.subjects-table {
+  width: 100%;
+  min-width: 1050px;
+
+  border-collapse: collapse;
+}
+
+.subjects-table th {
+  padding: 12px 14px;
+
+  background: #f9fafb;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  color: #6b7280;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-align: left;
+  text-transform: uppercase;
+
+  white-space: nowrap;
+}
+
+.subjects-table td {
+  padding: 14px;
+
+  border-bottom: 1px solid #f0f1f3;
+
+  color: #4b5563;
+
+  font-size: 13px;
+
+  vertical-align: middle;
+}
+
+.subjects-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.subjects-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.subjects-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =========================================================
+   COLUMNS
+   ========================================================= */
+
+.subject-number {
+  width: 45px;
+
+  color: #9ca3af !important;
+
+  text-align: center;
+}
+
+.subject-code {
+  width: 130px;
+
+  color: #2563eb !important;
+
+  white-space: nowrap;
+}
+
+.subject-code strong {
+  color: #2563eb;
+}
+
+.subject-name {
+  min-width: 230px;
+
+  color: #374151 !important;
+
+  font-weight: 600;
+}
+
+.subject-number-value {
+  width: 80px;
+
+  color: #374151 !important;
+
+  font-weight: 600;
+
+  text-align: center;
+}
+
+.subject-description {
+  min-width: 200px;
+  max-width: 300px;
+
+  color: #6b7280 !important;
+
+  line-height: 1.4;
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+
+.subject-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+}
+
+.subject-edit-button,
+.subject-delete-button {
+  min-height: 32px;
+
+  padding: 0 10px;
+
+  border-radius: 6px;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.subject-edit-button {
+  border: 1px solid #bfdbfe;
+
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.subject-edit-button:hover {
+  background: #dbeafe;
+
+  color: #1d4ed8;
+}
+
+.subject-delete-button {
+  border: 1px solid #fecaca;
+
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.subject-delete-button:hover {
+  background: #fee2e2;
+
+  color: #b91c1c;
+}
+
+.subject-delete-button:disabled {
+  opacity: 0.5;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.subjects-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  margin: 18px 24px;
+  padding: 12px 14px;
+
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+
+  background: #fef2f2;
+
+  color: #b91c1c;
+
+  font-size: 13px;
+}
+
+.subjects-error button {
+  border: none;
+
+  background: transparent;
+
+  color: #b91c1c;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.subjects-error button:hover {
+  text-decoration: underline;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.subjects-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 350px;
+
+  text-align: center;
+}
+
+.subjects-spinner {
+  width: 34px;
+  height: 34px;
+
+  margin-bottom: 15px;
+
+  border: 3px solid #e5e7eb;
+  border-top-color: #2563eb;
+
+  border-radius: 50%;
+
+  animation: subjects-spin 0.8s linear infinite;
+}
+
+.subjects-loading h3 {
+  margin: 0 0 6px;
+
+  color: #374151;
+
+  font-size: 17px;
+}
+
+.subjects-loading p {
+  margin: 0;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+}
+
+@keyframes subjects-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.subjects-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 350px;
+
+  padding: 40px;
+
+  text-align: center;
+}
+
+.subjects-empty-icon {
+  margin-bottom: 12px;
+
+  font-size: 40px;
+}
+
+.subjects-empty h3 {
+  margin: 0 0 6px;
+
+  color: #374151;
+
+  font-size: 18px;
+}
+
+.subjects-empty p {
+  margin: 0 0 18px;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+}
+
+.subjects-empty button {
+  min-height: 38px;
+
+  padding: 0 15px;
+
+  border: none;
+  border-radius: 7px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+.subjects-empty button:hover {
+  background: #1d4ed8;
+}
+
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+
+.subjects-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 16px 20px;
+
+  border-top: 1px solid #e5e7eb;
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   PAGINATION INFO
+   ========================================================= */
+
+.subjects-pagination-info {
+  flex-shrink: 0;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  line-height: 36px;
+
+  white-space: nowrap;
+}
+
+.subjects-pagination-info strong {
+  color: #374151;
+
+  font-weight: 700;
+}
+
+/* =========================================================
+   PAGINATION CONTROLS
+   ========================================================= */
+
+.subjects-pagination-controls {
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+}
+
+/* =========================================================
+   PREVIOUS / NEXT
+   ========================================================= */
+
+.pagination-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 36px;
+
+  padding: 0 13px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #374151;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background: #f9fafb;
+
+  border-color: #9ca3af;
+
+  color: #111827;
+}
+
+.pagination-button:disabled {
+  opacity: 0.45;
+
+  cursor: not-allowed;
+}
+
+.pagination-button:focus-visible {
+  outline: none;
+
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   PAGE NUMBERS
+   ========================================================= */
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+}
+
+.pagination-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 36px;
+  height: 36px;
+
+  padding: 0;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #4b5563;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pagination-page:hover:not(:disabled) {
+  background: #f9fafb;
+
+  border-color: #9ca3af;
+
+  color: #111827;
+}
+
+.pagination-page.active {
+  background: #2563eb;
+
+  border-color: #2563eb;
+
+  color: #ffffff;
+}
+
+.pagination-page.active:hover {
+  background: #1d4ed8;
+
+  border-color: #1d4ed8;
+
+  color: #ffffff;
+}
+
+.pagination-page:disabled {
+  cursor: not-allowed;
+}
+
+.pagination-page:focus-visible {
+  outline: none;
+
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   PAGINATION ELLIPSIS
+   ========================================================= */
+
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 30px;
+  height: 36px;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  user-select: none;
+}
+
+/* =========================================================
+   RESPONSIVE — TABLET
+   ========================================================= */
+
+@media (max-width: 1000px) {
+  .registrar-subjects-management {
+    padding: 24px;
+  }
+
+  .subjects-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .subjects-pagination {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .subjects-pagination-info {
+    line-height: normal;
+  }
+
+  .subjects-pagination-controls {
+    width: 100%;
+
+    justify-content: center;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE — MOBILE
+   ========================================================= */
+
+@media (max-width: 800px) {
+  .registrar-subjects-management {
+    padding: 20px;
+  }
+
+  .subjects-page-header {
+    flex-direction: column;
+  }
+
+  .add-subject-main-button {
+    width: 100%;
+  }
+
+  .subjects-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .subjects-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .subject-search {
+    width: 100%;
+  }
+
+  .subjects-pagination {
+    padding: 15px;
+  }
+
+  .subjects-pagination-controls {
+    flex-wrap: wrap;
+
+    justify-content: center;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 500px) {
+  .registrar-subjects-management {
+    padding: 15px;
+  }
+
+  .subjects-page-header h1 {
+    font-size: 23px;
+  }
+
+  .subjects-page-header p {
+    font-size: 13px;
+  }
+
+  .subjects-pagination {
+    gap: 12px;
+  }
+
+  .subjects-pagination-info {
+    width: 100%;
+
+    text-align: center;
+  }
+
+  .subjects-pagination-controls {
+    gap: 4px;
+  }
+
+  .pagination-button {
+    height: 34px;
+
+    padding: 0 9px;
+
+    font-size: 11px;
+  }
+
+  .pagination-page {
+    width: 34px;
+    height: 34px;
+  }
+
+  .pagination-ellipsis {
+    width: 24px;
+    height: 34px;
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .add-subject-main-button,
+  .subject-search input,
+  .subjects-table tbody tr,
+  .subject-edit-button,
+  .subject-delete-button,
+  .pagination-button,
+  .pagination-page,
+  .subjects-spinner {
+    transition: none;
+
+    animation: none;
+  }
+}

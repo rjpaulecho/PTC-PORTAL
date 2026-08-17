@@ -140,6 +140,9 @@ import TranscriptPreviewR from "../pages/registrar/StudentRecord/TranscriptPrevi
 import type { ReactElement } from "react";
 import EnrollmentManagementR from "../pages/registrar/Enrollment/EnrollmentManagementR";
 import EnrollmentDetailsR from "../pages/registrar/Enrollment/EnrollmentDetailsR";
+import CurriculumManagementR from "../pages/registrar/Curriculum/CurriculumManagementR";
+import CurriculumDetailR from "../pages/registrar/Curriculum/CurriculumDetailsR";
+import SubjectmanagementR from "../pages/registrar/Subjects/SubjectManagementR";
 
 // ─── Role guard ───────────────────────────────────────────────
 function ProtectedRoute({
@@ -576,6 +579,20 @@ export default function AppRoutes() {
         element={<RegistrarRoute element={<EnrollmentDetailsR />} />}
       />
 
+      {/* ── Registrar Curriculum ── */}
+      <Route
+        path="/registrar/curriculum/management"
+        element={<RegistrarRoute element={<CurriculumManagementR />} />}
+      />
+      <Route
+        path="/registrar/curriculum/:id"
+        element={<RegistrarRoute element={<CurriculumDetailR />} />}
+      />
+      {/* ── Registrar Announcements ── */}
+      <Route
+        path="/registrar/subjects/management"
+        element={<RegistrarRoute element={<SubjectmanagementR />} />}
+      />
       {/* ── Registrar Announcements ── */}
       <Route
         path="/registrar/announcement/listR"
