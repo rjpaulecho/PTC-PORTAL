@@ -10,7 +10,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  async function handleSubmit(e: React.FormEvent) {
+   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     setError("");
@@ -49,7 +49,7 @@ export default function LoginForm() {
           <h2>Login</h2>
 
           <form onSubmit={handleSubmit}>
-            {/* --- input BEFORE label, needed for the floating-label CSS --- */}
+            {/* input BEFORE label — required for the floating-label CSS (:valid ~ label) */}
             <div className={styles.inputgroup}>
               <input
                 type="text"
@@ -71,7 +71,6 @@ export default function LoginForm() {
               />
               <label>Password</label>
             </div>
-            {/* --- end reordered inputs --- */}
 
             {error && (
               <p key={error} className={styles.errorMsg}>
@@ -84,14 +83,7 @@ export default function LoginForm() {
               disabled={loading}
               className={`${styles.submitBtn} ${loading ? styles.loading : ""}`}
             >
-              {loading ? (
-                <>
-                  <span className={styles.spinner} />
-                  Verifying...
-                </>
-              ) : (
-                "Login"
-              )}
+              {loading ? "Verifying..." : "Login"}
             </button>
           </form>
 
@@ -127,15 +119,15 @@ export default function LoginForm() {
                 onClick={() => {
                   authService.saveSession({
                     user_id: 2,
-                    username: "faculty",
-                    email: "faculty@ptc.edu.ph",
-                    role: "Faculty",
+                    username: "registrar",
+                    email: "registrar@ptc.edu.ph",
+                    role: "Registrar",
                     role_id: 2,
                   });
-                  navigate("/faculty/dashboard");
+                  navigate("/registrar/dashboard");
                 }}
               >
-                Login as Faculty
+                Login as Registrar
               </button>
 
               <button
@@ -144,27 +136,10 @@ export default function LoginForm() {
                 onClick={() => {
                   authService.saveSession({
                     user_id: 3,
-                    username: "student",
-                    email: "student@ptc.edu.ph",
-                    role: "Student",
-                    role_id: 3,
-                  });
-                  navigate("/student/dashboard");
-                }}
-              >
-                Login as Student
-              </button>
-
-              <button
-                type="button"
-                className={styles.devBtn}
-                onClick={() => {
-                  authService.saveSession({
-                    user_id: 4,
-                    username: "programhead",
-                    email: "programhead@ptc.edu.ph",
+                    username: "proghead",
+                    email: "proghead@ptc.edu.ph",
                     role: "Program Head",
-                    role_id: 4,
+                    role_id: 3,
                   });
                   navigate("/programhead/dashboard");
                 }}
@@ -177,16 +152,33 @@ export default function LoginForm() {
                 className={styles.devBtn}
                 onClick={() => {
                   authService.saveSession({
-                    user_id: 5,
-                    username: "registrar",
-                    email: "registrar@ptc.edu.ph",
-                    role: "Registrar",
-                    role_id: 5,
+                    user_id: 4,
+                    username: "faculty",
+                    email: "faculty@ptc.edu.ph",
+                    role: "Faculty",
+                    role_id: 4,
                   });
-                  navigate("/registrar/dashboard");
+                  navigate("/faculty/dashboard");
                 }}
               >
-                Login as Registrar
+                Login as Faculty
+              </button>
+
+              <button
+                type="button"
+                className={styles.devBtn}
+                onClick={() => {
+                  authService.saveSession({
+                    user_id: 5,
+                    username: "student",
+                    email: "student@ptc.edu.ph",
+                    role: "Student",
+                    role_id: 5,
+                  });
+                  navigate("/student/dashboard");
+                }}
+              >
+                Login as Student
               </button>
             </div>
           </div>

@@ -1,297 +1,734 @@
-/* Import bold, modern fonts — Sora for headings, Inter for body text */
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+/* =========================================================
+   PTC STUDENT MANAGEMENT SYSTEM
+   LIGHT GREEN + WHITE THEME
+   ========================================================= */
 
-/* ==========================
-Manage Students
-========================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap');
 
-.admin-manage-students {
-padding: 30px;
-background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
-min-height: 100vh;
-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-font-weight: 500;
+
+/* =========================================================
+   GLOBAL
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
 }
 
-/* Header */
+.admin-manage-students,
+.admin-editstudents-students-table {
+  min-height: 100vh;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  color: #1f2937;
+}
+
+
+/* =========================================================
+   MAIN PAGE BACKGROUND
+   ========================================================= */
+
+.admin-manage-students {
+  padding: 32px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #e8f7ec 0%,
+      #f5fbf6 50%,
+      #dff3e5 100%
+    );
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
 
 .admin-manage-students__header {
-display: flex;
-justify-content: space-between;
-align-items: center;
-margin-bottom: 20px;
-color: red
+  display: flex;
+
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 20px;
+
+  margin-bottom: 28px;
 }
 
 .admin-manage-students__header h1 {
-font-family: 'Sora', 'Inter', sans-serif;
-font-size: 38px;
-font-weight: 800;
-color: #1b1b1b;
-margin: 0;
-letter-spacing: -0.8px;
+  margin: 0;
+
+  font-family: 'Sora', 'Inter', sans-serif;
+
+  font-size: 32px;
+  font-weight: 800;
+
+  color: #123d27;
+
+  letter-spacing: -0.8px;
 }
 
-/* Search */
+
+/* Green accent */
+.admin-manage-students__header h1::after {
+  content: "";
+
+  display: block;
+
+  width: 48px;
+  height: 4px;
+
+  margin-top: 8px;
+
+  border-radius: 20px;
+
+  background: #39a852;
+}
+
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
 
 .admin-manage-students__search {
-width: 350px;
-max-width: 100%;
-padding: 12px 16px;
-border: 1px solid #d9d9d9;
-border-radius: 8px;
-margin-bottom: 20px;
-outline: none;
-transition: 0.3s;
-font-size: 15px;
-font-weight: 600;
-font-family: inherit;
+  width: 340px;
+  max-width: 100%;
+
+  height: 46px;
+
+  padding: 0 16px;
+
+  background: #ffffff;
+
+  border: 1px solid #b8d9c0;
+
+  border-radius: 9px;
+
+  outline: none;
+
+  color: #1f2937;
+
+  font-family: inherit;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  box-shadow:
+    0 3px 10px rgba(30, 100, 50, 0.08);
+
+  transition: 0.25s ease;
+}
+
+.admin-manage-students__search::placeholder {
+  color: #8a9a8e;
 }
 
 .admin-manage-students__search:focus {
-border-color: #0d6efd;
-box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+  border-color: #39a852;
+
+  box-shadow:
+    0 0 0 3px rgba(57, 168, 82, 0.14);
 }
 
-/* Table */
+
+/* =========================================================
+   TABLE CARD
+   ========================================================= */
+
+.admin-manage-students__table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+
+  background: #ffffff;
+
+  border: 1px solid #c9e3cf;
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 10px 30px rgba(35, 100, 50, 0.10);
+}
+
+
+/* =========================================================
+   TABLE
+   ========================================================= */
 
 .admin-manage-students__table {
-width: 100%;
-border-collapse: collapse;
-background: linear-gradient(180deg, #d4d4db 0%, #d0ec80 100%);
-border-radius: 12px;
-overflow: hidden;
-box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-font-family: inherit;
-animation: tableFadeIn 0.5s ease-out both;
+  width: 100%;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  background: #ffffff;
+
+  font-family: inherit;
 }
 
+
+/* =========================================================
+   TABLE HEADER
+   ========================================================= */
+
 .admin-manage-students__table thead {
-background: linear-gradient(180deg, #1e7e3b 0%, #000a04 100%);
-background-size: 200% 200%;
-color: rgb(243, 239, 239);
-animation: headerGlow 6s ease-in-out infinite;
+  background:
+    linear-gradient(
+      135deg,
+      #2e8b47,
+      #176b32
+    );
+
+  color: #ffffff;
 }
 
 .admin-manage-students__table th {
-font-family: 'Sora', 'Inter', sans-serif;
-padding: 15px;
-text-align: left;
-font-size: 14px;
-font-weight: 800;
-text-transform: uppercase;
-letter-spacing: 0.6px;
+  padding: 16px 18px;
+
+  text-align: left;
+
+  font-family: 'Sora', 'Inter', sans-serif;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.6px;
+
+  border-bottom: 2px solid #9bd5a8;
+
+  white-space: nowrap;
 }
+
+
+/* =========================================================
+   TABLE BODY
+   ========================================================= */
 
 .admin-manage-students__table td {
-padding: 15px;
-border-bottom: 1px solid #181616;
-font-size: 14px;
-color: #000000;
-font-weight: 600;
+  padding: 16px 18px;
+
+  background: #ffffff;
+
+  border-bottom: 1px solid #e5eee7;
+
+  color: #374151;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  vertical-align: middle;
 }
+
+
+/* =========================================================
+   TABLE ROW HOVER
+   ========================================================= */
 
 .admin-manage-students__table tbody tr {
-transition: background 0.25s ease, transform 0.25s ease;
-animation: rowSlideIn 0.4s ease-out both;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
-.admin-manage-students__table tbody tr:nth-child(1) { animation-delay: 0.05s; }
-.admin-manage-students__table tbody tr:nth-child(2) { animation-delay: 0.1s; }
-.admin-manage-students__table tbody tr:nth-child(3) { animation-delay: 0.15s; }
-.admin-manage-students__table tbody tr:nth-child(4) { animation-delay: 0.2s; }
-.admin-manage-students__table tbody tr:nth-child(5) { animation-delay: 0.25s; }
-.admin-manage-students__table tbody tr:nth-child(n+6) { animation-delay: 0.3s; }
+.admin-manage-students__table tbody tr:hover td {
+  background: #effaf2;
 
-.admin-manage-students__table tbody tr:hover {
-background: #f7f7f88f;
-transform: scale(1.005);
+  color: #123d27;
 }
 
-/* Action buttons */
 
-.admin-manage-students__table td:last-child {
-white-space: nowrap;
-}
+/* =========================================================
+   LAST TABLE ROW
+   ========================================================= */
 
-.admin-manage-students__table .btn {
-margin-right: 8px;
-}
-
-/* ===================
-Animations
-=================== */
-
-@keyframes tableFadeIn {
-from {
-    opacity: 0;
-    transform: translateY(15px);
-}
-to {
-    opacity: 1;
-    transform: translateY(0);
-}
+.admin-manage-students__table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-@keyframes rowSlideIn {
-from {
-    opacity: 0;
-    transform: translateX(-12px);
-}
-to {
-    opacity: 1;
-    transform: translateX(0);
-}
-}
 
-@keyframes headerGlow {
-0%, 100% {
-    background-position: 0% 50%;
-}
-50% {
-    background-position: 100% 50%;
-}
-}
+/* =========================================================
+   STUDENT FORM PAGE
+   ========================================================= */
 
-/* ===================
-Buttons
-=================== */
-
-.btn {
-border: none;
-padding: 10px 18px;
-border-radius: 8px;
-cursor: pointer;
-font-size: 14px;
-transition: 0.3s;
-font-weight: 700;
-font-family: inherit;
-letter-spacing: 0.2px;
-}
-
-.btn:hover {
-transform: translateY(-2px);
-}
-
-.btn-primary {
-background: #0d6efd;
-color: white;
-}
-
-.btn-primary:hover {
-background: #0b5ed7;
-}
-
-.btn-secondary {
-background: #6c757d;
-color: white;
-}
-
-.btn-secondary:hover {
-background: #5b636a;
-}
-
-.btn-danger {
-background: #dc3545;
-color: white;
-}
-
-.btn-danger:hover {
-background: #bb2d3b;
-}
-
-/* =====================
-Modal Form
-====================== */
-
-Thailand for mine sexti sanford twenty six dedical
 .admin-editstudents-students-table {
-  padding: 30px;
-  min-height: 100vh;
-  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 32px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #e8f7ec 0%,
+      #f5fbf6 50%,
+      #dff3e5 100%
+    );
 }
+
+
+/* =========================================================
+   STUDENT FORM CARD
+   ========================================================= */
+
 .admin-student-form {
-display: flex;
-flex-direction: column;
-gap: 18px;
-margin-top: 20px;
+  width: 100%;
+  max-width: 1050px;
+
+  margin: 0 auto;
+
+  padding: 32px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 22px;
+
+  background: #ffffff;
+
+  border: 1px solid #c8e3cf;
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 10px 30px rgba(35, 100, 50, 0.10);
+
+  animation: formFadeIn 0.4s ease-out;
 }
+
+
+/* =========================================================
+   FORM TITLE
+   ========================================================= */
+
+.admin-student-form h1,
+.admin-student-form h2 {
+  grid-column: 1 / -1;
+
+  margin: 0 0 5px;
+
+  font-family: 'Sora', 'Inter', sans-serif;
+
+  font-size: 25px;
+
+  font-weight: 700;
+
+  color: #123d27;
+}
+
+
+/* Green title accent */
+
+.admin-student-form h1::after,
+.admin-student-form h2::after {
+  content: "";
+
+  display: block;
+
+  width: 42px;
+  height: 3px;
+
+  margin-top: 8px;
+
+  border-radius: 20px;
+
+  background: #39a852;
+}
+
+
+/* =========================================================
+   FORM LABEL
+   ========================================================= */
 
 .admin-student-form label {
-display: flex;
-flex-direction: column;
-font-weight: 700;
-color: #000000;
-font-size: 14px;
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  color: #355440;
+
+  font-size: 13px;
+  font-weight: 600;
 }
+
+
+/* =========================================================
+   FORM INPUT
+   ========================================================= */
 
 .admin-student-form input,
 .admin-student-form select {
-margin-top: 6px;
-padding: 12px;
-border: 1px solid #000000;
-border-radius: 8px;
-font-size: 14px;
-font-weight: 600;
-outline: none;
-transition: 0.3s;
-font-family: inherit;
+  width: 100%;
+
+  height: 48px;
+
+  padding: 0 14px;
+
+  background: #ffffff;
+
+  border: 1px solid #bcd8c3;
+
+  border-radius: 8px;
+
+  outline: none;
+
+  color: #1f2937;
+
+  font-family: inherit;
+
+  font-size: 14px;
+  font-weight: 500;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
+
+
+/* =========================================================
+   PLACEHOLDER
+   ========================================================= */
+
+.admin-student-form input::placeholder {
+  color: #9aaa9e;
+}
+
+
+/* =========================================================
+   INPUT HOVER
+   ========================================================= */
+
+.admin-student-form input:hover,
+.admin-student-form select:hover {
+  border-color: #7fbd8d;
+}
+
+
+/* =========================================================
+   INPUT FOCUS
+   ========================================================= */
 
 .admin-student-form input:focus,
 .admin-student-form select:focus {
-border-color: #0d6efd;
-box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+  border-color: #39a852;
+
+  background: #fbfffc;
+
+  box-shadow:
+    0 0 0 3px rgba(57, 168, 82, 0.13);
 }
 
-.admin-student-form {
-  padding: 30px;
-  min-height: 100vh;
-  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  }
+/* =========================================================
+   FORM ACTIONS
+   ========================================================= */
+
 .admin-student-form__actions {
-display: flex;
-justify-content: flex-end;
-gap: 12px;
-margin-top: 15px;
+  grid-column: 1 / -1;
+
+  display: flex;
+
+  justify-content: flex-end;
+
+  align-items: center;
+
+  gap: 12px;
+
+  padding-top: 20px;
+
+  margin-top: 5px;
+
+  border-top: 1px solid #e2eee5;
 }
 
-/* ===================
-Responsive
-=================== */
 
-@media (max-width: 992px) {
-.admin-manage-students__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
+/* =========================================================
+   PRIMARY GREEN BUTTON
+   ========================================================= */
+
+.btn-primary {
+  min-height: 40px;
+
+  padding: 9px 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #39a852,
+      #198754
+    );
+
+  border: 1px solid #198754;
+
+  border-radius: 8px;
+
+  color: #ffffff;
+
+  font-family: inherit;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 4px 10px rgba(25, 135, 84, 0.18);
+
+  transition: 0.25s ease;
 }
 
-.admin-manage-students__search {
-    width: 100%;
+.btn-primary:hover {
+  background:
+    linear-gradient(
+      135deg,
+      #2e9146,
+      #157347
+    );
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 6px 14px rgba(25, 135, 84, 0.25);
 }
 
-.admin-manage-students {
-    padding: 20px;
-}
+
+/* =========================================================
+   SECONDARY BUTTON
+   ========================================================= */
+
+.btn-secondary {
+  min-height: 40px;
+
+  padding: 9px 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #b7c9bc;
+
+  border-radius: 8px;
+
+  color: #355440;
+
+  font-family: inherit;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.25s ease;
 }
 
-@media (max-width: 768px) {
-.admin-manage-students__table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
+.btn-secondary:hover {
+  background: #effaf2;
+
+  border-color: #39a852;
+
+  color: #176b32;
 }
 
-.admin-manage-students__header h1 {
-    font-size: 28px;
+
+/* =========================================================
+   DANGER BUTTON
+   ========================================================= */
+
+.btn-danger {
+  min-height: 38px;
+
+  padding: 8px 15px;
+
+  background: #fff7f7;
+
+  border: 1px solid #e8b6b6;
+
+  border-radius: 7px;
+
+  color: #c53030;
+
+  font-family: inherit;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.25s ease;
 }
+
+.btn-danger:hover {
+  background: #dc3545;
+
+  border-color: #dc3545;
+
+  color: #ffffff;
+}
+
+
+/* =========================================================
+   GENERAL BUTTON
+   ========================================================= */
 
 .btn {
-    padding: 8px 14px;
-    font-size: 13px;
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-family: inherit;
+
+  transition: 0.25s ease;
 }
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+
+@keyframes formFadeIn {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0);
+  }
+}
+
+
+/* =========================================================
+   TABLE ANIMATION
+   ========================================================= */
+
+.admin-manage-students__table-wrapper {
+  animation: tableFadeIn 0.4s ease-out;
+}
+
+@keyframes tableFadeIn {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0);
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE - TABLET
+   ========================================================= */
+
+@media (max-width: 992px) {
+
+  .admin-manage-students,
+  .admin-editstudents-students-table {
+    padding: 24px;
+  }
+
+  .admin-manage-students__header {
+    flex-direction: column;
+
+    align-items: flex-start;
+
+    gap: 15px;
+  }
+
+  .admin-manage-students__search {
+    width: 100%;
+  }
+
+  .admin-student-form {
+    max-width: 100%;
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE - MOBILE
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .admin-manage-students,
+  .admin-editstudents-students-table {
+    padding: 16px;
+  }
+
+  .admin-manage-students__header h1 {
+    font-size: 26px;
+  }
+
+  .admin-manage-students__table {
+    min-width: 750px;
+  }
+
+  .admin-student-form {
+    grid-template-columns: 1fr;
+
+    padding: 24px;
+
+    gap: 18px;
+  }
+
+  .admin-student-form__actions {
+    grid-column: auto;
+
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+  .admin-student-form__actions .btn {
+    width: 100%;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .admin-manage-students,
+  .admin-editstudents-students-table {
+    padding: 12px;
+  }
+
+  .admin-manage-students__header h1 {
+    font-size: 23px;
+  }
+
+  .admin-student-form {
+    padding: 18px;
+  }
+
+  .admin-student-form input,
+  .admin-student-form select {
+    height: 45px;
+  }
 }

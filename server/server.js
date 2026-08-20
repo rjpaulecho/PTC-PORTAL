@@ -4,9 +4,18 @@ import cors from "cors";
 import path from "path";
 
 import authRouter from "./routes/auth.routes.js";
-import studentsRouter from "./routes/students.routes.js";
 import usersRouter from "./routes/users.routes.js";
+import studentsRouter from "./routes/students.routes.js";
+import rolesRouter from "./routes/roles.routes.js";
+
 import activityRouter from "./routes/activity.routes.js";
+import filesRouter from "./routes/files.routes.js";
+
+import announcementRoutes from "./routes/announcement/adminAnnouncement.routes.js";
+import usersAnnouncementRoutes from "./routes/announcement/usersAnnouncement.routes.js";
+
+import registrarRoutes from "./routes/registrar/index.js";
+import studentEnrollmentRoutes from "./routes/student/enrollments.js";
 
 const app = express();
 
@@ -27,12 +36,21 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 // API Routes
 // =======================
 app.use("/auth", authRouter);
-
-app.use("/api/students", studentsRouter);
-
+app.use("/api/roles", rolesRouter);
 app.use("/api/users", usersRouter);
-
 app.use("/api/activity-logs", activityRouter);
+app.use("/api/students", studentsRouter);
+app.use("/api/files", filesRouter);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+// Announcement Routing
+app.use("/api/admin/announcements", announcementRoutes);
+app.use("/api/announcements", usersAnnouncementRoutes);
+
+// Registrar Routing
+app.use("/api/registrar", registrarRoutes);
+// Student Routing
+app.use("/api/student/enrollments", studentEnrollmentRoutes);
 
 // =======================
 // Root Route
