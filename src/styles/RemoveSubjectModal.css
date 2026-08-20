@@ -1,0 +1,346 @@
+/* =========================================================
+   REMOVE SUBJECT MODAL
+   ========================================================= */
+
+.remove-modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 99999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(15, 23, 42, 0.55);
+
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+.remove-modal {
+  position: relative;
+
+  width: 100%;
+  max-width: 460px;
+
+  padding: 28px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, 0.18),
+    0 8px 20px rgba(15, 23, 42, 0.08);
+
+  box-sizing: border-box;
+
+  animation: remove-modal-show 0.18s ease-out;
+}
+
+@keyframes remove-modal-show {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =========================================================
+   WARNING ICON
+   ========================================================= */
+
+.remove-modal-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 48px;
+  height: 48px;
+
+  margin: 0 auto 16px;
+
+  border-radius: 50%;
+
+  background: #fef2f2;
+  color: #dc2626;
+
+  font-size: 22px;
+  font-weight: 800;
+
+  border: 1px solid #fecaca;
+}
+
+/* =========================================================
+   TITLE
+   ========================================================= */
+
+.remove-modal h2 {
+  margin: 0 0 8px;
+
+  color: #111827;
+
+  font-size: 20px;
+  font-weight: 700;
+
+  text-align: center;
+}
+
+/* =========================================================
+   DESCRIPTION
+   ========================================================= */
+
+.remove-modal-description {
+  margin: 0 auto 20px;
+
+  max-width: 380px;
+
+  color: #6b7280;
+
+  font-size: 13px;
+  line-height: 1.6;
+
+  text-align: center;
+}
+
+/* =========================================================
+   SUBJECT INFORMATION
+   ========================================================= */
+
+.remove-subject-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  margin-bottom: 16px;
+  padding: 15px 16px;
+
+  background: #f8fafc;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+
+  box-sizing: border-box;
+}
+
+.remove-subject-info > div {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.remove-subject-info strong {
+  color: #1d4ed8;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+.remove-subject-info span {
+  color: #374151;
+
+  font-size: 13px;
+  line-height: 1.4;
+
+  word-break: break-word;
+}
+
+.remove-subject-info small {
+  flex-shrink: 0;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   WARNING MESSAGE
+   ========================================================= */
+
+.remove-warning {
+  display: flex;
+  gap: 8px;
+
+  margin-bottom: 20px;
+  padding: 13px 14px;
+
+  background: #fff7ed;
+
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+
+  color: #9a3412;
+
+  font-size: 12px;
+  line-height: 1.55;
+
+  box-sizing: border-box;
+}
+
+.remove-warning strong {
+  flex-shrink: 0;
+
+  font-weight: 700;
+}
+
+.remove-warning span {
+  color: #9a3412;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.remove-error {
+  margin-bottom: 16px;
+  padding: 11px 13px;
+
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+
+  color: #b91c1c;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+
+.remove-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  padding-top: 4px;
+}
+
+/* =========================================================
+   CANCEL BUTTON
+   ========================================================= */
+
+.remove-cancel-button,
+.remove-confirm-button {
+  min-height: 40px;
+
+  padding: 0 16px;
+
+  border-radius: 7px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.1s ease,
+    opacity 0.2s ease;
+
+  box-sizing: border-box;
+}
+
+.remove-cancel-button {
+  border: 1px solid #d1d5db;
+
+  background: #ffffff;
+  color: #374151;
+}
+
+.remove-cancel-button:hover:not(:disabled) {
+  background: #f9fafb;
+
+  border-color: #9ca3af;
+}
+
+.remove-cancel-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   CONFIRM BUTTON
+   ========================================================= */
+
+.remove-confirm-button {
+  border: 1px solid #dc2626;
+
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.remove-confirm-button:hover:not(:disabled) {
+  background: #b91c1c;
+
+  border-color: #b91c1c;
+
+  box-shadow: 0 3px 8px rgba(220, 38, 38, 0.2);
+}
+
+.remove-confirm-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   DISABLED
+   ========================================================= */
+
+.remove-cancel-button:disabled,
+.remove-confirm-button:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 500px) {
+  .remove-modal-overlay {
+    padding: 15px;
+  }
+
+  .remove-modal {
+    padding: 22px 18px;
+
+    border-radius: 12px;
+  }
+
+  .remove-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .remove-cancel-button,
+  .remove-confirm-button {
+    width: 100%;
+  }
+
+  .remove-subject-info {
+    align-items: flex-start;
+  }
+}

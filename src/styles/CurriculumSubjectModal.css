@@ -1,0 +1,417 @@
+/* =====================================================
+   CURRICULUM SUBJECT MODAL
+===================================================== */
+
+.curriculum-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.55);
+
+  backdrop-filter: blur(4px);
+
+  animation: curriculumModalFadeIn 0.18s ease;
+}
+
+/* =====================================================
+   MODAL
+===================================================== */
+
+.curriculum-subject-modal {
+  width: 100%;
+  max-width: 720px;
+
+  max-height: calc(100vh - 48px);
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.22),
+    0 8px 24px rgba(15, 23, 42, 0.12);
+
+  animation: curriculumModalSlideIn 0.2s ease;
+}
+
+/* =====================================================
+   HEADER
+===================================================== */
+
+.curriculum-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 24px 28px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.curriculum-modal-header h2 {
+  margin: 0;
+
+  font-size: 21px;
+  font-weight: 700;
+
+  color: #111827;
+}
+
+.curriculum-modal-header p {
+  margin: 6px 0 0;
+
+  font-size: 13px;
+
+  color: #6b7280;
+}
+
+.curriculum-modal-close {
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border: none;
+  border-radius: 8px;
+
+  background: transparent;
+
+  color: #6b7280;
+
+  font-size: 26px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.curriculum-modal-close:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.curriculum-modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   BODY
+===================================================== */
+
+.curriculum-modal-body {
+  padding: 26px 28px;
+
+  overflow-y: auto;
+}
+
+.curriculum-modal-body::-webkit-scrollbar {
+  width: 7px;
+}
+
+.curriculum-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.curriculum-modal-body::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
+}
+
+/* =====================================================
+   ERROR
+===================================================== */
+
+.curriculum-modal-error {
+  margin-bottom: 20px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+
+  background: #fef2f2;
+
+  color: #b91c1c;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =====================================================
+   FORM
+===================================================== */
+
+.curriculum-form-group {
+  display: flex;
+  flex-direction: column;
+
+  gap: 7px;
+
+  flex: 1;
+}
+
+.curriculum-form-group label {
+  font-size: 13px;
+  font-weight: 600;
+
+  color: #374151;
+}
+
+.curriculum-form-group label span {
+  color: #dc2626;
+}
+
+.curriculum-form-group input,
+.curriculum-form-group select {
+  width: 100%;
+  height: 42px;
+
+  box-sizing: border-box;
+
+  padding: 0 12px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background: #ffffff;
+
+  color: #111827;
+
+  font-size: 14px;
+
+  outline: none;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.curriculum-form-group input:focus,
+.curriculum-form-group select:focus {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.curriculum-form-group input:disabled,
+.curriculum-form-group select:disabled {
+  background: #f9fafb;
+
+  color: #9ca3af;
+
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   FORM ROW
+===================================================== */
+
+.curriculum-form-row {
+  display: flex;
+
+  gap: 16px;
+
+  margin-top: 18px;
+}
+
+.curriculum-form-row.three-columns {
+  display: grid;
+
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* =====================================================
+   SELECTED SUBJECT
+===================================================== */
+
+.selected-subject-display {
+  min-height: 42px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 9px 12px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background: #f9fafb;
+
+  font-size: 14px;
+}
+
+.selected-subject-display strong {
+  color: #1d4ed8;
+}
+
+.selected-subject-display span {
+  color: #374151;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =====================================================
+   FOOTER
+===================================================== */
+
+.curriculum-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 18px 28px;
+
+  border-top: 1px solid #e5e7eb;
+
+  background: #fafafa;
+}
+
+.curriculum-modal-cancel,
+.curriculum-modal-submit {
+  height: 40px;
+
+  padding: 0 18px;
+
+  border-radius: 8px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.curriculum-modal-cancel {
+  border: 1px solid #d1d5db;
+
+  background: #ffffff;
+
+  color: #374151;
+}
+
+.curriculum-modal-cancel:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.curriculum-modal-submit {
+  border: 1px solid #2563eb;
+
+  background: #2563eb;
+
+  color: #ffffff;
+}
+
+.curriculum-modal-submit:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.curriculum-modal-submit:active:not(:disabled),
+.curriculum-modal-cancel:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.curriculum-modal-cancel:disabled,
+.curriculum-modal-submit:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   ANIMATIONS
+===================================================== */
+
+@keyframes curriculumModalFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes curriculumModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 700px) {
+  .curriculum-modal-overlay {
+    padding: 12px;
+  }
+
+  .curriculum-subject-modal {
+    max-height: calc(100vh - 24px);
+
+    border-radius: 12px;
+  }
+
+  .curriculum-modal-header {
+    padding: 20px;
+  }
+
+  .curriculum-modal-body {
+    padding: 20px;
+  }
+
+  .curriculum-modal-footer {
+    padding: 16px 20px;
+  }
+
+  .curriculum-form-row {
+    flex-direction: column;
+
+    gap: 16px;
+  }
+
+  .curriculum-form-row.three-columns {
+    grid-template-columns: 1fr;
+  }
+}

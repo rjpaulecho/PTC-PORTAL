@@ -1,0 +1,738 @@
+/* =========================================================
+   REGISTRAR — CURRICULUM MANAGEMENT
+   ========================================================= */
+
+.registrar-curriculum-management {
+  width: 100%;
+  min-height: 100%;
+  padding: 28px 32px 40px;
+  box-sizing: border-box;
+  background: #f7f8fa;
+  color: #1f2937;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.registrar-curriculum-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 26px;
+}
+
+.registrar-curriculum-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #111827;
+  letter-spacing: -0.4px;
+}
+
+.registrar-curriculum-header p {
+  margin: 7px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+/* =========================================================
+   SUMMARY CARDS
+   ========================================================= */
+
+.registrar-curriculum-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.registrar-curriculum-card {
+  position: relative;
+  min-height: 105px;
+  padding: 20px 22px;
+  box-sizing: border-box;
+
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.registrar-curriculum-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+.registrar-curriculum-card span {
+  display: block;
+  margin-bottom: 8px;
+
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.registrar-curriculum-card h2 {
+  margin: 0;
+
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1;
+
+  color: #111827;
+}
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
+.registrar-curriculum-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+
+  padding: 18px;
+
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+
+  margin-bottom: 18px;
+}
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+.registrar-curriculum-search {
+  flex: 1;
+  min-width: 240px;
+}
+
+.registrar-curriculum-search input {
+  width: 100%;
+  height: 42px;
+
+  padding: 0 14px;
+  box-sizing: border-box;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background: #ffffff;
+
+  color: #111827;
+  font-family: inherit;
+  font-size: 14px;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.registrar-curriculum-search input::placeholder {
+  color: #9ca3af;
+}
+
+.registrar-curriculum-search input:hover {
+  border-color: #9ca3af;
+}
+
+.registrar-curriculum-search input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   FILTERS
+   ========================================================= */
+
+.registrar-curriculum-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.registrar-curriculum-filters select {
+  min-width: 135px;
+  height: 42px;
+
+  padding: 0 34px 0 12px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background-color: #ffffff;
+  color: #374151;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+
+  outline: none;
+  cursor: pointer;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.registrar-curriculum-filters select:hover {
+  border-color: #9ca3af;
+}
+
+.registrar-curriculum-filters select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   TABLE WRAPPER
+   ========================================================= */
+
+.registrar-curriculum-table-wrapper {
+  width: 100%;
+  overflow: hidden;
+
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+}
+
+.curriculum-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.curriculum-table {
+  width: 100%;
+  min-width: 900px;
+
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+/* =========================================================
+   TABLE HEADER
+   ========================================================= */
+
+.curriculum-table thead {
+  background: #f9fafb;
+}
+
+.curriculum-table th {
+  height: 48px;
+
+  padding: 0 16px;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  color: #6b7280;
+
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   TABLE BODY
+   ========================================================= */
+
+.curriculum-table tbody tr {
+  background: #ffffff;
+
+  transition: background-color 0.15s ease;
+}
+
+.curriculum-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.curriculum-table td {
+  padding: 15px 16px;
+
+  border-bottom: 1px solid #f0f1f3;
+
+  color: #374151;
+
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.curriculum-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =========================================================
+   ID
+   ========================================================= */
+
+.curriculum-table td:first-child {
+  width: 70px;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   COURSE
+   ========================================================= */
+
+.curriculum-course {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.curriculum-course strong {
+  color: #111827;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.curriculum-course small {
+  color: #6b7280;
+
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* =========================================================
+   CURRICULUM NAME
+   ========================================================= */
+
+.curriculum-name {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.curriculum-name strong {
+  color: #111827;
+
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.curriculum-name small {
+  color: #9ca3af;
+
+  font-size: 11px;
+}
+
+/* =========================================================
+   NUMERIC COLUMNS
+   ========================================================= */
+
+.curriculum-table td:nth-child(4),
+.curriculum-table td:nth-child(5),
+.curriculum-table td:nth-child(6) {
+  color: #374151;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+.curriculum-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 70px;
+  height: 27px;
+
+  padding: 0 10px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.curriculum-status.active {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+
+.curriculum-status.inactive {
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+
+.curriculum-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 32px;
+  min-width: 58px;
+
+  padding: 0 13px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #374151;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.view-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.view-btn:active {
+  transform: translateY(1px);
+}
+
+.view-btn:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   TABLE MESSAGES
+   ========================================================= */
+
+.table-message {
+  height: 180px;
+
+  padding: 20px !important;
+
+  color: #6b7280 !important;
+
+  font-size: 13px !important;
+  font-weight: 500 !important;
+
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.table-message.error {
+  color: #dc2626 !important;
+  background: #fffafa;
+}
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+
+.registrar-curriculum-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 100%;
+  gap: 18px;
+
+  margin-top: 18px;
+  padding: 14px 2px 0;
+
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   PAGINATION INFO
+   ========================================================= */
+
+.pagination-info {
+  flex-shrink: 0;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.pagination-info strong {
+  color: #374151;
+  font-weight: 700;
+}
+
+/* =========================================================
+   PAGE NUMBERS CONTAINER
+   ========================================================= */
+
+.page-numbers {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+
+  flex: 1;
+}
+
+/* =========================================================
+   PAGINATION BUTTON
+   ========================================================= */
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 36px;
+  height: 36px;
+
+  padding: 0 10px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #4b5563;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+/* =========================================================
+   HOVER
+   ========================================================= */
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+/* =========================================================
+   ACTIVE PAGE
+   ========================================================= */
+
+.pagination-btn.active-page {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.pagination-btn.active-page:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+/* =========================================================
+   DISABLED
+   ========================================================= */
+
+.pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+/* =========================================================
+   ACTIVE / CLICK
+   ========================================================= */
+
+.pagination-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+.pagination-btn:focus-visible {
+  outline: none;
+
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================================
+   PREVIOUS / NEXT
+   ========================================================= */
+
+.pagination-prev,
+.pagination-next {
+  min-width: 76px;
+}
+
+.pagination-prev {
+  margin-right: 4px;
+}
+
+.pagination-next {
+  margin-left: 4px;
+}
+
+/* =========================================================
+   ELLIPSIS
+   ========================================================= */
+
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 36px;
+
+  color: #9ca3af;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  user-select: none;
+}
+
+/* =========================================================
+   MOBILE PAGINATION
+   ========================================================= */
+
+@media (max-width: 768px) {
+  .registrar-curriculum-pagination {
+    flex-wrap: wrap;
+
+    justify-content: center;
+
+    gap: 12px;
+
+    padding-top: 16px;
+  }
+
+  .pagination-info {
+    width: 100%;
+
+    text-align: center;
+
+    order: 1;
+  }
+
+  .page-numbers {
+    width: 100%;
+    flex-basis: 100%;
+
+    order: 2;
+
+    overflow-x: auto;
+
+    justify-content: flex-start;
+
+    padding-bottom: 2px;
+  }
+
+  .pagination-prev,
+  .pagination-next {
+    min-width: 70px;
+  }
+}
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+  .registrar-curriculum-pagination {
+    gap: 8px;
+  }
+
+  .pagination-btn {
+    min-width: 34px;
+    height: 34px;
+
+    padding: 0 8px;
+
+    font-size: 11px;
+  }
+
+  .pagination-prev,
+  .pagination-next {
+    min-width: 64px;
+  }
+
+  .pagination-ellipsis {
+    width: 24px;
+    height: 34px;
+  }
+
+  .pagination-info {
+    font-size: 11px;
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .pagination-btn {
+    transition: none;
+  }
+}

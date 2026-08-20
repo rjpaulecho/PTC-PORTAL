@@ -1,0 +1,336 @@
+/* =========================================================
+   DELETE SUBJECT MODAL
+   ========================================================= */
+
+.delete-subject-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(15, 23, 42, 0.55);
+
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+.delete-subject-modal {
+  width: 100%;
+  max-width: 440px;
+
+  padding: 28px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  box-shadow:
+    0 20px 40px rgba(15, 23, 42, 0.15),
+    0 4px 12px rgba(15, 23, 42, 0.08);
+
+  box-sizing: border-box;
+
+  animation: delete-subject-modal-in 0.18s ease-out;
+}
+
+@keyframes delete-subject-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =========================================================
+   ICON
+   ========================================================= */
+
+.delete-subject-modal-icon {
+  width: 44px;
+  height: 44px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 18px;
+
+  border-radius: 50%;
+
+  background: #fef2f2;
+  color: #dc2626;
+
+  font-size: 22px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   CONTENT
+   ========================================================= */
+
+.delete-subject-modal-content h2 {
+  margin: 0 0 8px;
+
+  color: #111827;
+
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.delete-subject-modal-content p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   SUBJECT INFORMATION
+   ========================================================= */
+
+.delete-subject-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  margin-top: 20px;
+  padding: 15px 16px;
+
+  background: #f9fafb;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+
+  box-sizing: border-box;
+}
+
+.delete-subject-info-main {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.delete-subject-info-main strong {
+  color: #1d4ed8;
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.delete-subject-info-main span {
+  overflow: hidden;
+
+  color: #374151;
+
+  font-size: 13px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-subject-info-units {
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: baseline;
+
+  gap: 4px;
+}
+
+.delete-subject-info-units strong {
+  color: #111827;
+
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.delete-subject-info-units span {
+  color: #6b7280;
+
+  font-size: 11px;
+}
+
+/* =========================================================
+   WARNING
+   ========================================================= */
+
+.delete-subject-warning {
+  margin-top: 15px;
+  padding: 13px 15px;
+
+  background: #fff7ed;
+
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.delete-subject-warning strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #c2410c;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.delete-subject-warning p {
+  margin: 0;
+
+  color: #9a3412;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.delete-subject-error {
+  margin-top: 15px;
+  padding: 11px 13px;
+
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+
+  color: #b91c1c;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+
+.delete-subject-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 24px;
+}
+
+/* =========================================================
+   CANCEL
+   ========================================================= */
+
+.delete-subject-cancel,
+.delete-subject-confirm {
+  min-height: 38px;
+
+  padding: 0 15px;
+
+  border-radius: 7px;
+
+  font-family: inherit;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.delete-subject-cancel {
+  border: 1px solid #d1d5db;
+
+  background: #ffffff;
+  color: #374151;
+}
+
+.delete-subject-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+
+  border-color: #9ca3af;
+}
+
+/* =========================================================
+   DELETE BUTTON
+   ========================================================= */
+
+.delete-subject-confirm {
+  border: 1px solid #dc2626;
+
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.delete-subject-confirm:hover:not(:disabled) {
+  background: #b91c1c;
+
+  border-color: #b91c1c;
+}
+
+/* =========================================================
+   DISABLED
+   ========================================================= */
+
+.delete-subject-cancel:disabled,
+.delete-subject-confirm:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+  .delete-subject-modal-overlay {
+    padding: 15px;
+  }
+
+  .delete-subject-modal {
+    padding: 22px;
+  }
+
+  .delete-subject-info {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .delete-subject-info-main span {
+    white-space: normal;
+  }
+
+  .delete-subject-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .delete-subject-cancel,
+  .delete-subject-confirm {
+    width: 100%;
+  }
+}
