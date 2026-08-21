@@ -203,7 +203,7 @@ export default function EditStudent() {
 
   return (
     <DashboardLayout>
-      <div className="admin-editstudents-students">
+      <div className="admin-editstudents-students-table">
         <h1>Edit Student</h1>
 
         {errorMessage && (
