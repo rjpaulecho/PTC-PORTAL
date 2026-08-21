@@ -160,11 +160,11 @@ export default function LoginForm() {
             type="button"
             onClick={() => {
               authService.saveSession({
-                user_id: 5,
-                username: "student",
-                email: "student@ptc.edu.ph",
+                user_id: 11,
+                username: "26BSA-0004",
+                email: "rjpail@paterostechnologicalcollege.edu.ph",
                 role: "Student",
-                role_id: 5,
+                role_id: 11,
               });
 
               navigate("/student/dashboard");

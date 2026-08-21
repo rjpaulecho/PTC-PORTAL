@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import SubjectModal from "./Subjectmodal";
-import DeleteSubjectModal from "./DeleteSubjectModal";
+import DeleteSubjectModal from "./DeleteSubjectmodal";
 
 import "../../../styles/SubjectmanagementR2.css";
 

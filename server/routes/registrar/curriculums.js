@@ -4,6 +4,44 @@ import express from "express";
 import db from "../../db.js";
 
 const router = express.Router();
+// =====================================================
+// RECALCULATE CURRICULUM TOTAL UNITS
+//
+// Source of truth:
+// curriculum_subjects -> subjects.units
+//
+// This keeps curriculum.total_units synchronized
+// with its mapped subjects.
+// =====================================================
+
+async function recalculateCurriculumUnits(connection, curriculumId) {
+  const [rows] = await connection.execute(
+    `
+      SELECT
+        COALESCE(SUM(s.units), 0) AS total_units
+      FROM curriculum_subjects cs
+
+      INNER JOIN subjects s
+        ON s.subject_id = cs.subject_id
+
+      WHERE cs.curriculum_id = ?
+    `,
+    [curriculumId],
+  );
+
+  const totalUnits = Number(rows[0]?.total_units || 0);
+
+  await connection.execute(
+    `
+      UPDATE curriculum
+      SET total_units = ?
+      WHERE curriculum_id = ?
+    `,
+    [totalUnits, curriculumId],
+  );
+
+  return totalUnits;
+}
 console.log("REGISTRAR CURRICULUM ROUTER LOADED");
 // =====================================================
 // GET ALL REGISTRAR CURRICULUMS
@@ -199,6 +237,41 @@ router.get("/", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch curricula.",
+    });
+  }
+});
+// =====================================================
+// GET COURSES FOR CURRICULUM FORM
+//
+// GET /api/registrar/curriculums/courses
+//
+// Purpose:
+// Return available courses for the Add Curriculum modal.
+// =====================================================
+
+router.get("/courses", async (req, res) => {
+  try {
+    const [courses] = await db.execute(
+      `
+        SELECT
+          course_id,
+          course_code,
+          course_name
+        FROM courses
+        ORDER BY course_code ASC
+      `,
+    );
+
+    return res.json({
+      success: true,
+      courses,
+    });
+  } catch (error) {
+    console.error("GET CURRICULUM COURSES ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch courses.",
     });
   }
 });
@@ -419,7 +492,6 @@ router.get("/:id/available-subjects", async (req, res) => {
     });
   }
 });
-
 // =====================================================
 // CREATE CURRICULUM
 //
@@ -428,12 +500,15 @@ router.get("/:id/available-subjects", async (req, res) => {
 // Body:
 // {
 //   "course_id": 1,
-//   "curriculum_name":
-//      "BSIT Revised Curriculum SY 2019-2020",
-//   "effective_year": 2019,
-//   "total_units": 185,
-//   "is_active": 0
+//   "curriculum_name": "BSIT Curriculum 2026",
+//   "effective_year": 2026,
+//   "is_active": 1
 // }
+//
+// Notes:
+// - total_units starts at 0.
+// - Total units will be based on mapped subjects.
+// - One curriculum per course per effective year.
 // =====================================================
 
 router.post("/", async (req, res) => {
@@ -444,19 +519,15 @@ router.post("/", async (req, res) => {
       course_id,
       curriculum_name,
       effective_year,
-      total_units,
-      is_active = 0,
+      is_active = 1,
     } = req.body;
 
     const courseId = Number(course_id);
-
     const effectiveYear = Number(effective_year);
 
-    const totalUnits = Number(total_units);
-
-    // -------------------------------------------------
-    // VALIDATION
-    // -------------------------------------------------
+    // =================================================
+    // VALIDATE COURSE
+    // =================================================
 
     if (!Number.isInteger(courseId) || courseId <= 0) {
       return res.status(400).json({
@@ -465,8 +536,11 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // =================================================
+    // VALIDATE CURRICULUM NAME
+    // =================================================
+
     if (
-      !curriculum_name ||
       typeof curriculum_name !== "string" ||
       curriculum_name.trim().length === 0
     ) {
@@ -475,6 +549,19 @@ router.post("/", async (req, res) => {
         message: "Curriculum name is required.",
       });
     }
+
+    const curriculumName = curriculum_name.trim();
+
+    if (curriculumName.length > 255) {
+      return res.status(400).json({
+        success: false,
+        message: "Curriculum name must not exceed 255 characters.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE EFFECTIVE YEAR
+    // =================================================
 
     if (
       !Number.isInteger(effectiveYear) ||
@@ -487,24 +574,23 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (!Number.isInteger(totalUnits) || totalUnits < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid total units are required.",
-      });
-    }
+    // =================================================
+    // VALIDATE STATUS
+    // =================================================
 
-    // -------------------------------------------------
+    const activeStatus = Number(is_active) === 1 ? 1 : 0;
+
+    // =================================================
     // CONNECTION
-    // -------------------------------------------------
+    // =================================================
 
     connection = await db.getConnection();
 
     await connection.beginTransaction();
 
-    // -------------------------------------------------
+    // =================================================
     // VERIFY COURSE
-    // -------------------------------------------------
+    // =================================================
 
     const [courseRows] = await connection.execute(
       `
@@ -515,7 +601,7 @@ router.post("/", async (req, res) => {
         FROM courses
         WHERE course_id = ?
         LIMIT 1
-        `,
+      `,
       [courseId],
     );
 
@@ -524,23 +610,30 @@ router.post("/", async (req, res) => {
 
       return res.status(404).json({
         success: false,
-        message: "Course not found.",
+        message: "Selected course was not found.",
       });
     }
 
-    // -------------------------------------------------
-    // CHECK DUPLICATE
-    // -------------------------------------------------
+    // =================================================
+    // CHECK DUPLICATE CURRICULUM
+    //
+    // Same course + same effective year
+    // is not allowed.
+    // =================================================
 
     const [existingRows] = await connection.execute(
       `
-        SELECT curriculum_id
+        SELECT
+          curriculum_id,
+          curriculum_name,
+          effective_year,
+          is_active
         FROM curriculum
         WHERE course_id = ?
-          AND curriculum_name = ?
+          AND effective_year = ?
         LIMIT 1
-        `,
-      [courseId, curriculum_name.trim()],
+      `,
+      [courseId, effectiveYear],
     );
 
     if (existingRows.length > 0) {
@@ -548,14 +641,19 @@ router.post("/", async (req, res) => {
 
       return res.status(409).json({
         success: false,
-        message: "This curriculum already exists for the selected course.",
+        message:
+          "A curriculum already exists for this course and effective year.",
         curriculum_id: existingRows[0].curriculum_id,
+        curriculum: existingRows[0],
       });
     }
 
-    // -------------------------------------------------
-    // INSERT
-    // -------------------------------------------------
+    // =================================================
+    // CREATE CURRICULUM
+    //
+    // total_units starts at 0 because no subjects
+    // have been mapped yet.
+    // =================================================
 
     const [result] = await connection.execute(
       `
@@ -566,28 +664,66 @@ router.post("/", async (req, res) => {
           total_units,
           is_active
         )
-        VALUES (?, ?, ?, ?, ?)
-        `,
-      [
-        courseId,
-        curriculum_name.trim(),
-        effectiveYear,
-        totalUnits,
-        is_active ? 1 : 0,
-      ],
+        VALUES (?, ?, ?, 0, ?)
+      `,
+      [courseId, curriculumName, effectiveYear, activeStatus],
+    );
+
+    // =================================================
+    // GET CREATED CURRICULUM
+    // =================================================
+
+    const [createdRows] = await connection.execute(
+      `
+        SELECT
+          c.curriculum_id,
+          c.course_id,
+          co.course_code,
+          co.course_name,
+          c.curriculum_name,
+          c.effective_year,
+          c.total_units,
+          c.is_active
+        FROM curriculum c
+
+        INNER JOIN courses co
+          ON co.course_id = c.course_id
+
+        WHERE c.curriculum_id = ?
+
+        LIMIT 1
+      `,
+      [result.insertId],
     );
 
     await connection.commit();
 
+    // =================================================
+    // RESPONSE
+    // =================================================
+
     return res.status(201).json({
       success: true,
+
       message: "Curriculum created successfully.",
 
-      curriculum_id: result.insertId,
+      curriculum: createdRows[0],
     });
   } catch (error) {
     if (connection) {
       await connection.rollback();
+    }
+
+    // =================================================
+    // DATABASE DUPLICATE PROTECTION
+    // =================================================
+
+    if (error?.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A curriculum already exists for this course and effective year.",
+      });
     }
 
     console.error("CREATE CURRICULUM ERROR:", error);
@@ -938,7 +1074,10 @@ router.post("/:id/subjects", async (req, res) => {
         displayOrder,
       ],
     );
-
+    const totalUnits = await recalculateCurriculumUnits(
+      connection,
+      curriculumId,
+    );
     await connection.commit();
 
     return res.status(201).json({
@@ -1140,18 +1279,28 @@ router.put("/:id/subjects/:curriculumSubjectId", async (req, res) => {
     });
   }
 });
-
 // =====================================================
 // REMOVE SUBJECT FROM CURRICULUM
 //
 // DELETE /api/registrar/curriculums/:id/subjects/:curriculumSubjectId
+//
+// Removes the subject mapping only.
+// The actual subject remains in the subjects table.
+//
+// Also recalculates curriculum.total_units.
 // =====================================================
 
 router.delete("/:id/subjects/:curriculumSubjectId", async (req, res) => {
+  let connection;
+
   try {
     const curriculumId = Number(req.params.id);
 
     const curriculumSubjectId = Number(req.params.curriculumSubjectId);
+
+    // -------------------------------------------------
+    // VALIDATE CURRICULUM ID
+    // -------------------------------------------------
 
     if (!Number.isInteger(curriculumId) || curriculumId <= 0) {
       return res.status(400).json({
@@ -1160,6 +1309,10 @@ router.delete("/:id/subjects/:curriculumSubjectId", async (req, res) => {
       });
     }
 
+    // -------------------------------------------------
+    // VALIDATE MAPPING ID
+    // -------------------------------------------------
+
     if (!Number.isInteger(curriculumSubjectId) || curriculumSubjectId <= 0) {
       return res.status(400).json({
         success: false,
@@ -1167,57 +1320,114 @@ router.delete("/:id/subjects/:curriculumSubjectId", async (req, res) => {
       });
     }
 
-    const [existingRows] = await db.execute(
+    // -------------------------------------------------
+    // CONNECTION
+    // -------------------------------------------------
+
+    connection = await db.getConnection();
+
+    await connection.beginTransaction();
+
+    // -------------------------------------------------
+    // FIND MAPPING
+    // -------------------------------------------------
+
+    const [existingRows] = await connection.execute(
       `
-          SELECT
-            cs.curriculum_subject_id,
-            cs.curriculum_id,
-            cs.subject_id,
-            s.subject_code,
-            s.subject_name
-          FROM curriculum_subjects cs
+        SELECT
+          cs.curriculum_subject_id,
+          cs.curriculum_id,
+          cs.subject_id,
 
-          INNER JOIN subjects s
-            ON s.subject_id = cs.subject_id
+          s.subject_code,
+          s.subject_name,
+          s.units,
 
-          WHERE cs.curriculum_subject_id = ?
-            AND cs.curriculum_id = ?
+          cs.year_level,
+          cs.semester_id,
+          cs.is_required,
+          cs.display_order
 
-          LIMIT 1
-          `,
+        FROM curriculum_subjects cs
+
+        INNER JOIN subjects s
+          ON s.subject_id = cs.subject_id
+
+        WHERE cs.curriculum_subject_id = ?
+          AND cs.curriculum_id = ?
+
+        LIMIT 1
+      `,
       [curriculumSubjectId, curriculumId],
     );
 
     if (existingRows.length === 0) {
+      await connection.rollback();
+
       return res.status(404).json({
         success: false,
         message: "Curriculum subject mapping not found.",
       });
     }
 
-    await db.execute(
+    const removedSubject = existingRows[0];
+
+    // -------------------------------------------------
+    // DELETE MAPPING
+    // -------------------------------------------------
+
+    await connection.execute(
       `
         DELETE FROM curriculum_subjects
         WHERE curriculum_subject_id = ?
           AND curriculum_id = ?
-        `,
+      `,
       [curriculumSubjectId, curriculumId],
     );
+
+    // -------------------------------------------------
+    // RECALCULATE TOTAL UNITS
+    // -------------------------------------------------
+
+    const totalUnits = await recalculateCurriculumUnits(
+      connection,
+      curriculumId,
+    );
+
+    // -------------------------------------------------
+    // COMMIT
+    // -------------------------------------------------
+
+    await connection.commit();
+
+    // -------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------
 
     return res.json({
       success: true,
 
       message: "Subject removed from curriculum successfully.",
 
-      removed: existingRows[0],
+      removed: removedSubject,
+
+      total_units: totalUnits,
     });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+
     console.error("REMOVE CURRICULUM SUBJECT ERROR:", error);
 
     return res.status(500).json({
       success: false,
       message: "Failed to remove subject from curriculum.",
     });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 

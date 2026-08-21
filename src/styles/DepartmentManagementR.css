@@ -1,0 +1,435 @@
+/* =====================================================
+   DEPARTMENT MANAGEMENT
+===================================================== */
+
+.registrar-department-management {
+  width: 100%;
+  padding: 28px 32px 40px;
+  box-sizing: border-box;
+  color: #1f2937;
+}
+
+/* =====================================================
+   HEADER
+===================================================== */
+
+.registrar-department-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.registrar-department-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.3px;
+}
+
+.registrar-department-header p {
+  margin: 7px 0 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* =====================================================
+   ADD DEPARTMENT BUTTON
+===================================================== */
+
+.add-department-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 170px;
+  height: 42px;
+
+  padding: 0 18px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+.add-department-btn:hover {
+  background: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.add-department-btn:active {
+  transform: translateY(1px);
+}
+
+.add-department-btn:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+}
+
+/* =====================================================
+   SUMMARY
+===================================================== */
+
+.registrar-department-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.registrar-department-card {
+  min-height: 105px;
+
+  padding: 20px 22px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  box-sizing: border-box;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.registrar-department-card span {
+  display: block;
+
+  margin-bottom: 8px;
+
+  font-size: 13px;
+  font-weight: 500;
+
+  color: #6b7280;
+}
+
+.registrar-department-card h2 {
+  margin: 0;
+
+  font-size: 27px;
+  font-weight: 700;
+
+  color: #111827;
+}
+
+/* =====================================================
+   TOOLBAR
+===================================================== */
+
+.registrar-department-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-bottom: 18px;
+}
+
+.registrar-department-search {
+  flex: 1;
+  max-width: 520px;
+}
+
+.registrar-department-search input {
+  width: 100%;
+  height: 42px;
+
+  padding: 0 14px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background: #ffffff;
+
+  color: #111827;
+
+  font-size: 14px;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.registrar-department-search input::placeholder {
+  color: #9ca3af;
+}
+
+.registrar-department-search input:focus {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* =====================================================
+   REFRESH BUTTON
+===================================================== */
+
+.refresh-department-btn {
+  height: 42px;
+
+  padding: 0 18px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background: #ffffff;
+  color: #374151;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.refresh-department-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.refresh-department-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* =====================================================
+   TABLE WRAPPER
+===================================================== */
+
+.registrar-department-table-wrapper {
+  width: 100%;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  overflow: hidden;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.department-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* =====================================================
+   TABLE
+===================================================== */
+
+.department-table {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  min-width: 760px;
+}
+
+.department-table thead {
+  background: #f8fafc;
+}
+
+.department-table th {
+  padding: 14px 18px;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  text-align: left;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  color: #6b7280;
+
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+
+  white-space: nowrap;
+}
+
+.department-table td {
+  padding: 16px 18px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  font-size: 14px;
+
+  color: #374151;
+
+  vertical-align: middle;
+}
+
+.department-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.department-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.department-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =====================================================
+   DEPARTMENT CODE
+===================================================== */
+
+.department-code {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 5px 9px;
+
+  border-radius: 6px;
+
+  background: #eff6ff;
+
+  color: #1d4ed8;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  letter-spacing: 0.3px;
+}
+
+/* =====================================================
+   DEPARTMENT NAME
+===================================================== */
+
+.department-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.department-name strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* =====================================================
+   ACTIONS
+===================================================== */
+
+.department-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-department-btn {
+  height: 34px;
+
+  padding: 0 13px;
+
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.edit-department-btn:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+/* =====================================================
+   TABLE MESSAGES
+===================================================== */
+
+.table-message {
+  padding: 45px 20px !important;
+
+  text-align: center !important;
+
+  color: #6b7280 !important;
+
+  font-size: 14px !important;
+}
+
+.table-message.error {
+  color: #dc2626 !important;
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 900px) {
+  .registrar-department-management {
+    padding: 22px 20px 32px;
+  }
+
+  .registrar-department-header {
+    align-items: flex-start;
+  }
+
+  .registrar-department-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .registrar-department-header {
+    flex-direction: column;
+  }
+
+  .registrar-department-header > div {
+    width: 100%;
+  }
+
+  .add-department-btn {
+    width: 100%;
+  }
+
+  .registrar-department-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .registrar-department-search {
+    max-width: none;
+  }
+
+  .refresh-department-btn {
+    width: 100%;
+  }
+}
