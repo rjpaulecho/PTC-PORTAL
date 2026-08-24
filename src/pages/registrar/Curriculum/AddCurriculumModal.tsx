@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from "react";
+
+import { authService } from "../../../services/auth.service";
+
 import "../../../styles/CurriculumManagementR.css";
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/curriculums";
@@ -26,11 +29,13 @@ interface CourseResponse {
   data?: Course[];
   courses?: Course[];
   message?: string;
+  error?: string;
 }
 
 interface CreateCurriculumResponse {
   success: boolean;
   message?: string;
+  error?: string;
   curriculum_id?: number;
 }
 
@@ -42,6 +47,18 @@ export default function AddCurriculumModal({
   onClose,
   onSuccess,
 }: AddCurriculumModalProps) {
+  // =====================================================
+  // AUTH
+  // =====================================================
+
+  const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
+
   // =====================================================
   // FORM STATES
   // =====================================================
@@ -83,14 +100,21 @@ export default function AddCurriculumModal({
   // =====================================================
 
   useEffect(() => {
+    if (!authenticated || userRole !== "Registrar") {
+      setLoadingCourses(false);
+
+      return;
+    }
+
     const controller = new AbortController();
 
     const loadCourses = async () => {
       try {
         setLoadingCourses(true);
+
         setCourseError("");
 
-        const response = await fetch(COURSES_API_URL, {
+        const response = await authService.authFetch(COURSES_API_URL, {
           method: "GET",
 
           signal: controller.signal,
@@ -102,7 +126,11 @@ export default function AddCurriculumModal({
 
         const contentType = response.headers.get("content-type") || "";
 
-        if (!contentType.includes("application/json")) {
+        let data: CourseResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
           const text = await response.text();
 
           throw new Error(
@@ -113,27 +141,27 @@ export default function AddCurriculumModal({
           );
         }
 
-        const data: CourseResponse = await response.json();
+        if (response.status === 401) {
+          authService.logout();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Failed to load courses.");
+          setCourseError("Your session has expired. Please log in again.");
+
+          return;
         }
 
-        // -------------------------------------------------
-        // SUPPORT EITHER:
-        //
-        // {
-        //   success: true,
-        //   data: [...]
-        // }
-        //
-        // OR:
-        //
-        // {
-        //   success: true,
-        //   courses: [...]
-        // }
-        // -------------------------------------------------
+        if (response.status === 403) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              "You are not authorized to load courses.",
+          );
+        }
+
+        if (!response.ok || !data?.success) {
+          throw new Error(
+            data?.message || data?.error || "Failed to load courses.",
+          );
+        }
 
         const loadedCourses = Array.isArray(data.data)
           ? data.data
@@ -161,12 +189,12 @@ export default function AddCurriculumModal({
       }
     };
 
-    loadCourses();
+    void loadCourses();
 
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [authenticated, userRole]);
 
   // =====================================================
   // HANDLE SUBMIT
@@ -178,9 +206,13 @@ export default function AddCurriculumModal({
     setError("");
     setSuccessMessage("");
 
-    // ===================================================
-    // VALIDATE COURSE
-    // ===================================================
+    if (!authenticated || userRole !== "Registrar") {
+      setError(
+        "Your session has expired or you are not authorized to create curricula.",
+      );
+
+      return;
+    }
 
     const parsedCourseId = Number(courseId);
 
@@ -190,10 +222,6 @@ export default function AddCurriculumModal({
       return;
     }
 
-    // ===================================================
-    // VALIDATE CURRICULUM NAME
-    // ===================================================
-
     const trimmedName = curriculumName.trim();
 
     if (!trimmedName) {
@@ -201,10 +229,6 @@ export default function AddCurriculumModal({
 
       return;
     }
-
-    // ===================================================
-    // VALIDATE EFFECTIVE YEAR
-    // ===================================================
 
     const parsedEffectiveYear = Number(effectiveYear);
 
@@ -218,23 +242,15 @@ export default function AddCurriculumModal({
       return;
     }
 
-    // ===================================================
-    // VALIDATE TOTAL UNITS
-    // ===================================================
-
     const parsedTotalUnits = Number(totalUnits);
 
-    if (!Number.isInteger(parsedTotalUnits) || parsedTotalUnits < 0) {
+    if (!Number.isFinite(parsedTotalUnits) || parsedTotalUnits < 0) {
       setError(
         "Total units must be a valid number greater than or equal to 0.",
       );
 
       return;
     }
-
-    // ===================================================
-    // SUBMIT
-    // ===================================================
 
     try {
       setSubmitting(true);
@@ -253,25 +269,19 @@ export default function AddCurriculumModal({
 
       console.log("POST CREATE CURRICULUM:", payload);
 
-      const response = await fetch(API_BASE_URL, {
+      const response = await authService.authFetch(API_BASE_URL, {
         method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-
-          Accept: "application/json",
-        },
 
         body: JSON.stringify(payload),
       });
 
-      // ===================================================
-      // CONTENT TYPE
-      // ===================================================
-
       const contentType = response.headers.get("content-type") || "";
 
-      if (!contentType.includes("application/json")) {
+      let data: CreateCurriculumResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
         const text = await response.text();
 
         throw new Error(
@@ -282,29 +292,30 @@ export default function AddCurriculumModal({
         );
       }
 
-      // ===================================================
-      // RESPONSE
-      // ===================================================
+      if (response.status === 401) {
+        authService.logout();
 
-      const data: CreateCurriculumResponse = await response.json();
+        setError("Your session has expired. Please log in again.");
 
-      // ===================================================
-      // BACKEND ERROR
-      // ===================================================
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to create curriculum.");
+        return;
       }
 
-      // ===================================================
-      // SUCCESS
-      // ===================================================
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to create curricula.",
+        );
+      }
 
-      console.log("CURRICULUM CREATED:", data);
+      if (!response.ok || !data?.success) {
+        throw new Error(
+          data?.message || data?.error || "Failed to create curriculum.",
+        );
+      }
 
       setSuccessMessage(data.message || "Curriculum created successfully.");
 
-      // Small delay so the success message can be seen.
       setTimeout(() => {
         onSuccess();
       }, 500);
@@ -327,10 +338,8 @@ export default function AddCurriculumModal({
     <div
       className="curriculum-modal-overlay"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          if (!submitting) {
-            onClose();
-          }
+        if (event.target === event.currentTarget && !submitting) {
+          onClose();
         }
       }}
     >
@@ -340,10 +349,6 @@ export default function AddCurriculumModal({
         aria-modal="true"
         aria-labelledby="add-curriculum-title"
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
         <div className="curriculum-modal-header">
           <div>
             <h2 id="add-curriculum-title">Add Curriculum</h2>
@@ -362,32 +367,16 @@ export default function AddCurriculumModal({
           </button>
         </div>
 
-        {/* =================================================
-            FORM
-        ================================================= */}
-
         <form className="curriculum-modal-form" onSubmit={handleSubmit}>
-          {/* =================================================
-              ERROR
-          ================================================= */}
-
           {error && (
             <div className="curriculum-form-message error">{error}</div>
           )}
-
-          {/* =================================================
-              SUCCESS
-          ================================================= */}
 
           {successMessage && (
             <div className="curriculum-form-message success">
               {successMessage}
             </div>
           )}
-
-          {/* =================================================
-              COURSE
-          ================================================= */}
 
           <div className="curriculum-form-group">
             <label htmlFor="curriculum-course">Course</label>
@@ -415,10 +404,6 @@ export default function AddCurriculumModal({
             )}
           </div>
 
-          {/* =================================================
-              CURRICULUM NAME
-          ================================================= */}
-
           <div className="curriculum-form-group">
             <label htmlFor="curriculum-name">Curriculum Name</label>
 
@@ -433,10 +418,6 @@ export default function AddCurriculumModal({
               required
             />
           </div>
-
-          {/* =================================================
-              EFFECTIVE YEAR
-          ================================================= */}
 
           <div className="curriculum-form-row">
             <div className="curriculum-form-group">
@@ -453,10 +434,6 @@ export default function AddCurriculumModal({
                 required
               />
             </div>
-
-            {/* =================================================
-                TOTAL UNITS
-            ================================================= */}
 
             <div className="curriculum-form-group">
               <label htmlFor="curriculum-total-units">Total Units</label>
@@ -475,10 +452,6 @@ export default function AddCurriculumModal({
             </div>
           </div>
 
-          {/* =================================================
-              STATUS
-          ================================================= */}
-
           <div className="curriculum-form-group">
             <label htmlFor="curriculum-status">Status</label>
 
@@ -494,10 +467,6 @@ export default function AddCurriculumModal({
             </select>
           </div>
 
-          {/* =================================================
-              ACTIONS
-          ================================================= */}
-
           <div className="curriculum-modal-actions">
             <button
               type="button"
@@ -511,7 +480,13 @@ export default function AddCurriculumModal({
             <button
               type="submit"
               className="curriculum-submit-btn"
-              disabled={submitting || loadingCourses || courses.length === 0}
+              disabled={
+                submitting ||
+                loadingCourses ||
+                courses.length === 0 ||
+                !authenticated ||
+                userRole !== "Registrar"
+              }
             >
               {submitting ? "Creating..." : "Create Curriculum"}
             </button>

@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from "react";
-import DashboardLayout from "../../../components/Layout/DashboardLayout";
-import { authService } from "../../../services/auth.service";
+
 import { useNavigate, useParams } from "react-router-dom";
+
+import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
+import { authService } from "../../../services/auth.service";
+
 import "../../../styles/EnrollmementDetailsR.css";
+
+// =====================================================
+// API
+// =====================================================
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/enrollments";
 
@@ -12,35 +20,47 @@ const API_BASE_URL = "http://localhost:3000/api/registrar/enrollments";
 
 interface Enrollment {
   enrollment_id: number;
+
   student_id: number;
 
   student_number: string;
+
   first_name: string;
   middle_name: string | null;
   last_name: string;
 
   gender: string | null;
+
   birth_date: string | null;
+
   contact_number: string | null;
+
   year_level: number | null;
 
   course_id: number | null;
+
   course_code: string | null;
 
   student_section_id: number | null;
+
   student_section_name: string | null;
 
   academic_year_id: number;
+
   academic_year: string;
 
   semester_id: number;
+
   semester_name: string;
 
   enrollment_status: string;
+
   remarks: string | null;
 
   approved_by: number | null;
+
   approved_by_username: string | null;
+
   approved_at: string | null;
 
   created_at: string;
@@ -50,16 +70,21 @@ interface EnrollmentSubject {
   enrollment_subject_id: number;
 
   subject_id: number;
+
   subject_code: string;
+
   subject_name: string;
 
   units: number;
+
   lecture_hours: number | null;
+
   laboratory_hours: number | null;
 
   subject_status: string;
 
   section_id: number | null;
+
   section_name: string | null;
 
   section_subject_id: number | null;
@@ -67,9 +92,11 @@ interface EnrollmentSubject {
   offering_id: number | null;
 
   faculty_id: number | null;
+
   room_id: number | null;
 
   schedule_days: string | null;
+
   schedule_time: string | null;
 
   max_students: number | null;
@@ -77,10 +104,16 @@ interface EnrollmentSubject {
 
 interface EnrollmentDetailsResponse {
   success: boolean;
+
   enrollment: Enrollment;
+
   totalSubjects: number;
+
   subjects: EnrollmentSubject[];
+
   message?: string;
+
+  error?: string;
 }
 
 // =====================================================
@@ -89,10 +122,20 @@ interface EnrollmentDetailsResponse {
 
 export default function EnrollmentDetailsR() {
   const navigate = useNavigate();
+
   const { id } = useParams<{ id: string }>();
 
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
   const user = authService.getSession();
+
+  const token = authService.getToken();
+
   const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // STATES
@@ -109,27 +152,65 @@ export default function EnrollmentDetailsR() {
   const [error, setError] = useState("");
 
   // =====================================================
-  // AUTHENTICATION
+  // AUTHORIZATION
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
-      navigate("/login");
+    // ---------------------------------------------------
+    // No session or no JWT
+    // ---------------------------------------------------
+
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
     }
-  }, [userRole, navigate]);
+
+    // ---------------------------------------------------
+    // Logged in but wrong role
+    // ---------------------------------------------------
+
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, user, navigate]);
 
   // =====================================================
   // FETCH ENROLLMENT DETAILS
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
+    if (!authenticated || userRole !== "Registrar") {
       return;
     }
 
     if (!id) {
       setError("Invalid enrollment ID.");
+
       setLoading(false);
+
+      return;
+    }
+
+    const enrollmentId = Number(id);
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      setError("Invalid enrollment ID.");
+
+      setLoading(false);
+
       return;
     }
 
@@ -138,33 +219,116 @@ export default function EnrollmentDetailsR() {
     const loadEnrollment = async () => {
       try {
         setLoading(true);
+
         setError("");
 
-        const enrollmentId = Number(id);
+        const requestUrl = `${API_BASE_URL}/${enrollmentId}`;
 
-        if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
-          throw new Error("Invalid enrollment ID.");
-        }
+        console.log("GET REGISTRAR ENROLLMENT DETAILS:", requestUrl);
 
-        const response = await fetch(`${API_BASE_URL}/${enrollmentId}`, {
+        // =============================================
+        // AUTHENTICATED REQUEST
+        //
+        // authFetch automatically adds:
+        //
+        // Authorization: Bearer <JWT>
+        // =============================================
+
+        const response = await authService.authFetch(requestUrl, {
           method: "GET",
+
           signal: controller.signal,
+
           headers: {
             Accept: "application/json",
           },
         });
 
-        const data: EnrollmentDetailsResponse = await response.json();
+        // =============================================
+        // SAFE RESPONSE READ
+        // =============================================
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Failed to fetch enrollment.");
+        const contentType = response.headers.get("content-type") || "";
+
+        let data: EnrollmentDetailsResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
         }
 
+        // =============================================
+        // 401
+        //
+        // Missing / invalid / expired JWT
+        // =============================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =============================================
+        // 403
+        //
+        // Authenticated but wrong role
+        // =============================================
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              "You are not authorized to view this enrollment.",
+          );
+        }
+
+        // =============================================
+        // HTTP ERROR
+        // =============================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Failed to fetch enrollment (${response.status}).`,
+          );
+        }
+
+        // =============================================
+        // API ERROR
+        // =============================================
+
+        if (!data?.success) {
+          throw new Error(data?.message || "Failed to fetch enrollment.");
+        }
+
+        // =============================================
+        // SUCCESS
+        // =============================================
+
         setEnrollment(data.enrollment);
+
         setSubjects(Array.isArray(data.subjects) ? data.subjects : []);
 
-        setTotalSubjects(data.totalSubjects || 0);
+        setTotalSubjects(Number(data.totalSubjects || 0));
       } catch (err) {
+        // =============================================
+        // ABORTED REQUEST
+        // =============================================
+
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
@@ -172,8 +336,26 @@ export default function EnrollmentDetailsR() {
         console.error("GET ENROLLMENT DETAILS ERROR:", err);
 
         setEnrollment(null);
+
         setSubjects([]);
+
         setTotalSubjects(0);
+
+        // =============================================
+        // NETWORK ERROR
+        // =============================================
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the enrollment server. Make sure the backend is running on port 3000.",
+          );
+
+          return;
+        }
+
+        // =============================================
+        // NORMAL ERROR
+        // =============================================
 
         setError(
           err instanceof Error
@@ -187,12 +369,12 @@ export default function EnrollmentDetailsR() {
       }
     };
 
-    loadEnrollment();
+    void loadEnrollment();
 
     return () => {
       controller.abort();
     };
-  }, [id, userRole]);
+  }, [id, authenticated, userRole, navigate]);
 
   // =====================================================
   // HELPERS
@@ -209,7 +391,7 @@ export default function EnrollmentDetailsR() {
   };
 
   const getStatusClass = (value: string) => {
-    return `status ${value.toLowerCase().replace(/\s+/g, "-")}`;
+    return `status ${(value || "").toLowerCase().replace(/\s+/g, "-")}`;
   };
 
   const formatDate = (value: string | null) => {
@@ -230,7 +412,11 @@ export default function EnrollmentDetailsR() {
     });
   };
 
-  const formatSchedule = (days: string | null, time: string | null) => {
+  const formatSchedule = (
+    days: string | null,
+
+    time: string | null,
+  ) => {
     if (!days && !time) {
       return "—";
     }
@@ -247,10 +433,100 @@ export default function EnrollmentDetailsR() {
   };
 
   // =====================================================
-  // AUTH GUARD
+  // SUBJECT ACTION PLACEHOLDERS
   // =====================================================
 
-  if (!user || userRole !== "Registrar") {
+  const handleChangeSection = (subject: EnrollmentSubject) => {
+    console.log("Change section:", subject.enrollment_subject_id);
+
+    // ==================================================
+    // TODO:
+    //
+    // Later connect this to the Registrar endpoint that
+    // assigns a valid offering / section_subject /
+    // section to this enrollment subject.
+    //
+    // This must use authService.authFetch().
+    // ==================================================
+  };
+
+  const handleDropSubject = (subject: EnrollmentSubject) => {
+    console.log("Drop subject:", subject.enrollment_subject_id);
+
+    // ==================================================
+    // TODO:
+    //
+    // Later connect this to the official Registrar
+    // enrollment-subject status endpoint.
+    //
+    // Do not delete the academic intent blindly.
+    //
+    // Expected subject status:
+    // DROPPED
+    //
+    // This must use authService.authFetch().
+    // ==================================================
+  };
+
+  // =====================================================
+  // ENROLLMENT ACTION PLACEHOLDERS
+  // =====================================================
+
+  const handleRejectEnrollment = () => {
+    if (!enrollment) {
+      return;
+    }
+
+    console.log("Reject enrollment:", enrollment.enrollment_id);
+
+    // ==================================================
+    // TODO:
+    //
+    // Connect to the real Registrar reject endpoint.
+    //
+    // When implemented:
+    //
+    // authService.authFetch(...)
+    //
+    // Backend actor:
+    // req.user.user_id
+    //
+    // Do not send frontend approved_by / user_id.
+    // ==================================================
+  };
+
+  const handleApproveEnrollment = () => {
+    if (!enrollment) {
+      return;
+    }
+
+    console.log("Approve enrollment:", enrollment.enrollment_id);
+
+    // ==================================================
+    // TODO:
+    //
+    // Connect to the final Registrar approval endpoint.
+    //
+    // Before approval backend must validate:
+    //
+    // - enrollment still Pending / Under Review
+    // - enrollment period rules
+    // - every subject valid
+    // - section/offering assignments
+    // - prerequisites
+    // - capacity
+    // - duplicate enrollment
+    //
+    // Actor must come from:
+    // req.user.user_id
+    // ==================================================
+  };
+
+  // =====================================================
+  // AUTH RENDER GUARD
+  // =====================================================
+
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
 
@@ -349,26 +625,31 @@ export default function EnrollmentDetailsR() {
           <div className="details-grid">
             <div className="detail-item">
               <span>Student Number</span>
+
               <strong>{enrollment.student_number}</strong>
             </div>
 
             <div className="detail-item">
               <span>Student Name</span>
+
               <strong>{getFullName()}</strong>
             </div>
 
             <div className="detail-item">
               <span>Gender</span>
+
               <strong>{enrollment.gender || "—"}</strong>
             </div>
 
             <div className="detail-item">
               <span>Birth Date</span>
+
               <strong>{formatDate(enrollment.birth_date)}</strong>
             </div>
 
             <div className="detail-item">
               <span>Contact Number</span>
+
               <strong>{enrollment.contact_number || "—"}</strong>
             </div>
           </div>
@@ -386,11 +667,13 @@ export default function EnrollmentDetailsR() {
           <div className="details-grid">
             <div className="detail-item">
               <span>Course</span>
+
               <strong>{enrollment.course_code || "—"}</strong>
             </div>
 
             <div className="detail-item">
               <span>Year Level</span>
+
               <strong>
                 {enrollment.year_level ? `Year ${enrollment.year_level}` : "—"}
               </strong>
@@ -398,6 +681,7 @@ export default function EnrollmentDetailsR() {
 
             <div className="detail-item">
               <span>Section</span>
+
               <strong>
                 {enrollment.student_section_name || "Not Assigned"}
               </strong>
@@ -405,33 +689,45 @@ export default function EnrollmentDetailsR() {
 
             <div className="detail-item">
               <span>Academic Year</span>
+
               <strong>{enrollment.academic_year}</strong>
             </div>
 
             <div className="detail-item">
               <span>Semester</span>
+
               <strong>{enrollment.semester_name}</strong>
             </div>
 
             <div className="detail-item">
               <span>Total Subjects</span>
+
               <strong>{totalSubjects}</strong>
             </div>
 
             <div className="detail-item">
               <span>Created</span>
+
               <strong>{formatDate(enrollment.created_at)}</strong>
             </div>
 
             <div className="detail-item">
               <span>Approved By</span>
+
               <strong>{enrollment.approved_by_username || "—"}</strong>
+            </div>
+
+            <div className="detail-item">
+              <span>Approved At</span>
+
+              <strong>{formatDate(enrollment.approved_at)}</strong>
             </div>
           </div>
 
           {enrollment.remarks && (
             <div className="remarks-box">
               <span>Remarks</span>
+
               <p>{enrollment.remarks}</p>
             </div>
           )}
@@ -458,13 +754,21 @@ export default function EnrollmentDetailsR() {
               <thead>
                 <tr>
                   <th>Code</th>
+
                   <th>Subject</th>
+
                   <th>Units</th>
+
                   <th>Section</th>
+
                   <th>Schedule</th>
+
                   <th>Faculty</th>
+
                   <th>Room</th>
+
                   <th>Status</th>
+
                   <th>Action</th>
                 </tr>
               </thead>
@@ -524,12 +828,7 @@ export default function EnrollmentDetailsR() {
                         <button
                           type="button"
                           className="subject-action-btn"
-                          onClick={() => {
-                            console.log(
-                              "Change section:",
-                              subject.enrollment_subject_id,
-                            );
-                          }}
+                          onClick={() => handleChangeSection(subject)}
                         >
                           Change
                         </button>
@@ -537,12 +836,7 @@ export default function EnrollmentDetailsR() {
                         <button
                           type="button"
                           className="subject-action-btn danger"
-                          onClick={() => {
-                            console.log(
-                              "Drop subject:",
-                              subject.enrollment_subject_id,
-                            );
-                          }}
+                          onClick={() => handleDropSubject(subject)}
                         >
                           Drop
                         </button>
@@ -563,9 +857,8 @@ export default function EnrollmentDetailsR() {
           <button
             type="button"
             className="reject-enrollment-btn"
-            onClick={() => {
-              console.log("Reject enrollment:", enrollment.enrollment_id);
-            }}
+            onClick={handleRejectEnrollment}
+            disabled={enrollment.enrollment_status === "Approved"}
           >
             Reject Enrollment
           </button>
@@ -573,9 +866,11 @@ export default function EnrollmentDetailsR() {
           <button
             type="button"
             className="approve-enrollment-btn"
-            onClick={() => {
-              console.log("Approve enrollment:", enrollment.enrollment_id);
-            }}
+            onClick={handleApproveEnrollment}
+            disabled={
+              enrollment.enrollment_status === "Approved" ||
+              subjects.length === 0
+            }
           >
             Approve Enrollment
           </button>

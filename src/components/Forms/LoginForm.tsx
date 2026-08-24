@@ -1,15 +1,23 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { authService } from "../../services/auth.service";
+
 import styles from "../../styles/auth.module.css";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
+  // =====================================================
+  // NORMAL LOGIN
+  // Username + Password → OTP
+  // =====================================================
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -17,9 +25,12 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      await authService.login(username, password);
+      const cleanUsername = username.trim();
 
-      authService.savePendingUsername(username);
+      await authService.login(cleanUsername, password);
+
+      authService.savePendingUsername(cleanUsername);
+
       navigate("/otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed.");
@@ -28,37 +39,96 @@ export default function LoginForm() {
     }
   }
 
+  // =====================================================
+  // DEVELOPMENT LOGIN
+  //
+  // One-click development login.
+  //
+  // IMPORTANT:
+  // This does NOT create a fake frontend session anymore.
+  //
+  // It calls:
+  //
+  // POST /auth/dev-login
+  //
+  // Backend:
+  // - loads real user from database
+  // - loads real role
+  // - creates JWT
+  // - returns JWT + user
+  //
+  // authService.devLogin():
+  // - stores JWT
+  // - stores user session
+  // =====================================================
+  async function handleDevLogin(devUsername: string) {
+    setError("");
+    setLoading(true);
+
+    try {
+      const user = await authService.devLogin(devUsername);
+
+      const destination = authService.getDashboardRoute(user.role);
+
+      navigate(destination, {
+        replace: true,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Development login failed.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className={styles.authPage}>
       <div className={`${styles.authcard} ${styles.fadeIn}`}>
+        {/* ==========================================
+            BACK BUTTON
+        ========================================== */}
         <button
           type="button"
           className={styles.backBtn}
           onClick={() => navigate("/")}
           aria-label="Go back"
+          disabled={loading}
         >
           ←
         </button>
 
+        {/* ==========================================
+            LEFT SIDE
+        ========================================== */}
         <div className={styles.authleft}>
           <h2>Welcome Back</h2>
+
           <p>Login to access your portal dashboard.</p>
         </div>
 
+        {/* ==========================================
+            RIGHT SIDE
+        ========================================== */}
         <div className={styles.authright}>
           <h2>Login</h2>
 
+          {/* ========================================
+              NORMAL LOGIN
+          ======================================== */}
           <form onSubmit={handleSubmit}>
-            {/* input BEFORE label — required for the floating-label CSS (:valid ~ label) */}
             <div className={styles.inputgroup}>
               <input
                 type="text"
                 placeholder=" "
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toUpperCase())}
+                disabled={loading}
                 required
+                autoComplete="username"
               />
-              <label>Student Number </label>
+
+              <label>Username / Student Number</label>
             </div>
 
             <div className={styles.inputgroup}>
@@ -67,17 +137,26 @@ export default function LoginForm() {
                 placeholder=" "
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="current-password"
               />
+
               <label>Password</label>
             </div>
 
+            {/* ======================================
+                ERROR
+            ====================================== */}
             {error && (
               <p key={error} className={styles.errorMsg}>
                 {error}
               </p>
             )}
 
+            {/* ======================================
+                LOGIN BUTTON
+            ====================================== */}
             <button
               type="submit"
               disabled={loading}
@@ -87,95 +166,80 @@ export default function LoginForm() {
             </button>
           </form>
 
+          {/* ========================================
+              FORGOT PASSWORD
+          ======================================== */}
           <div className={styles.authlinks}>
             <a href="#">Forgot password?</a>
           </div>
 
-          <div style={{ marginTop: "20px" }}>
+          {/* ========================================
+              DEVELOPMENT LOGIN
+          ======================================== */}
+          <div
+            style={{
+              marginTop: "20px",
+            }}
+          >
             <h4>For Development Access</h4>
 
             <div className={styles.devButtons}>
+              {/* ================================
+                  ADMIN
+              ================================ */}
               <button
                 type="button"
                 className={styles.devBtn}
-                onClick={() => {
-                  authService.saveSession({
-                    user_id: 1,
-                    username: "admin",
-                    email: "admin@ptc.edu.ph",
-                    role: "Admin",
-                    role_id: 1,
-                  });
-                  navigate("/admin/dashboard");
-                }}
+                disabled={loading}
+                onClick={() => handleDevLogin("admin")}
               >
                 Login as Admin
               </button>
 
+              {/* ================================
+                  REGISTRAR
+              ================================ */}
               <button
                 type="button"
                 className={styles.devBtn}
-                onClick={() => {
-                  authService.saveSession({
-                    user_id: 2,
-                    username: "registrar",
-                    email: "registrar@ptc.edu.ph",
-                    role: "Registrar",
-                    role_id: 2,
-                  });
-                  navigate("/registrar/dashboard");
-                }}
+                disabled={loading}
+                onClick={() => handleDevLogin("registrar")}
               >
                 Login as Registrar
               </button>
 
+              {/* ================================
+                  PROGRAM HEAD
+              ================================ */}
               <button
                 type="button"
                 className={styles.devBtn}
-                onClick={() => {
-                  authService.saveSession({
-                    user_id: 3,
-                    username: "proghead",
-                    email: "proghead@ptc.edu.ph",
-                    role: "Program Head",
-                    role_id: 3,
-                  });
-                  navigate("/programhead/dashboard");
-                }}
+                disabled={loading}
+                onClick={() => handleDevLogin("proghead")}
               >
                 Login as Program Head
               </button>
 
+              {/* ================================
+                  FACULTY
+              ================================ */}
               <button
                 type="button"
                 className={styles.devBtn}
-                onClick={() => {
-                  authService.saveSession({
-                    user_id: 4,
-                    username: "faculty",
-                    email: "faculty@ptc.edu.ph",
-                    role: "Faculty",
-                    role_id: 4,
-                  });
-                  navigate("/faculty/dashboard");
-                }}
+                disabled={loading}
+                onClick={() => handleDevLogin("faculty")}
               >
                 Login as Faculty
               </button>
 
+              {/* ================================
+                  STUDENT
+              ================================ */}
               <button
                 type="button"
                 className={styles.devBtn}
-                onClick={() => {
-                  authService.saveSession({
-                    user_id: 6,
-                    username: "26BSIT-0001",
-                    email: "rvvillon@paterostechnologicalcollege.edu.ph",
-                    role: "Student",
-                    role_id: 6,
-                  });
-                  navigate("/student/dashboard");
-                }}
+                disabled={loading}
+                onClick={() => handleDevLogin("26BSIT-0001")}
               >
                 Login as Student
               </button>

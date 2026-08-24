@@ -35,7 +35,7 @@ export default function UserList() {
     try {
       setLoading(true);
 
-      const response = await fetch(API_BASE_URL);
+      const response = await authService.authFetch(API_BASE_URL);
 
       if (!response.ok) {
         throw new Error("Failed to load users.");

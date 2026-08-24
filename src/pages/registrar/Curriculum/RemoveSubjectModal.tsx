@@ -1,4 +1,7 @@
 import { useState } from "react";
+
+import { authService } from "../../../services/auth.service";
+
 import "../../../styles/RemoveSubjectModal.css";
 
 interface CurriculumSubject {
@@ -17,6 +20,13 @@ interface RemoveSubjectModalProps {
   onSuccess: () => void;
 }
 
+interface RemoveSubjectResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  removed?: unknown;
+}
+
 const API_BASE_URL = "http://localhost:3000/api/registrar/curriculums";
 
 export default function RemoveSubjectModal({
@@ -26,42 +36,198 @@ export default function RemoveSubjectModal({
   onClose,
   onSuccess,
 }: RemoveSubjectModalProps) {
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
+  const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
+
+  // =====================================================
+  // STATE
+  // =====================================================
+
   const [removing, setRemoving] = useState(false);
+
   const [error, setError] = useState("");
+
+  // =====================================================
+  // HIDDEN MODAL
+  // =====================================================
 
   if (!isOpen || !subject) {
     return null;
   }
 
+  // =====================================================
+  // REMOVE SUBJECT
+  // =====================================================
+
   const handleRemove = async () => {
+    setError("");
+
+    // =================================================
+    // AUTH CHECK
+    // =================================================
+
+    if (!authenticated || userRole !== "Registrar") {
+      setError(
+        "Your session has expired or you are not authorized to manage curriculum subjects.",
+      );
+
+      return;
+    }
+
+    // =================================================
+    // VALIDATE CURRICULUM
+    // =================================================
+
+    const parsedCurriculumId = Number(curriculumId);
+
+    if (!Number.isInteger(parsedCurriculumId) || parsedCurriculumId <= 0) {
+      setError("Invalid curriculum ID.");
+
+      return;
+    }
+
+    // =================================================
+    // VALIDATE CURRICULUM SUBJECT
+    // =================================================
+
+    const curriculumSubjectId = Number(subject.curriculum_subject_id);
+
+    if (!Number.isInteger(curriculumSubjectId) || curriculumSubjectId <= 0) {
+      setError("Invalid curriculum subject ID.");
+
+      return;
+    }
+
     try {
       setRemoving(true);
+
       setError("");
 
-      const url =
-        `${API_BASE_URL}/${curriculumId}/subjects/` +
-        `${subject.curriculum_subject_id}`;
+      const url = `${API_BASE_URL}/${parsedCurriculumId}/subjects/${curriculumSubjectId}`;
 
-      console.log("REMOVE CURRICULUM SUBJECT:", url);
+      console.log("=================================");
 
-      const response = await fetch(url, {
+      console.log("REMOVE CURRICULUM SUBJECT");
+
+      console.log("Curriculum ID:", parsedCurriculumId);
+
+      console.log("Curriculum Subject ID:", curriculumSubjectId);
+
+      console.log("URL:", url);
+
+      console.log("=================================");
+
+      // =================================================
+      // JWT AUTHENTICATED REQUEST
+      //
+      // authFetch automatically sends:
+      //
+      // Authorization: Bearer <JWT>
+      // =================================================
+
+      const response = await authService.authFetch(url, {
         method: "DELETE",
+
         headers: {
-          "Content-Type": "application/json",
+          Accept: "application/json",
         },
       });
 
-      const data = await response.json();
+      // =================================================
+      // SAFE RESPONSE READ
+      // =================================================
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to remove subject.");
+      const contentType = response.headers.get("content-type") || "";
+
+      let data: RemoveSubjectResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+
+        throw new Error(
+          `Server returned a non-JSON response (${response.status}): ${text.slice(
+            0,
+            200,
+          )}`,
+        );
       }
+
+      console.log("REMOVE CURRICULUM SUBJECT RESPONSE:", data);
+
+      // =================================================
+      // 401
+      // Missing / invalid / expired JWT
+      // =================================================
+
+      if (response.status === 401) {
+        authService.logout();
+
+        setError("Your session has expired. Please log in again.");
+
+        return;
+      }
+
+      // =================================================
+      // 403
+      // Valid JWT, wrong role / permission
+      // =================================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to remove subjects from this curriculum.",
+        );
+      }
+
+      // =================================================
+      // HTTP ERROR
+      // =================================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Failed to remove subject (${response.status}).`,
+        );
+      }
+
+      // =================================================
+      // API ERROR
+      // =================================================
+
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to remove subject.");
+      }
+
+      // =================================================
+      // SUCCESS
+      // =================================================
 
       console.log("SUBJECT REMOVED:", data.removed);
 
       onSuccess();
     } catch (err) {
       console.error("REMOVE CURRICULUM SUBJECT ERROR:", err);
+
+      if (err instanceof TypeError) {
+        setError(
+          "Unable to connect to the curriculum server. Make sure the backend is running on port 3000.",
+        );
+
+        return;
+      }
 
       setError(
         err instanceof Error ? err.message : "Failed to remove subject.",
@@ -71,15 +237,29 @@ export default function RemoveSubjectModal({
     }
   };
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
-    <div className="remove-modal-overlay">
+    <div
+      className="remove-modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !removing) {
+          onClose();
+        }
+      }}
+    >
       <div
         className="remove-modal"
-        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="remove-subject-title"
+        onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="remove-modal-icon">!</div>
 
-        <h2>Remove Subject?</h2>
+        <h2 id="remove-subject-title">Remove Subject?</h2>
 
         <p className="remove-modal-description">
           Are you sure you want to remove this subject from this curriculum?
@@ -122,7 +302,7 @@ export default function RemoveSubjectModal({
             type="button"
             className="remove-confirm-button"
             onClick={handleRemove}
-            disabled={removing}
+            disabled={removing || !authenticated || userRole !== "Registrar"}
           >
             {removing ? "Removing..." : "Remove Subject"}
           </button>

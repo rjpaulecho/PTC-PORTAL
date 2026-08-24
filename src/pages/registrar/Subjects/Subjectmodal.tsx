@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+
+import { authService } from "../../../services/auth.service";
+
 import "../../../styles/SubjectmodalR.css";
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/subjects";
@@ -22,6 +25,13 @@ interface SubjectModalProps {
   onSuccess: () => void;
 }
 
+interface SubjectSaveResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  subject?: Subject;
+}
+
 export default function SubjectModal({
   isOpen,
   mode,
@@ -29,14 +39,36 @@ export default function SubjectModal({
   onClose,
   onSuccess,
 }: SubjectModalProps) {
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
+  const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
+
+  // =====================================================
+  // FORM STATE
+  // =====================================================
+
   const [subjectCode, setSubjectCode] = useState("");
+
   const [subjectName, setSubjectName] = useState("");
+
   const [units, setUnits] = useState("");
+
   const [lectureHours, setLectureHours] = useState("3");
+
   const [laboratoryHours, setLaboratoryHours] = useState("0");
+
   const [description, setDescription] = useState("");
 
   const [saving, setSaving] = useState(false);
+
   const [error, setError] = useState("");
 
   // =====================================================
@@ -52,17 +84,27 @@ export default function SubjectModal({
 
     if (mode === "edit" && subject) {
       setSubjectCode(subject.subject_code);
+
       setSubjectName(subject.subject_name);
+
       setUnits(String(subject.units));
-      setLectureHours(String(subject.lecture_hours));
-      setLaboratoryHours(String(subject.laboratory_hours));
+
+      setLectureHours(String(subject.lecture_hours ?? 0));
+
+      setLaboratoryHours(String(subject.laboratory_hours ?? 0));
+
       setDescription(subject.description || "");
     } else {
       setSubjectCode("");
+
       setSubjectName("");
+
       setUnits("");
+
       setLectureHours("3");
+
       setLaboratoryHours("0");
+
       setDescription("");
     }
   }, [isOpen, mode, subject]);
@@ -88,71 +130,216 @@ export default function SubjectModal({
 
     setError("");
 
+    // =================================================
+    // AUTH CHECK
+    // =================================================
+
+    if (!authenticated || userRole !== "Registrar") {
+      setError(
+        "Your session has expired or you are not authorized to manage subjects.",
+      );
+
+      return;
+    }
+
+    // =================================================
+    // CLEAN VALUES
+    // =================================================
+
     const cleanCode = subjectCode.trim();
+
     const cleanName = subjectName.trim();
+
+    // =================================================
+    // VALIDATION
+    // =================================================
 
     if (!cleanCode) {
       setError("Subject code is required.");
+
       return;
     }
 
     if (!cleanName) {
       setError("Subject name is required.");
+
       return;
     }
 
-    if (!units || Number(units) < 0) {
+    const parsedUnits = Number(units);
+
+    const parsedLectureHours = Number(lectureHours);
+
+    const parsedLaboratoryHours = Number(laboratoryHours);
+
+    if (units === "" || !Number.isFinite(parsedUnits) || parsedUnits < 0) {
       setError("Please enter valid units.");
+
       return;
     }
 
-    if (lectureHours === "" || Number(lectureHours) < 0) {
+    if (
+      lectureHours === "" ||
+      !Number.isFinite(parsedLectureHours) ||
+      parsedLectureHours < 0
+    ) {
       setError("Please enter valid lecture hours.");
+
       return;
     }
 
-    if (laboratoryHours === "" || Number(laboratoryHours) < 0) {
+    if (
+      laboratoryHours === "" ||
+      !Number.isFinite(parsedLaboratoryHours) ||
+      parsedLaboratoryHours < 0
+    ) {
       setError("Please enter valid laboratory hours.");
+
+      return;
+    }
+
+    // =================================================
+    // EDIT MODE VALIDATION
+    // =================================================
+
+    if (mode === "edit" && !subject?.subject_id) {
+      setError("Invalid subject selected for editing.");
+
       return;
     }
 
     try {
       setSaving(true);
 
+      // =================================================
+      // PAYLOAD
+      // =================================================
+
       const payload = {
         subject_code: cleanCode,
+
         subject_name: cleanName,
-        units: Number(units),
-        lecture_hours: Number(lectureHours),
-        laboratory_hours: Number(laboratoryHours),
+
+        units: parsedUnits,
+
+        lecture_hours: parsedLectureHours,
+
+        laboratory_hours: parsedLaboratoryHours,
+
         description: description.trim() || null,
       };
+
+      // =================================================
+      // URL
+      // =================================================
 
       const url =
         mode === "add"
           ? API_BASE_URL
-          : `${API_BASE_URL}/${subject?.subject_id}`;
+          : `${API_BASE_URL}/${subject!.subject_id}`;
 
-      const response = await fetch(url, {
+      console.log(mode === "add" ? "ADD SUBJECT:" : "UPDATE SUBJECT:", url);
+
+      // =================================================
+      // JWT AUTHENTICATED REQUEST
+      //
+      // authFetch automatically sends:
+      //
+      // Authorization: Bearer <JWT>
+      // Content-Type: application/json
+      // =================================================
+
+      const response = await authService.authFetch(url, {
         method: mode === "add" ? "POST" : "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      // =================================================
+      // SAFE RESPONSE READ
+      // =================================================
 
-      if (!response.ok || !data.success) {
+      const contentType = response.headers.get("content-type") || "";
+
+      let data: SubjectSaveResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+
         throw new Error(
-          data.message ||
+          `Server returned a non-JSON response (${response.status}): ${text.slice(
+            0,
+            200,
+          )}`,
+        );
+      }
+
+      // =================================================
+      // 401
+      // =================================================
+
+      if (response.status === 401) {
+        authService.logout();
+
+        setError("Your session has expired. Please log in again.");
+
+        return;
+      }
+
+      // =================================================
+      // 403
+      // =================================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to manage subjects.",
+        );
+      }
+
+      // =================================================
+      // HTTP ERROR
+      // =================================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Failed to ${
+              mode === "add" ? "add" : "update"
+            } subject (${response.status}).`,
+        );
+      }
+
+      // =================================================
+      // API ERROR
+      // =================================================
+
+      if (!data?.success) {
+        throw new Error(
+          data?.message ||
             `Failed to ${mode === "add" ? "add" : "update"} subject.`,
         );
       }
 
+      // =================================================
+      // SUCCESS
+      // =================================================
+
       onSuccess();
     } catch (err) {
       console.error("SAVE SUBJECT ERROR:", err);
+
+      if (err instanceof TypeError) {
+        setError(
+          "Unable to connect to the subject server. Make sure the backend is running on port 3000.",
+        );
+
+        return;
+      }
 
       setError(err instanceof Error ? err.message : "Failed to save subject.");
     } finally {
@@ -160,9 +347,17 @@ export default function SubjectModal({
     }
   };
 
+  // =====================================================
+  // CLOSED
+  // =====================================================
+
   if (!isOpen) {
     return null;
   }
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <div
@@ -318,7 +513,7 @@ export default function SubjectModal({
             <button
               type="submit"
               className="subject-modal-submit"
-              disabled={saving}
+              disabled={saving || !authenticated || userRole !== "Registrar"}
             >
               {saving
                 ? "Saving..."

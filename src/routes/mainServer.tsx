@@ -156,7 +156,9 @@ function ProtectedRoute({
 }) {
   const user = authService.getSession();
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!authService.isLoggedIn() || !user) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (user.role !== allowedRole) {
     const fallback: Record<UserRole, string> = {
@@ -172,6 +174,7 @@ function ProtectedRoute({
 
   return children;
 }
+
 function StudentRoute({ element }: { element: ReactElement }) {
   return <ProtectedRoute allowedRole="Student">{element}</ProtectedRoute>;
 }
@@ -551,7 +554,7 @@ export default function AppRoutes() {
       />
       <Route
         path="/registrar/student/:id/transcriptR"
-        element={<TranscriptPreviewR />}
+        element={<RegistrarRoute element={<TranscriptPreviewR />} />}
       />
       <Route
         path="/registrar/student/DetailsR/:id"

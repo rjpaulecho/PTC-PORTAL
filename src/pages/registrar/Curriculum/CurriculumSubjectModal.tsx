@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+
+import { authService } from "../../../services/auth.service";
+
 import "../../../styles/CurriculumSubjectModal.css";
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/curriculums";
@@ -41,6 +44,19 @@ interface CurriculumSubjectModalProps {
   onSuccess: () => void;
 }
 
+interface AvailableSubjectsResponse {
+  success: boolean;
+  subjects?: AvailableSubject[];
+  message?: string;
+  error?: string;
+}
+
+interface SaveSubjectResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
 export default function CurriculumSubjectModal({
   isOpen,
   mode,
@@ -49,6 +65,22 @@ export default function CurriculumSubjectModal({
   onClose,
   onSuccess,
 }: CurriculumSubjectModalProps) {
+  // =====================================================
+  // AUTH
+  // =====================================================
+
+  const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
+
+  // =====================================================
+  // STATES
+  // =====================================================
+
   const [availableSubjects, setAvailableSubjects] = useState<
     AvailableSubject[]
   >([]);
@@ -56,17 +88,23 @@ export default function CurriculumSubjectModal({
   const [subjectId, setSubjectId] = useState("");
 
   const [yearLevel, setYearLevel] = useState("1");
+
   const [semesterId, setSemesterId] = useState("1");
 
   const [units, setUnits] = useState("");
+
   const [lectureHours, setLectureHours] = useState("");
+
   const [laboratoryHours, setLaboratoryHours] = useState("");
 
   const [isRequired, setIsRequired] = useState("1");
+
   const [displayOrder, setDisplayOrder] = useState("1");
 
   const [loadingSubjects, setLoadingSubjects] = useState(false);
+
   const [saving, setSaving] = useState(false);
+
   const [error, setError] = useState("");
 
   // =====================================================
@@ -82,12 +120,19 @@ export default function CurriculumSubjectModal({
 
     if (mode === "edit" && subject) {
       setSubjectId(String(subject.subject_id));
+
       setYearLevel(String(subject.year_level));
+
       setSemesterId(String(subject.semester_id));
+
       setUnits(String(subject.units));
+
       setLectureHours(String(subject.lecture_hours));
+
       setLaboratoryHours(String(subject.laboratory_hours));
+
       setIsRequired(String(subject.is_required));
+
       setDisplayOrder(String(subject.display_order));
     } else {
       setSubjectId("");
@@ -110,38 +155,81 @@ export default function CurriculumSubjectModal({
       return;
     }
 
-    let cancelled = false;
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
+    const controller = new AbortController();
 
     const loadAvailableSubjects = async () => {
       try {
         setLoadingSubjects(true);
+
         setError("");
 
-        const response = await fetch(
+        const response = await authService.authFetch(
           `${API_BASE_URL}/${curriculumId}/available-subjects`,
           {
             method: "GET",
+
+            signal: controller.signal,
+
             headers: {
-              "Content-Type": "application/json",
+              Accept: "application/json",
             },
           },
         );
 
-        const data = await response.json();
+        const contentType = response.headers.get("content-type") || "";
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Failed to load available subjects.");
+        let data: AvailableSubjectsResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
         }
 
-        if (!cancelled) {
-          setAvailableSubjects(data.subjects || []);
+        if (response.status === 401) {
+          authService.logout();
+
+          setError("Your session has expired. Please log in again.");
+
+          return;
         }
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              "You are not authorized to manage curriculum subjects.",
+          );
+        }
+
+        if (!response.ok || !data?.success) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              "Failed to load available subjects.",
+          );
+        }
+
+        setAvailableSubjects(Array.isArray(data.subjects) ? data.subjects : []);
       } catch (err) {
-        if (cancelled) {
+        if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
 
         console.error("LOAD AVAILABLE SUBJECTS ERROR:", err);
+
+        setAvailableSubjects([]);
 
         setError(
           err instanceof Error
@@ -149,21 +237,21 @@ export default function CurriculumSubjectModal({
             : "Failed to load available subjects.",
         );
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoadingSubjects(false);
         }
       }
     };
 
-    loadAvailableSubjects();
+    void loadAvailableSubjects();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [isOpen, mode, curriculumId]);
+  }, [isOpen, mode, curriculumId, authenticated, userRole]);
 
   // =====================================================
-  // AUTO-FILL SUBJECT INFORMATION
+  // AUTO-FILL
   // =====================================================
 
   useEffect(() => {
@@ -180,7 +268,9 @@ export default function CurriculumSubjectModal({
     }
 
     setUnits(String(selected.units));
+
     setLectureHours(String(selected.lecture_hours));
+
     setLaboratoryHours(String(selected.laboratory_hours));
   }, [subjectId, availableSubjects, mode]);
 
@@ -193,23 +283,41 @@ export default function CurriculumSubjectModal({
 
     setError("");
 
+    if (!authenticated || userRole !== "Registrar") {
+      setError(
+        "Your session has expired or you are not authorized to manage curriculum subjects.",
+      );
+
+      return;
+    }
+
     if (mode === "add" && !subjectId) {
       setError("Please select a subject.");
+
       return;
     }
 
-    if (!units || Number(units) < 0) {
+    const parsedUnits = Number(units);
+
+    const parsedLectureHours = Number(lectureHours);
+
+    const parsedLaboratoryHours = Number(laboratoryHours);
+
+    if (units === "" || parsedUnits < 0) {
       setError("Please enter valid units.");
+
       return;
     }
 
-    if (!lectureHours || Number(lectureHours) < 0) {
+    if (lectureHours === "" || parsedLectureHours < 0) {
       setError("Please enter valid lecture hours.");
+
       return;
     }
 
-    if (!laboratoryHours || Number(laboratoryHours) < 0) {
+    if (laboratoryHours === "" || parsedLaboratoryHours < 0) {
       setError("Please enter valid laboratory hours.");
+
       return;
     }
 
@@ -220,14 +328,18 @@ export default function CurriculumSubjectModal({
         subject_id:
           mode === "add" ? Number(subjectId) : Number(subject?.subject_id),
 
-        units: Number(units),
-        lecture_hours: Number(lectureHours),
-        laboratory_hours: Number(laboratoryHours),
+        units: parsedUnits,
+
+        lecture_hours: parsedLectureHours,
+
+        laboratory_hours: parsedLaboratoryHours,
 
         year_level: Number(yearLevel),
+
         semester_id: Number(semesterId),
 
         is_required: Number(isRequired),
+
         display_order: Number(displayOrder),
       };
 
@@ -238,19 +350,49 @@ export default function CurriculumSubjectModal({
 
       const method = mode === "add" ? "POST" : "PUT";
 
-      const response = await fetch(url, {
+      const response = await authService.authFetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
+
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
 
-      if (!response.ok || !data.success) {
+      let data: SaveSubjectResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+
         throw new Error(
-          data.message ||
+          `Server returned a non-JSON response (${response.status}): ${text.slice(
+            0,
+            200,
+          )}`,
+        );
+      }
+
+      if (response.status === 401) {
+        authService.logout();
+
+        setError("Your session has expired. Please log in again.");
+
+        return;
+      }
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to manage curriculum subjects.",
+        );
+      }
+
+      if (!response.ok || !data?.success) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
             `Failed to ${mode === "add" ? "add" : "update"} subject.`,
         );
       }
@@ -285,6 +427,10 @@ export default function CurriculumSubjectModal({
     return null;
   }
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
     <div
       className="curriculum-modal-overlay"
@@ -300,10 +446,6 @@ export default function CurriculumSubjectModal({
         aria-modal="true"
         aria-labelledby="curriculum-subject-modal-title"
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
         <div className="curriculum-modal-header">
           <div>
             <h2 id="curriculum-subject-modal-title">
@@ -328,15 +470,9 @@ export default function CurriculumSubjectModal({
           </button>
         </div>
 
-        {/* =================================================
-            FORM
-        ================================================= */}
-
         <form onSubmit={handleSubmit}>
           <div className="curriculum-modal-body">
             {error && <div className="curriculum-modal-error">{error}</div>}
-
-            {/* SUBJECT */}
 
             <div className="curriculum-form-group">
               <label htmlFor="subject">
@@ -371,8 +507,6 @@ export default function CurriculumSubjectModal({
               )}
             </div>
 
-            {/* YEAR + SEMESTER */}
-
             <div className="curriculum-form-row">
               <div className="curriculum-form-group">
                 <label htmlFor="yearLevel">
@@ -386,8 +520,11 @@ export default function CurriculumSubjectModal({
                   disabled={saving}
                 >
                   <option value="1">1st Year</option>
+
                   <option value="2">2nd Year</option>
+
                   <option value="3">3rd Year</option>
+
                   <option value="4">4th Year</option>
                 </select>
               </div>
@@ -404,12 +541,11 @@ export default function CurriculumSubjectModal({
                   disabled={saving}
                 >
                   <option value="1">1st Semester</option>
+
                   <option value="2">2nd Semester</option>
                 </select>
               </div>
             </div>
-
-            {/* UNITS */}
 
             <div className="curriculum-form-row three-columns">
               <div className="curriculum-form-group">
@@ -461,8 +597,6 @@ export default function CurriculumSubjectModal({
               </div>
             </div>
 
-            {/* TYPE + ORDER */}
-
             <div className="curriculum-form-row">
               <div className="curriculum-form-group">
                 <label htmlFor="isRequired">Subject Type</label>
@@ -474,6 +608,7 @@ export default function CurriculumSubjectModal({
                   disabled={saving}
                 >
                   <option value="1">Required</option>
+
                   <option value="0">Elective</option>
                 </select>
               </div>
@@ -493,10 +628,6 @@ export default function CurriculumSubjectModal({
             </div>
           </div>
 
-          {/* =================================================
-              FOOTER
-          ================================================= */}
-
           <div className="curriculum-modal-footer">
             <button
               type="button"
@@ -510,7 +641,12 @@ export default function CurriculumSubjectModal({
             <button
               type="submit"
               className="curriculum-modal-submit"
-              disabled={saving || loadingSubjects}
+              disabled={
+                saving ||
+                loadingSubjects ||
+                !authenticated ||
+                userRole !== "Registrar"
+              }
             >
               {saving
                 ? "Saving..."

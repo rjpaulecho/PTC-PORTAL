@@ -1,27 +1,32 @@
 import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
 import path from "path";
 
 import authRouter from "./routes/auth.routes.js";
-import usersRouter from "./routes/users.routes.js";
-import studentsRouter from "./routes/students.routes.js";
-import rolesRouter from "./routes/roles.routes.js";
+import usersRouter from "./routes/admin/users.routes.js";
+import studentsRouter from "./routes/admin/students.routes.js";
+import rolesRouter from "./routes/admin/roles.routes.js";
 
-import activityRouter from "./routes/activity.routes.js";
+import activityRouter from "./routes/admin/activity.routes.js";
 import filesRouter from "./routes/files.routes.js";
 
-import announcementRoutes from "./routes/announcement/adminAnnouncement.routes.js";
+import announcementManagementRouter from "./routes/announcement/adminAnnouncement.routes.js";
 import usersAnnouncementRoutes from "./routes/announcement/usersAnnouncement.routes.js";
 
 import registrarRoutes from "./routes/registrar/index.js";
 import studentRoutes from "./routes/student/index.js";
 
+import authenticate from "./middleware/authenticate.js";
+import requireRole from "./middleware/requireRole.js";
+
 const app = express();
 
-// =======================
-// Middleware
-// =======================
+// =====================================================
+// GLOBAL MIDDLEWARE
+// =====================================================
+
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
@@ -30,64 +35,142 @@ app.use(
 
 app.use(express.json());
 
+// =====================================================
+// STATIC FILES
+// =====================================================
+
+// TEMPORARY:
+// Announcement/file URLs under /uploads are currently
+// public.
+//
+// Later, sensitive academic/student files should be served
+// through authenticated download endpoints instead of
+// direct public URLs.
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// =======================
-// API Routes
-// =======================
+// =====================================================
+// PUBLIC AUTHENTICATION ROUTES
+// =====================================================
+
 app.use("/auth", authRouter);
-app.use("/api/roles", rolesRouter);
-app.use("/api/users", usersRouter);
-app.use("/api/activity-logs", activityRouter);
-app.use("/api/students", studentsRouter);
-app.use("/api/files", filesRouter);
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-// Announcement Routing
-app.use("/api/admin/announcements", announcementRoutes);
-app.use("/api/announcements", usersAnnouncementRoutes);
+// =====================================================
+// ADMIN ROUTES
+// =====================================================
 
-// Registrar Routing
-app.use("/api/registrar", registrarRoutes);
-// Student Routing
-app.use("/api/student", studentRoutes);
+app.use("/api/users", authenticate, requireRole("Admin"), usersRouter);
 
-// =======================
-// Root Route
-// =======================
+app.use("/api/roles", authenticate, requireRole("Admin"), rolesRouter);
+
+app.use("/api/students", authenticate, requireRole("Admin"), studentsRouter);
+
+app.use(
+  "/api/activity-logs",
+  authenticate,
+  requireRole("Admin"),
+  activityRouter,
+);
+
+// =====================================================
+// ANNOUNCEMENT MANAGEMENT
+//
+// ADMIN + REGISTRAR
+//
+// GET    /api/announcement-management
+// GET    /api/announcement-management/:id
+// POST   /api/announcement-management
+// PUT    /api/announcement-management/:id
+// DELETE /api/announcement-management/:id
+// PATCH  /api/announcement-management/:id/status
+// =====================================================
+
+app.use(
+  "/api/announcement-management",
+  authenticate,
+  requireRole("Admin", "Registrar"),
+  announcementManagementRouter,
+);
+
+// =====================================================
+// SHARED ANNOUNCEMENT VIEWING
+//
+// ALL AUTHENTICATED USERS
+//
+// GET /api/announcements
+// GET /api/announcements/:id
+//
+// Visibility is determined inside the router using:
+//
+// req.user.role_id
+//
+// Never trust role_id from the frontend.
+// =====================================================
+
+app.use("/api/announcements", authenticate, usersAnnouncementRoutes);
+
+// =====================================================
+// REGISTRAR ROUTES
+// =====================================================
+
+app.use(
+  "/api/registrar",
+  authenticate,
+  requireRole("Registrar"),
+  registrarRoutes,
+);
+
+// =====================================================
+// STUDENT ROUTES
+// =====================================================
+
+app.use("/api/student", authenticate, requireRole("Student"), studentRoutes);
+
+// =====================================================
+// SHARED AUTHENTICATED FILE ROUTES
+// =====================================================
+
+app.use("/api/files", authenticate, filesRouter);
+
+// =====================================================
+// ROOT ROUTE
+// =====================================================
+
 app.get("/", (req, res) => {
-  res.json({
+  return res.json({
     success: true,
     message: "PTC Student Portal API is running.",
   });
 });
 
-// =======================
-// 404 Handler
-// =======================
+// =====================================================
+// 404 HANDLER
+// =====================================================
+
 app.use((req, res) => {
-  res.status(404).json({
+  return res.status(404).json({
     success: false,
     message: "API endpoint not found.",
   });
 });
 
-// =======================
-// Global Error Handler
-// =======================
-app.use((err, req, res, next) => {
-  console.error(err);
+// =====================================================
+// GLOBAL ERROR HANDLER
+// =====================================================
 
-  res.status(500).json({
+app.use((err, req, res, next) => {
+  console.error("UNHANDLED SERVER ERROR:", err);
+
+  return res.status(500).json({
     success: false,
     message: "Internal Server Error",
   });
 });
 
-// =======================
-// Start Server
-// =======================
-const PORT = process.env.PORT || 3000;
+// =====================================================
+// START SERVER
+// =====================================================
+
+const PORT = Number(process.env.PORT) || 3000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend running at http://localhost:${PORT}`);

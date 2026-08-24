@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+
 import { useNavigate, useParams } from "react-router-dom";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
 
 import "../../../styles/RegistrarTranscriptPreview.css";
@@ -65,6 +67,7 @@ interface AcademicResponse {
   success: boolean;
 
   message?: string;
+  error?: string;
 
   student: Student;
 
@@ -80,9 +83,19 @@ interface AcademicResponse {
 export default function TranscriptPreviewR() {
   const navigate = useNavigate();
 
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
+
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
 
   const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // STATES
@@ -96,36 +109,199 @@ export default function TranscriptPreviewR() {
 
   const [error, setError] = useState("");
 
+  // =====================================================
+  // AUTHORIZATION
+  // =====================================================
+
   useEffect(() => {
-    if (!id || !user || user.role !== "Registrar") {
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
       return;
     }
+
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, user, navigate]);
+
+  // =====================================================
+  // FETCH TRANSCRIPT DATA
+  // =====================================================
+
+  useEffect(() => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
+    if (!id) {
+      setError("Invalid student ID.");
+
+      setLoading(false);
+
+      return;
+    }
+
+    const studentId = Number(id);
+
+    if (!Number.isInteger(studentId) || studentId <= 0) {
+      setError("Invalid student ID.");
+
+      setLoading(false);
+
+      return;
+    }
+
+    const controller = new AbortController();
 
     const fetchTranscriptData = async () => {
       try {
         setLoading(true);
+
         setError("");
 
-        const response = await fetch(`${API_BASE_URL}/${id}/academic-records`);
+        const requestUrl = `${API_BASE_URL}/${studentId}/academic-records`;
 
-        const data: AcademicResponse = await response.json();
+        console.log("GET REGISTRAR TRANSCRIPT:", requestUrl);
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Failed to load transcript records.");
+        // =============================================
+        // JWT AUTHENTICATED REQUEST
+        // =============================================
+
+        const response = await authService.authFetch(requestUrl, {
+          method: "GET",
+
+          signal: controller.signal,
+
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        // =============================================
+        // SAFE RESPONSE READ
+        // =============================================
+
+        const contentType = response.headers.get("content-type") || "";
+
+        let data: AcademicResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
         }
 
+        // =============================================
+        // 401
+        // =============================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =============================================
+        // 403
+        // =============================================
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message || "You are not authorized to view this transcript.",
+          );
+        }
+
+        // =============================================
+        // HTTP ERROR
+        // =============================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Unable to load transcript (${response.status}).`,
+          );
+        }
+
+        // =============================================
+        // API ERROR
+        // =============================================
+
+        if (!data?.success) {
+          throw new Error(
+            data?.message || "Failed to load transcript records.",
+          );
+        }
+
+        // =============================================
+        // SUCCESS
+        // =============================================
+
         setStudent(data.student);
-        setRecords(data.records);
+
+        setRecords(Array.isArray(data.records) ? data.records : []);
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
         console.error("TRANSCRIPT FETCH ERROR:", err);
-        setError("Unable to load transcript records.");
+
+        setStudent(null);
+
+        setRecords([]);
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the transcript server. Make sure the backend is running on port 3000.",
+          );
+
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load transcript records.",
+        );
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchTranscriptData();
-  }, [id]);
+    void fetchTranscriptData();
+
+    return () => {
+      controller.abort();
+    };
+  }, [id, authenticated, userRole, navigate]);
+
   // =====================================================
   // GROUP RECORDS
   // =====================================================
@@ -153,7 +329,10 @@ export default function TranscriptPreviewR() {
   // =====================================================
 
   const totalUnits = useMemo(() => {
-    return records.reduce((total, record) => total + Number(record.units), 0);
+    return records.reduce(
+      (total, record) => total + Number(record.units || 0),
+      0,
+    );
   }, [records]);
 
   // =====================================================
@@ -171,12 +350,16 @@ export default function TranscriptPreviewR() {
   }, [student]);
 
   // =====================================================
-  // LOADING
+  // AUTH RENDER GUARD
   // =====================================================
 
-  if (!user || user.role !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
+
+  // =====================================================
+  // LOADING
+  // =====================================================
 
   if (loading) {
     return (
@@ -200,7 +383,11 @@ export default function TranscriptPreviewR() {
             {error || "Student record not found."}
           </div>
 
-          <button className="transcript-back-btn" onClick={() => navigate(-1)}>
+          <button
+            type="button"
+            className="transcript-back-btn"
+            onClick={() => navigate(-1)}
+          >
             Go Back
           </button>
         </div>
@@ -220,12 +407,17 @@ export default function TranscriptPreviewR() {
         ===================================================== */}
 
         <div className="transcript-action-bar">
-          <button className="transcript-back-btn" onClick={() => navigate(-1)}>
+          <button
+            type="button"
+            className="transcript-back-btn"
+            onClick={() => navigate(-1)}
+          >
             ← Back
           </button>
 
           <div className="transcript-actions">
             <button
+              type="button"
               className="transcript-print-btn"
               onClick={() => window.print()}
             >
@@ -233,6 +425,7 @@ export default function TranscriptPreviewR() {
             </button>
 
             <button
+              type="button"
               className="transcript-generate-btn"
               onClick={() => window.print()}
             >
@@ -266,11 +459,13 @@ export default function TranscriptPreviewR() {
             <div className="student-info-row">
               <div>
                 <span>Student Number</span>
+
                 <strong>{student.student_number}</strong>
               </div>
 
               <div>
                 <span>Student Status</span>
+
                 <strong>{student.status}</strong>
               </div>
             </div>
@@ -278,6 +473,7 @@ export default function TranscriptPreviewR() {
             <div className="student-info-row">
               <div>
                 <span>Name</span>
+
                 <strong>{studentName}</strong>
               </div>
             </div>
@@ -285,11 +481,13 @@ export default function TranscriptPreviewR() {
             <div className="student-info-row">
               <div>
                 <span>Program</span>
-                <strong>{student.course_code}</strong>
+
+                <strong>{student.course_code || "-"}</strong>
               </div>
 
               <div>
                 <span>Current Year Level</span>
+
                 <strong>Year {student.year_level}</strong>
               </div>
             </div>
@@ -322,9 +520,13 @@ export default function TranscriptPreviewR() {
                             <thead>
                               <tr>
                                 <th>Subject Code</th>
+
                                 <th>Subject Description</th>
+
                                 <th>Units</th>
+
                                 <th>Grade</th>
+
                                 <th>Remarks</th>
                               </tr>
                             </thead>
@@ -351,7 +553,8 @@ export default function TranscriptPreviewR() {
                           <div className="semester-total">
                             <strong>Semester Units:</strong>{" "}
                             {semesterRecords.reduce(
-                              (total, record) => total + Number(record.units),
+                              (total, record) =>
+                                total + Number(record.units || 0),
                               0,
                             )}
                           </div>
@@ -371,17 +574,19 @@ export default function TranscriptPreviewR() {
           <div className="transcript-summary">
             <div>
               <span>Total Subjects</span>
+
               <strong>{records.length}</strong>
             </div>
 
             <div>
               <span>Total Units</span>
+
               <strong>{totalUnits}</strong>
             </div>
           </div>
 
           {/* =====================================================
-              CERTIFICATION PLACEHOLDER
+              CERTIFICATION
           ===================================================== */}
 
           <div className="transcript-certification">
@@ -398,6 +603,7 @@ export default function TranscriptPreviewR() {
           <div className="transcript-signature">
             <div className="signature-line">
               <strong>REGISTRAR</strong>
+
               <span>Registrar</span>
             </div>
           </div>

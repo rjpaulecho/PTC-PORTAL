@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
+
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
+
 import { useNavigate } from "react-router-dom";
 
 import AddCourseModal from "./AddCourseModal";
@@ -37,6 +40,7 @@ interface CourseResponse {
   courses?: Course[];
 
   message?: string;
+  error?: string;
 }
 
 interface Department {
@@ -53,6 +57,13 @@ interface DepartmentResponse {
   departments?: Department[];
 
   message?: string;
+  error?: string;
+}
+
+interface DeleteCourseResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
 }
 
 // =====================================================
@@ -62,9 +73,17 @@ interface DepartmentResponse {
 export default function CoursemanagementR() {
   const navigate = useNavigate();
 
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
   const user = authService.getSession();
 
+  const token = authService.getToken();
+
   const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // COURSE STATES
@@ -111,20 +130,42 @@ export default function CoursemanagementR() {
   const [deletingCourseId, setDeletingCourseId] = useState<number | null>(null);
 
   // =====================================================
-  // AUTH
+  // AUTHORIZATION
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
-      navigate("/login");
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
     }
-  }, [userRole, navigate]);
+
+    if (userRole !== "Registrar") {
+      if (userRole) {
+        navigate(authService.getDashboardRoute(userRole), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, navigate]);
 
   // =====================================================
   // LOAD COURSES
   // =====================================================
 
   const loadCourses = async () => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -148,7 +189,11 @@ export default function CoursemanagementR() {
 
       console.log("GET REGISTRAR COURSES:", requestUrl);
 
-      const response = await fetch(requestUrl, {
+      // =================================================
+      // JWT AUTHENTICATED REQUEST
+      // =================================================
+
+      const response = await authService.authFetch(requestUrl, {
         method: "GET",
 
         headers: {
@@ -156,9 +201,17 @@ export default function CoursemanagementR() {
         },
       });
 
+      // =================================================
+      // SAFE RESPONSE
+      // =================================================
+
       const contentType = response.headers.get("content-type") || "";
 
-      if (!contentType.includes("application/json")) {
+      let data: CourseResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
         const text = await response.text();
 
         throw new Error(
@@ -169,10 +222,50 @@ export default function CoursemanagementR() {
         );
       }
 
-      const data: CourseResponse = await response.json();
+      // =================================================
+      // 401
+      // =================================================
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load courses.");
+      if (response.status === 401) {
+        authService.logout();
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      // =================================================
+      // 403
+      // =================================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to manage courses.",
+        );
+      }
+
+      // =================================================
+      // HTTP ERROR
+      // =================================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Failed to load courses (${response.status}).`,
+        );
+      }
+
+      // =================================================
+      // API ERROR
+      // =================================================
+
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to load courses.");
       }
 
       const loadedCourses = Array.isArray(data.data)
@@ -187,6 +280,14 @@ export default function CoursemanagementR() {
 
       setCourses([]);
 
+      if (err instanceof TypeError) {
+        setError(
+          "Unable to connect to the course server. Make sure the backend is running on port 3000.",
+        );
+
+        return;
+      }
+
       setError(err instanceof Error ? err.message : "Unable to load courses.");
     } finally {
       setLoading(false);
@@ -198,12 +299,22 @@ export default function CoursemanagementR() {
   // =====================================================
 
   const loadDepartments = async () => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
     try {
       setLoadingDepartments(true);
 
       setDepartmentError("");
 
-      const response = await fetch(`${API_BASE_URL}/departments/list`, {
+      const url = `${API_BASE_URL}/departments/list`;
+
+      // =================================================
+      // JWT AUTHENTICATED REQUEST
+      // =================================================
+
+      const response = await authService.authFetch(url, {
         method: "GET",
 
         headers: {
@@ -211,9 +322,17 @@ export default function CoursemanagementR() {
         },
       });
 
+      // =================================================
+      // SAFE RESPONSE
+      // =================================================
+
       const contentType = response.headers.get("content-type") || "";
 
-      if (!contentType.includes("application/json")) {
+      let data: DepartmentResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
         const text = await response.text();
 
         throw new Error(
@@ -224,10 +343,50 @@ export default function CoursemanagementR() {
         );
       }
 
-      const data: DepartmentResponse = await response.json();
+      // =================================================
+      // 401
+      // =================================================
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load departments.");
+      if (response.status === 401) {
+        authService.logout();
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      // =================================================
+      // 403
+      // =================================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to load departments.",
+        );
+      }
+
+      // =================================================
+      // HTTP ERROR
+      // =================================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Failed to load departments (${response.status}).`,
+        );
+      }
+
+      // =================================================
+      // API ERROR
+      // =================================================
+
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to load departments.");
       }
 
       const loadedDepartments = Array.isArray(data.data)
@@ -242,6 +401,12 @@ export default function CoursemanagementR() {
 
       setDepartments([]);
 
+      if (err instanceof TypeError) {
+        setDepartmentError("Unable to connect to the department server.");
+
+        return;
+      }
+
       setDepartmentError(
         err instanceof Error ? err.message : "Unable to load departments.",
       );
@@ -255,30 +420,30 @@ export default function CoursemanagementR() {
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
+    if (!authenticated || userRole !== "Registrar") {
       return;
     }
 
-    loadDepartments();
-  }, [userRole]);
+    void loadDepartments();
+  }, [authenticated, userRole]);
 
   // =====================================================
   // LOAD COURSES WHEN FILTER CHANGES
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
+    if (!authenticated || userRole !== "Registrar") {
       return;
     }
 
     const timeout = setTimeout(() => {
-      loadCourses();
+      void loadCourses();
     }, 300);
 
     return () => {
       clearTimeout(timeout);
     };
-  }, [userRole, search, department]);
+  }, [authenticated, userRole, search, department]);
 
   // =====================================================
   // SEARCH
@@ -335,6 +500,22 @@ export default function CoursemanagementR() {
   // =====================================================
 
   const handleDelete = async (course: Course) => {
+    if (!authenticated || userRole !== "Registrar") {
+      window.alert(
+        "Your session has expired or you are not authorized to delete courses.",
+      );
+
+      return;
+    }
+
+    const courseId = Number(course.course_id);
+
+    if (!Number.isInteger(courseId) || courseId <= 0) {
+      window.alert("Invalid course ID.");
+
+      return;
+    }
+
     const confirmed = window.confirm(
       `Are you sure you want to delete ${course.course_code}?\n\n${course.course_name}`,
     );
@@ -344,9 +525,15 @@ export default function CoursemanagementR() {
     }
 
     try {
-      setDeletingCourseId(course.course_id);
+      setDeletingCourseId(courseId);
 
-      const response = await fetch(`${API_BASE_URL}/${course.course_id}`, {
+      const url = `${API_BASE_URL}/${courseId}`;
+
+      // =================================================
+      // JWT AUTHENTICATED DELETE
+      // =================================================
+
+      const response = await authService.authFetch(url, {
         method: "DELETE",
 
         headers: {
@@ -354,9 +541,17 @@ export default function CoursemanagementR() {
         },
       });
 
+      // =================================================
+      // SAFE RESPONSE
+      // =================================================
+
       const contentType = response.headers.get("content-type") || "";
 
-      if (!contentType.includes("application/json")) {
+      let data: DeleteCourseResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
         const text = await response.text();
 
         throw new Error(
@@ -367,10 +562,50 @@ export default function CoursemanagementR() {
         );
       }
 
-      const data = await response.json();
+      // =================================================
+      // 401
+      // =================================================
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to delete course.");
+      if (response.status === 401) {
+        authService.logout();
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      // =================================================
+      // 403
+      // =================================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to delete courses.",
+        );
+      }
+
+      // =================================================
+      // HTTP ERROR
+      // =================================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Failed to delete course (${response.status}).`,
+        );
+      }
+
+      // =================================================
+      // API ERROR
+      // =================================================
+
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to delete course.");
       }
 
       await loadCourses();
@@ -389,7 +624,7 @@ export default function CoursemanagementR() {
   // AUTH GUARD
   // =====================================================
 
-  if (!user || userRole !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
 
@@ -496,15 +731,10 @@ export default function CoursemanagementR() {
               <thead>
                 <tr>
                   <th>ID</th>
-
                   <th>Course</th>
-
                   <th>Course Name</th>
-
                   <th>Department</th>
-
                   <th>Years</th>
-
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -546,11 +776,7 @@ export default function CoursemanagementR() {
                   !error &&
                   courses.map((course) => (
                     <tr key={course.course_id}>
-                      {/* ID */}
-
                       <td>{course.course_id}</td>
-
-                      {/* CODE */}
 
                       <td>
                         <div className="course-code-cell">
@@ -558,15 +784,11 @@ export default function CoursemanagementR() {
                         </div>
                       </td>
 
-                      {/* NAME */}
-
                       <td>
                         <div className="course-name-cell">
                           <strong>{course.course_name}</strong>
                         </div>
                       </td>
-
-                      {/* DEPARTMENT */}
 
                       <td>
                         <div className="course-department-cell">
@@ -576,14 +798,10 @@ export default function CoursemanagementR() {
                         </div>
                       </td>
 
-                      {/* YEARS */}
-
                       <td>
                         {course.total_years}{" "}
                         {course.total_years === 1 ? "Year" : "Years"}
                       </td>
-
-                      {/* ACTIONS */}
 
                       <td>
                         <div className="course-actions">

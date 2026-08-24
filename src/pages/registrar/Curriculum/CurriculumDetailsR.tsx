@@ -1,6 +1,9 @@
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
+
 import { useNavigate, useParams } from "react-router-dom";
+
 import { useCallback, useEffect, useState } from "react";
 
 import CurriculumSubjectModal from "./CurriculumSubjectModal";
@@ -47,11 +50,16 @@ export interface CurriculumSubject {
 
 interface CurriculumResponse {
   success: boolean;
-  curriculum: Curriculum;
-  totalSubjects: number;
-  mappedUnits: number;
-  subjects: CurriculumSubject[];
+
+  curriculum?: Curriculum;
+
+  totalSubjects?: number;
+  mappedUnits?: number;
+
+  subjects?: CurriculumSubject[];
+
   message?: string;
+  error?: string;
 }
 
 // =====================================================
@@ -60,7 +68,22 @@ interface CurriculumResponse {
 
 export default function CurriculumDetailR() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+
+  const { id } = useParams<{
+    id: string;
+  }>();
+
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
+  const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // CURRICULUM STATE
@@ -107,16 +130,32 @@ export default function CurriculumDetailR() {
     useState<CurriculumSubject | null>(null);
 
   // =====================================================
-  // AUTH CHECK
+  // AUTHORIZATION
   // =====================================================
 
   useEffect(() => {
-    const user = authService.getSession();
+    if (!authenticated) {
+      authService.logout();
 
-    if (!user || user.role !== "Registrar") {
-      navigate("/login", { replace: true });
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
     }
-  }, [navigate]);
+
+    if (userRole !== "Registrar") {
+      if (userRole) {
+        navigate(authService.getDashboardRoute(userRole), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, navigate]);
 
   // =====================================================
   // LOAD CURRICULUM
@@ -124,9 +163,19 @@ export default function CurriculumDetailR() {
 
   const loadCurriculum = useCallback(
     async (showMainLoading = true) => {
+      if (!authenticated || userRole !== "Registrar") {
+        return;
+      }
+
+      // =================================================
+      // VALIDATE ID
+      // =================================================
+
       if (!id) {
         setError("Invalid curriculum ID.");
+
         setLoading(false);
+
         return;
       }
 
@@ -134,7 +183,9 @@ export default function CurriculumDetailR() {
 
       if (!Number.isInteger(curriculumId) || curriculumId <= 0) {
         setError("Invalid curriculum ID.");
+
         setLoading(false);
+
         return;
       }
 
@@ -151,28 +202,128 @@ export default function CurriculumDetailR() {
 
         console.log("GET CURRICULUM DETAILS:", url);
 
-        const response = await fetch(url, {
+        // =================================================
+        // JWT AUTHENTICATED REQUEST
+        // =================================================
+
+        const response = await authService.authFetch(url, {
           method: "GET",
+
           headers: {
-            "Content-Type": "application/json",
+            Accept: "application/json",
           },
         });
 
-        const data: CurriculumResponse = await response.json();
+        // =================================================
+        // SAFE RESPONSE READ
+        // =================================================
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Failed to load curriculum details.");
+        const contentType = response.headers.get("content-type") || "";
+
+        let data: CurriculumResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        // =================================================
+        // 401
+        // =================================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =================================================
+        // 403
+        // =================================================
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              "You are not authorized to view this curriculum.",
+          );
+        }
+
+        // =================================================
+        // HTTP ERROR
+        // =================================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Failed to load curriculum details (${response.status}).`,
+          );
+        }
+
+        // =================================================
+        // API ERROR
+        // =================================================
+
+        if (!data?.success) {
+          throw new Error(
+            data?.message || "Failed to load curriculum details.",
+          );
+        }
+
+        // =================================================
+        // CURRICULUM
+        // =================================================
+
+        if (!data.curriculum) {
+          setCurriculum(null);
+
+          setSubjects([]);
+
+          setTotalSubjects(0);
+
+          setMappedUnits(0);
+
+          return;
         }
 
         setCurriculum(data.curriculum);
 
-        setSubjects(data.subjects || []);
+        // =================================================
+        // SUBJECTS
+        // =================================================
 
-        setTotalSubjects(Number(data.totalSubjects || 0));
+        const loadedSubjects = Array.isArray(data.subjects)
+          ? data.subjects
+          : [];
 
-        setMappedUnits(Number(data.mappedUnits || 0));
+        setSubjects(loadedSubjects);
+
+        setTotalSubjects(Number(data.totalSubjects ?? loadedSubjects.length));
+
+        setMappedUnits(Number(data.mappedUnits ?? 0));
       } catch (err) {
         console.error("LOAD CURRICULUM DETAILS ERROR:", err);
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the curriculum server. Make sure the backend is running on port 3000.",
+          );
+
+          return;
+        }
 
         setError(
           err instanceof Error
@@ -181,10 +332,11 @@ export default function CurriculumDetailR() {
         );
       } finally {
         setLoading(false);
+
         setRefreshing(false);
       }
     },
-    [id],
+    [id, authenticated, userRole, navigate],
   );
 
   // =====================================================
@@ -192,8 +344,12 @@ export default function CurriculumDetailR() {
   // =====================================================
 
   useEffect(() => {
-    loadCurriculum(true);
-  }, [loadCurriculum]);
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
+    void loadCurriculum(true);
+  }, [authenticated, userRole, loadCurriculum]);
 
   // =====================================================
   // OPEN ADD MODAL
@@ -272,6 +428,14 @@ export default function CurriculumDetailR() {
 
     await loadCurriculum(false);
   };
+
+  // =====================================================
+  // AUTH RENDER GUARD
+  // =====================================================
+
+  if (!authenticated || !user || userRole !== "Registrar") {
+    return null;
+  }
 
   // =====================================================
   // LOADING
@@ -419,8 +583,6 @@ export default function CurriculumDetailR() {
         ================================================= */}
 
         <div className="curriculum-subject-section">
-          {/* SECTION HEADER */}
-
           <div className="section-header">
             <div>
               <h2>Curriculum Subjects</h2>
@@ -443,9 +605,7 @@ export default function CurriculumDetailR() {
             <div className="curriculum-refreshing">Updating curriculum...</div>
           )}
 
-          {/* =================================================
-              EMPTY
-          ================================================= */}
+          {/* EMPTY */}
 
           {subjects.length === 0 ? (
             <div className="empty-subjects">
@@ -479,8 +639,11 @@ export default function CurriculumDetailR() {
                     <div className="year-header">
                       <h3>
                         {year === 1 && "1st Year"}
+
                         {year === 2 && "2nd Year"}
+
                         {year === 3 && "3rd Year"}
+
                         {year === 4 && "4th Year"}
                       </h3>
                     </div>
@@ -541,41 +704,25 @@ export default function CurriculumDetailR() {
                               <tbody>
                                 {semesterSubjects.map((subject, index) => (
                                   <tr key={subject.curriculum_subject_id}>
-                                    {/* NUMBER */}
-
                                     <td>{index + 1}</td>
-
-                                    {/* CODE */}
 
                                     <td>
                                       <strong>{subject.subject_code}</strong>
                                     </td>
 
-                                    {/* SUBJECT */}
-
                                     <td>{subject.subject_name}</td>
-
-                                    {/* UNITS */}
 
                                     <td>{subject.units}</td>
 
-                                    {/* LECTURE */}
-
                                     <td>{subject.lecture_hours}</td>
 
-                                    {/* LAB */}
-
                                     <td>{subject.laboratory_hours}</td>
-
-                                    {/* TYPE */}
 
                                     <td>
                                       {subject.is_required === 1
                                         ? "Required"
                                         : "Elective"}
                                     </td>
-
-                                    {/* ACTION */}
 
                                     <td className="subject-actions">
                                       <button

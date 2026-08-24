@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
+
 import { useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
 
 import "../../../styles/RegistrarStudentlist.css";
@@ -53,7 +55,9 @@ interface Student {
 
 interface StudentResponse {
   success: boolean;
+
   message?: string;
+  error?: string;
 
   page: number;
   limit: number;
@@ -78,13 +82,25 @@ interface Statistics {
 
 export default function StudentListR() {
   const navigate = useNavigate();
+
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
   const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // STATES
   // =====================================================
 
   const [students, setStudents] = useState<Student[]>([]);
+
   const [statistics, setStatistics] = useState<Statistics>({
     total: 0,
     regular: 0,
@@ -93,104 +109,308 @@ export default function StudentListR() {
   });
 
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
+
+  // =====================================================
+  // FILTERS
+  // =====================================================
 
   const [search, setSearch] = useState("");
 
   const [selectedCourse, setSelectedCourse] = useState("All");
+
   const [selectedYear, setSelectedYear] = useState("All");
+
   const [selectedSection, setSelectedSection] = useState("All");
+
+  // =====================================================
+  // PAGINATION
+  // =====================================================
 
   const studentsPerPage = 10;
 
   const [currentPage, setCurrentPage] = useState(1);
+
   const [totalPages, setTotalPages] = useState(1);
+
+  // =====================================================
+  // AUTH GUARD
+  // =====================================================
+
+  useEffect(() => {
+    // ---------------------------------------------------
+    // NO USER OR NO JWT
+    // ---------------------------------------------------
+
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    // ---------------------------------------------------
+    // USER EXISTS BUT WRONG ROLE
+    // ---------------------------------------------------
+
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, navigate]);
 
   // =====================================================
   // FETCH STUDENTS
   // =====================================================
 
-  const fetchStudents = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const params = new URLSearchParams();
-
-      params.append("page", currentPage.toString());
-      params.append("limit", studentsPerPage.toString());
-
-      if (search.trim()) {
-        params.append("search", search.trim());
-      }
-
-      if (selectedCourse !== "All") {
-        params.append("course", selectedCourse);
-      }
-
-      if (selectedYear !== "All") {
-        params.append("year", selectedYear);
-      }
-
-      if (selectedSection !== "All") {
-        params.append("section", selectedSection);
-      }
-
-      const response = await fetch(`${API_BASE_URL}?${params.toString()}`, {
-        method: "GET",
-      });
-
-      const data: StudentResponse = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load students.");
-      }
-
-      setStudents(data.students);
-      setTotalPages(data.totalPages);
-
-      // =====================================================
-      // COMPUTE STATISTICS
-      // =====================================================
-
-      let regular = 0;
-      let executive = 0;
-      let scholarship = 0;
-
-      data.students.forEach((student) => {
-        const course = student.course_code.toLowerCase();
-
-        if (course.includes("executive")) {
-          executive++;
-        } else if (course.includes("scholar")) {
-          scholarship++;
-        } else {
-          regular++;
-        }
-      });
-
-      setStatistics({
-        total: data.totalStudents,
-        regular,
-        executive,
-        scholarship,
-      });
-    } catch (err) {
-      console.error(err);
-
-      setError("Unable to load student records.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // =====================================================
-  // LOAD DATA
-  // =====================================================
-
   useEffect(() => {
-    fetchStudents();
-  }, [currentPage, search, selectedCourse, selectedYear, selectedSection]);
+    // Do not make API request
+    // if authentication is missing
+    // or role is incorrect.
+
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const fetchStudents = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        // =============================================
+        // QUERY PARAMETERS
+        // =============================================
+
+        const params = new URLSearchParams();
+
+        params.append("page", currentPage.toString());
+
+        params.append("limit", studentsPerPage.toString());
+
+        if (search.trim()) {
+          params.append("search", search.trim());
+        }
+
+        if (selectedCourse !== "All") {
+          params.append("course", selectedCourse);
+        }
+
+        if (selectedYear !== "All") {
+          params.append("year", selectedYear);
+        }
+
+        if (selectedSection !== "All") {
+          params.append("section", selectedSection);
+        }
+
+        const requestUrl = `${API_BASE_URL}?${params.toString()}`;
+
+        console.log("GET REGISTRAR STUDENTS:", requestUrl);
+
+        // =============================================
+        // AUTHENTICATED REQUEST
+        //
+        // authFetch automatically adds:
+        //
+        // Authorization:
+        // Bearer <JWT>
+        // =============================================
+
+        const response = await authService.authFetch(requestUrl, {
+          method: "GET",
+
+          signal: controller.signal,
+
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        // =============================================
+        // RESPONSE
+        // =============================================
+
+        let data: StudentResponse | null = null;
+
+        const contentType = response.headers.get("content-type") || "";
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        // =============================================
+        // 401
+        //
+        // JWT missing / expired / invalid
+        // =============================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =============================================
+        // 403
+        //
+        // Authenticated but not Registrar
+        // =============================================
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message ||
+              "You are not authorized to access student records.",
+          );
+        }
+
+        // =============================================
+        // OTHER HTTP ERROR
+        // =============================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Failed to load students (${response.status}).`,
+          );
+        }
+
+        // =============================================
+        // API ERROR
+        // =============================================
+
+        if (!data?.success) {
+          throw new Error(data?.message || "Failed to load students.");
+        }
+
+        // =============================================
+        // SUCCESS
+        // =============================================
+
+        const studentData = Array.isArray(data.students) ? data.students : [];
+
+        setStudents(studentData);
+
+        setTotalPages(data.totalPages || 1);
+
+        // =============================================
+        // COMPUTE STATISTICS
+        // =============================================
+
+        let regular = 0;
+        let executive = 0;
+        let scholarship = 0;
+
+        studentData.forEach((student) => {
+          const course = (student.course_code || "").toLowerCase();
+
+          if (course.includes("executive")) {
+            executive++;
+          } else if (course.includes("scholar")) {
+            scholarship++;
+          } else {
+            regular++;
+          }
+        });
+
+        setStatistics({
+          total: data.totalStudents || 0,
+
+          regular,
+
+          executive,
+
+          scholarship,
+        });
+      } catch (err) {
+        // =============================================
+        // ABORTED REQUEST
+        // =============================================
+
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
+        console.error("GET REGISTRAR STUDENTS ERROR:", err);
+
+        setStudents([]);
+
+        setStatistics({
+          total: 0,
+          regular: 0,
+          executive: 0,
+          scholarship: 0,
+        });
+
+        // =============================================
+        // NETWORK ERROR
+        // =============================================
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the student records server. Make sure the backend is running on port 3000.",
+          );
+
+          return;
+        }
+
+        // =============================================
+        // NORMAL ERROR
+        // =============================================
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load student records.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void fetchStudents();
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    authenticated,
+    userRole,
+    currentPage,
+    search,
+    selectedCourse,
+    selectedYear,
+    selectedSection,
+    navigate,
+  ]);
 
   // =====================================================
   // FILTER OPTIONS
@@ -199,6 +419,7 @@ export default function StudentListR() {
   const courseOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         students.map((student) => student.course_code).filter(Boolean),
       ),
@@ -208,24 +429,32 @@ export default function StudentListR() {
   const yearOptions = useMemo(() => {
     return [
       "All",
-      ...new Set(students.map((student) => student.year_level.toString())),
+
+      ...new Set(
+        students
+          .map((student) => student.year_level?.toString())
+          .filter(Boolean) as string[],
+      ),
     ];
   }, [students]);
 
   const sectionOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         students.map((student) => student.section_name).filter(Boolean),
       ),
     ];
   }, [students]);
+
   // =====================================================
   // SEARCH HANDLER
   // =====================================================
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(event.target.value);
+
     setCurrentPage(1);
   };
 
@@ -235,16 +464,19 @@ export default function StudentListR() {
 
   const handleCourseChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCourse(event.target.value);
+
     setCurrentPage(1);
   };
 
   const handleYearChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedYear(event.target.value);
+
     setCurrentPage(1);
   };
 
   const handleSectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedSection(event.target.value);
+
     setCurrentPage(1);
   };
 
@@ -254,34 +486,35 @@ export default function StudentListR() {
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      setCurrentPage((previous) => previous - 1);
     }
   };
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
-      setCurrentPage((prev) => prev + 1);
+      setCurrentPage((previous) => previous + 1);
     }
   };
+
+  // =====================================================
+  // AUTH RENDER GUARD
+  // =====================================================
+
+  if (!authenticated || !user || userRole !== "Registrar") {
+    return null;
+  }
 
   // =====================================================
   // RENDER
   // =====================================================
 
-  // Redirect AFTER all hooks are declared
-  useEffect(() => {
-    if (!user || user.role !== "Registrar") {
-      navigate("/login");
-    }
-  }, [user, navigate]);
-
-  if (!user || user.role !== "Registrar") {
-    return null;
-  }
-
   return (
     <DashboardLayout>
       <div className="registrar-listR-container">
+        {/* ===============================================
+            HEADER
+        =============================================== */}
+
         <div className="registrar-listR-header">
           <div>
             <h1>Student Records</h1>
@@ -293,27 +526,39 @@ export default function StudentListR() {
           </div>
         </div>
 
+        {/* ===============================================
+            STATISTICS
+        =============================================== */}
+
         <div className="registrar-listR-statistics">
           <div className="registrar-listR-card">
             <span>Total Students</span>
+
             <h2>{statistics.total}</h2>
           </div>
 
           <div className="registrar-listR-card">
             <span>Regular</span>
+
             <h2>{statistics.regular}</h2>
           </div>
 
           <div className="registrar-listR-card">
             <span>Executive</span>
+
             <h2>{statistics.executive}</h2>
           </div>
 
           <div className="registrar-listR-card">
             <span>Scholarship</span>
+
             <h2>{statistics.scholarship}</h2>
           </div>
         </div>
+
+        {/* ===============================================
+            TOOLBAR
+        =============================================== */}
 
         <div className="registrar-listR-toolbar">
           <div className="registrar-listR-search">
@@ -331,7 +576,7 @@ export default function StudentListR() {
             <select value={selectedCourse} onChange={handleCourseChange}>
               {courseOptions.map((course) => (
                 <option key={course} value={course}>
-                  {course}
+                  {course === "All" ? "All Courses" : course}
                 </option>
               ))}
             </select>
@@ -357,6 +602,11 @@ export default function StudentListR() {
             </select>
           </div>
         </div>
+
+        {/* ===============================================
+            TABLE
+        =============================================== */}
+
         <div className="registrar-listR-table-wrapper">
           <div className="student-table-container">
             <table className="student-table">
@@ -381,6 +631,8 @@ export default function StudentListR() {
               </thead>
 
               <tbody>
+                {/* LOADING */}
+
                 {loading && (
                   <tr>
                     <td colSpan={8} className="table-message">
@@ -388,6 +640,8 @@ export default function StudentListR() {
                     </td>
                   </tr>
                 )}
+
+                {/* ERROR */}
 
                 {!loading && error && (
                   <tr>
@@ -397,6 +651,8 @@ export default function StudentListR() {
                   </tr>
                 )}
 
+                {/* EMPTY */}
+
                 {!loading && !error && students.length === 0 && (
                   <tr>
                     <td colSpan={8} className="table-message">
@@ -404,6 +660,9 @@ export default function StudentListR() {
                     </td>
                   </tr>
                 )}
+
+                {/* STUDENTS */}
+
                 {!loading &&
                   !error &&
                   students.map((student) => (
@@ -413,7 +672,7 @@ export default function StudentListR() {
                       <td>
                         <div className="student-info">
                           <div className="student-avatar">
-                            {student.first_name.charAt(0)}
+                            {student.first_name?.charAt(0).toUpperCase() || "S"}
                           </div>
 
                           <div>
@@ -436,11 +695,11 @@ export default function StudentListR() {
 
                       <td>Year {student.year_level}</td>
 
-                      <td>{student.section_name}</td>
+                      <td>{student.section_name || "Not Assigned"}</td>
 
                       <td>
                         <span
-                          className={`status ${student.status
+                          className={`status ${(student.status || "")
                             .toLowerCase()
                             .replace(/\s+/g, "-")}`}
                         >
@@ -450,9 +709,10 @@ export default function StudentListR() {
 
                       <td>
                         <div className="action-buttons">
-                          {/* Student Profile */}
+                          {/* STUDENT PROFILE */}
 
                           <button
+                            type="button"
                             className="view-btn"
                             onClick={() =>
                               navigate(
@@ -463,9 +723,10 @@ export default function StudentListR() {
                             View
                           </button>
 
-                          {/* Academic Records */}
+                          {/* ACADEMIC RECORDS */}
 
                           <button
+                            type="button"
                             className="record-btn"
                             onClick={() =>
                               navigate(
@@ -476,9 +737,10 @@ export default function StudentListR() {
                             Records
                           </button>
 
-                          {/* Documents */}
+                          {/* DOCUMENTS */}
 
                           <button
+                            type="button"
                             className="document-btn"
                             onClick={() =>
                               navigate(
@@ -497,8 +759,13 @@ export default function StudentListR() {
           </div>
         </div>
 
+        {/* ===============================================
+            PAGINATION
+        =============================================== */}
+
         <div className="registrar-listR-pagination">
           <button
+            type="button"
             className="pagination-btn"
             disabled={currentPage === 1}
             onClick={handlePreviousPage}
@@ -507,24 +774,30 @@ export default function StudentListR() {
           </button>
 
           <div className="page-numbers">
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-              (page) => (
-                <button
-                  key={page}
-                  className={
-                    currentPage === page
-                      ? "pagination-btn active-page"
-                      : "pagination-btn"
-                  }
-                  onClick={() => setCurrentPage(page)}
-                >
-                  {page}
-                </button>
-              ),
-            )}
+            {Array.from(
+              {
+                length: totalPages,
+              },
+
+              (_, index) => index + 1,
+            ).map((page) => (
+              <button
+                type="button"
+                key={page}
+                className={
+                  currentPage === page
+                    ? "pagination-btn active-page"
+                    : "pagination-btn"
+                }
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
           </div>
 
           <button
+            type="button"
             className="pagination-btn"
             disabled={currentPage === totalPages}
             onClick={handleNextPage}

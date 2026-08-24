@@ -15,15 +15,6 @@ const API_BASE_URL = "http://localhost:3000/api/registrar/enrollments/period";
 // TYPES
 // ============================================================
 
-interface RegistrarSession {
-  id?: number;
-  user_id?: number;
-  username?: string;
-  role: string;
-  email?: string;
-  role_id?: number;
-}
-
 interface AcademicYear {
   academic_year_id: number;
   academic_year: string;
@@ -60,13 +51,12 @@ interface EnrollmentPeriod {
 interface PeriodResponse {
   success: boolean;
   message?: string;
+  error?: string;
 
   enrollment_period?: EnrollmentPeriod | null;
 
   academic_years?: AcademicYear[];
   semesters?: Semester[];
-
-  error?: string;
 }
 
 // ============================================================
@@ -77,10 +67,15 @@ export default function EnrollmentPeriodMR() {
   const navigate = useNavigate();
 
   // ============================================================
-  // SESSION
+  // AUTHENTICATION
   // ============================================================
 
-  const [user, setUser] = useState<RegistrarSession | null>(null);
+  const user = authService.getSession();
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // ============================================================
   // DATA
@@ -122,79 +117,166 @@ export default function EnrollmentPeriodMR() {
   const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
 
   // ============================================================
-  // GET SESSION
+  // AUTHORIZATION
   // ============================================================
 
   useEffect(() => {
-    const session = authService.getSession();
+    // No user session or no JWT
+    if (!authenticated) {
+      authService.logout();
 
-    console.log("=================================");
-    console.log("REGISTRAR ENROLLMENT PERIOD");
-    console.log("SESSION:", session);
-    console.log("=================================");
+      navigate("/login", {
+        replace: true,
+      });
 
-    if (!session || session.role !== "Registrar") {
-      navigate("/login", { replace: true });
       return;
     }
 
-    if (!session.user_id) {
-      setError("Registrar session does not contain a user ID.");
-      setLoading(false);
-      return;
+    // Logged in but not Registrar
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
     }
-
-    setUser(session);
-  }, [navigate]);
+  }, [authenticated, userRole, user, navigate]);
 
   // ============================================================
-  // LOAD INITIAL DATA
+  // RESPONSE HANDLER
   // ============================================================
 
-  useEffect(() => {
-    if (!user?.user_id) {
-      return;
+  const readPeriodResponse = async (
+    response: Response,
+  ): Promise<PeriodResponse> => {
+    const contentType = response.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      const text = await response.text();
+
+      throw new Error(
+        `Server returned a non-JSON response (${response.status}): ${text.slice(
+          0,
+          200,
+        )}`,
+      );
     }
 
-    void loadPeriodData();
-  }, [user]);
+    return response.json();
+  };
+
+  // ============================================================
+  // HANDLE AUTH RESPONSE
+  // ============================================================
+
+  const handleAuthenticationResponse = (
+    response: Response,
+    responseData: PeriodResponse,
+  ) => {
+    // ----------------------------------------------------------
+    // 401
+    // Token missing / invalid / expired
+    // ----------------------------------------------------------
+
+    if (response.status === 401) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return false;
+    }
+
+    // ----------------------------------------------------------
+    // 403
+    // Authenticated but not allowed
+    // ----------------------------------------------------------
+
+    if (response.status === 403) {
+      throw new Error(
+        responseData.message ||
+          responseData.error ||
+          "You are not authorized to manage the enrollment period.",
+      );
+    }
+
+    return true;
+  };
 
   // ============================================================
   // LOAD PERIOD DATA
   // ============================================================
 
   const loadPeriodData = async () => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
     try {
       setLoading(true);
+
       setError("");
 
       console.log("=================================");
+
       console.log("LOADING ENROLLMENT PERIOD");
+
       console.log("Endpoint:", API_BASE_URL);
+
       console.log("=================================");
 
-      const response = await fetch(API_BASE_URL);
+      // ========================================================
+      // AUTHENTICATED REQUEST
+      //
+      // Automatically adds:
+      //
+      // Authorization: Bearer <JWT>
+      // ========================================================
 
-      let responseData: PeriodResponse;
+      const response = await authService.authFetch(API_BASE_URL, {
+        method: "GET",
 
-      try {
-        responseData = await response.json();
-      } catch {
-        throw new Error(
-          `Server returned an invalid response (${response.status}).`,
-        );
-      }
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const responseData = await readPeriodResponse(response);
 
       console.log("Period API status:", response.status);
+
       console.log("Period API response:", responseData);
+
+      // ========================================================
+      // AUTHENTICATION / AUTHORIZATION
+      // ========================================================
+
+      const canContinue = handleAuthenticationResponse(response, responseData);
+
+      if (!canContinue) {
+        return;
+      }
+
+      // ========================================================
+      // HTTP ERROR
+      // ========================================================
 
       if (!response.ok) {
         throw new Error(
           responseData.message ||
             responseData.error ||
-            `Failed to load enrollment period (${response.status})`,
+            `Failed to load enrollment period (${response.status}).`,
         );
       }
+
+      // ========================================================
+      // API ERROR
+      // ========================================================
 
       if (!responseData.success) {
         throw new Error(
@@ -207,16 +289,24 @@ export default function EnrollmentPeriodMR() {
       // ACADEMIC YEARS
       // ========================================================
 
-      setAcademicYears(responseData.academic_years || []);
+      const years = Array.isArray(responseData.academic_years)
+        ? responseData.academic_years
+        : [];
+
+      setAcademicYears(years);
 
       // ========================================================
       // SEMESTERS
       // ========================================================
 
-      setSemesters(responseData.semesters || []);
+      const semesterData = Array.isArray(responseData.semesters)
+        ? responseData.semesters
+        : [];
+
+      setSemesters(semesterData);
 
       // ========================================================
-      // CURRENT OPEN PERIOD
+      // CURRENT PERIOD
       // ========================================================
 
       const period = responseData.enrollment_period || null;
@@ -238,133 +328,177 @@ export default function EnrollmentPeriodMR() {
       // ========================================================
       // NO OPEN PERIOD
       //
-      // Select current academic year and first semester
-      // as the default option for opening enrollment.
+      // Select current academic year if possible.
       // ========================================================
 
-      const currentYear = (responseData.academic_years || []).find(
+      const currentYear = years.find(
         (year) => year.is_current === true || Number(year.is_current) === 1,
       );
 
       if (currentYear) {
         setSelectedAcademicYearId(Number(currentYear.academic_year_id));
-      } else if (responseData.academic_years?.length) {
-        setSelectedAcademicYearId(
-          Number(responseData.academic_years[0].academic_year_id),
-        );
+      } else if (years.length > 0) {
+        setSelectedAcademicYearId(Number(years[0].academic_year_id));
+      } else {
+        setSelectedAcademicYearId(0);
       }
 
-      if (responseData.semesters?.length) {
-        setSelectedSemesterId(Number(responseData.semesters[0].semester_id));
+      if (semesterData.length > 0) {
+        setSelectedSemesterId(Number(semesterData[0].semester_id));
+      } else {
+        setSelectedSemesterId(0);
       }
-    } catch (error) {
-      console.error("LOAD ENROLLMENT PERIOD ERROR:", error);
+    } catch (err) {
+      console.error("LOAD ENROLLMENT PERIOD ERROR:", err);
 
-      if (error instanceof TypeError) {
+      if (err instanceof TypeError) {
         setError(
           "Unable to connect to the enrollment server. Make sure the backend is running on http://localhost:3000.",
         );
-      } else {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load enrollment period.",
-        );
+
+        return;
       }
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load enrollment period.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   // ============================================================
+  // LOAD INITIAL DATA
+  // ============================================================
+
+  useEffect(() => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
+    void loadPeriodData();
+  }, [authenticated, userRole]);
+
+  // ============================================================
   // OPEN / REOPEN ENROLLMENT
   // ============================================================
 
   const openEnrollment = async () => {
-    if (!user?.user_id) {
-      setError("Unable to identify the current Registrar.");
+    if (!authenticated || userRole !== "Registrar") {
+      setError("Authentication is required.");
+
       return;
     }
 
     if (!selectedAcademicYearId) {
       setError("Please select an academic year.");
+
       return;
     }
 
     if (!selectedSemesterId) {
       setError("Please select a semester.");
+
       return;
     }
 
     try {
       setActionLoading(true);
+
       setError("");
+
       setSuccessMessage("");
 
       console.log("=================================");
+
       console.log("OPENING ENROLLMENT PERIOD");
+
       console.log("Academic Year ID:", selectedAcademicYearId);
+
       console.log("Semester ID:", selectedSemesterId);
-      console.log("Registrar ID:", user.user_id);
+
       console.log("=================================");
 
-      const response = await fetch(`${API_BASE_URL}/open`, {
-        method: "POST",
+      // ======================================================
+      // IMPORTANT
+      //
+      // DO NOT send:
+      //
+      // user_id: user.user_id
+      //
+      // Backend must use:
+      //
+      // req.user.user_id
+      //
+      // ======================================================
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await authService.authFetch(`${API_BASE_URL}/open`, {
+        method: "POST",
 
         body: JSON.stringify({
           academic_year_id: selectedAcademicYearId,
 
           semester_id: selectedSemesterId,
-
-          user_id: user.user_id,
         }),
       });
 
-      let responseData: PeriodResponse;
-
-      try {
-        responseData = await response.json();
-      } catch {
-        throw new Error(
-          `Server returned an invalid response (${response.status}).`,
-        );
-      }
+      const responseData = await readPeriodResponse(response);
 
       console.log("Open status:", response.status);
 
       console.log("Open response:", responseData);
 
+      // ======================================================
+      // AUTH CHECK
+      // ======================================================
+
+      const canContinue = handleAuthenticationResponse(response, responseData);
+
+      if (!canContinue) {
+        return;
+      }
+
+      // ======================================================
+      // HTTP ERROR
+      // ======================================================
+
       if (!response.ok) {
         throw new Error(
           responseData.message ||
             responseData.error ||
-            `Unable to open enrollment (${response.status})`,
+            `Unable to open enrollment (${response.status}).`,
         );
       }
+
+      // ======================================================
+      // API ERROR
+      // ======================================================
 
       if (!responseData.success) {
         throw new Error(responseData.message || "Unable to open enrollment.");
       }
 
+      // ======================================================
+      // SUCCESS
+      // ======================================================
+
       setSuccessMessage(
         responseData.message || "Enrollment period opened successfully.",
       );
 
-      // ========================================================
+      // ======================================================
       // RELOAD DATABASE STATE
-      // ========================================================
+      // ======================================================
 
       await loadPeriodData();
-    } catch (error) {
-      console.error("OPEN ENROLLMENT ERROR:", error);
+    } catch (err) {
+      console.error("OPEN ENROLLMENT ERROR:", err);
 
       setError(
-        error instanceof Error
-          ? error.message
+        err instanceof Error
+          ? err.message
           : "Unable to open enrollment period.",
       );
     } finally {
@@ -377,69 +511,90 @@ export default function EnrollmentPeriodMR() {
   // ============================================================
 
   const closeEnrollment = async () => {
-    if (!user?.user_id) {
-      setError("Unable to identify the current Registrar.");
+    if (!authenticated || userRole !== "Registrar") {
+      setError("Authentication is required.");
+
       return;
     }
 
     if (!currentPeriod?.enrollment_period_id) {
       setError("There is no active enrollment period to close.");
+
       return;
     }
 
     try {
       setActionLoading(true);
+
       setError("");
+
       setSuccessMessage("");
 
       console.log("=================================");
+
       console.log("CLOSING ENROLLMENT PERIOD");
 
       console.log("Enrollment Period ID:", currentPeriod.enrollment_period_id);
 
-      console.log("Registrar ID:", user.user_id);
-
       console.log("=================================");
 
-      const response = await fetch(`${API_BASE_URL}/close`, {
-        method: "POST",
+      // ======================================================
+      // IMPORTANT
+      //
+      // Registrar identity comes from JWT:
+      //
+      // req.user.user_id
+      //
+      // No frontend user_id is sent.
+      // ======================================================
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await authService.authFetch(`${API_BASE_URL}/close`, {
+        method: "POST",
 
         body: JSON.stringify({
           enrollment_period_id: currentPeriod.enrollment_period_id,
-
-          user_id: user.user_id,
         }),
       });
 
-      let responseData: PeriodResponse;
-
-      try {
-        responseData = await response.json();
-      } catch {
-        throw new Error(
-          `Server returned an invalid response (${response.status}).`,
-        );
-      }
+      const responseData = await readPeriodResponse(response);
 
       console.log("Close status:", response.status);
 
       console.log("Close response:", responseData);
 
+      // ======================================================
+      // AUTH CHECK
+      // ======================================================
+
+      const canContinue = handleAuthenticationResponse(response, responseData);
+
+      if (!canContinue) {
+        return;
+      }
+
+      // ======================================================
+      // HTTP ERROR
+      // ======================================================
+
       if (!response.ok) {
         throw new Error(
           responseData.message ||
             responseData.error ||
-            `Unable to close enrollment (${response.status})`,
+            `Unable to close enrollment (${response.status}).`,
         );
       }
+
+      // ======================================================
+      // API ERROR
+      // ======================================================
 
       if (!responseData.success) {
         throw new Error(responseData.message || "Unable to close enrollment.");
       }
+
+      // ======================================================
+      // SUCCESS
+      // ======================================================
 
       setSuccessMessage(
         responseData.message || "Enrollment period closed successfully.",
@@ -447,17 +602,17 @@ export default function EnrollmentPeriodMR() {
 
       setShowCloseConfirmation(false);
 
-      // ========================================================
+      // ======================================================
       // RELOAD DATABASE STATE
-      // ========================================================
+      // ======================================================
 
       await loadPeriodData();
-    } catch (error) {
-      console.error("CLOSE ENROLLMENT ERROR:", error);
+    } catch (err) {
+      console.error("CLOSE ENROLLMENT ERROR:", err);
 
       setError(
-        error instanceof Error
-          ? error.message
+        err instanceof Error
+          ? err.message
           : "Unable to close enrollment period.",
       );
     } finally {
@@ -515,7 +670,15 @@ export default function EnrollmentPeriodMR() {
   // BUTTON TEXT
   // ============================================================
 
-  const openButtonText = periodIsOpen ? "" : "Open Enrollment";
+  const openButtonText = "Open Enrollment";
+
+  // ============================================================
+  // AUTH RENDER GUARD
+  // ============================================================
+
+  if (!authenticated || !user || userRole !== "Registrar") {
+    return null;
+  }
 
   // ============================================================
   // LOADING
@@ -822,12 +985,10 @@ export default function EnrollmentPeriodMR() {
                 type="button"
                 className="period-btn close-btn"
                 onClick={() => {
-                  console.log("CLOSE ENROLLMENT BUTTON CLICKED");
-                  console.log("Current Period:", currentPeriod);
-                  console.log("Action Loading:", actionLoading);
-
                   setError("");
+
                   setSuccessMessage("");
+
                   setShowCloseConfirmation(true);
                 }}
                 disabled={actionLoading}

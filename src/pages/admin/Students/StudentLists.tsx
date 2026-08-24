@@ -1,16 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
+
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
+
 import { useNavigate } from "react-router-dom";
+
 import {
   fallbackStudents,
   type StudentRecord,
 } from "../../../data/studentFallbackData";
+
 import "../../../styles/Studentlist.css";
 
-// ---------- Folder tree types ----------
+const API_BASE_URL = "http://localhost:3000/api/students";
+
+// =====================================================
+// FOLDER TREE TYPES
+// =====================================================
+
 type SectionMap = Record<string, StudentRecord[]>;
+
 type CourseMap = Record<string, SectionMap>;
+
 type FolderTree = Record<string, CourseMap>;
 
 interface FolderSelection {
@@ -19,7 +31,26 @@ interface FolderSelection {
   section?: string;
 }
 
-// ---------- Icons ----------
+// =====================================================
+// API RESPONSE
+// =====================================================
+
+interface StudentListResponse {
+  success?: boolean;
+
+  data?: StudentRecord[];
+
+  students?: StudentRecord[];
+
+  message?: string;
+
+  error?: string;
+}
+
+// =====================================================
+// ICONS
+// =====================================================
+
 function FolderIcon({ open }: { open?: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -64,73 +95,267 @@ function SectionIcon() {
         strokeWidth="1.5"
         fill="none"
       />
+
       <path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.5" fill="none" />
     </svg>
   );
 }
 
+// =====================================================
+// COMPONENT
+// =====================================================
+
 export default function StudentManagement() {
   const navigate = useNavigate();
+
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
   const user = authService.getSession();
-  const [students, setStudents] = useState<StudentRecord[]>(fallbackStudents);
-  const [loading, setLoading] = useState(false);
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
+
+  // =====================================================
+  // STATE
+  // =====================================================
+
+  const [students, setStudents] = useState<StudentRecord[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
+
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Folder explorer state
+  // =====================================================
+  // FOLDER EXPLORER STATE
+  // =====================================================
+
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
+
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
+
   const [selectedFolder, setSelectedFolder] = useState<FolderSelection | null>(
     null,
   );
 
+  // =====================================================
+  // AUTHORIZATION
+  // =====================================================
+
   useEffect(() => {
-    if (!user || user.role !== "Admin") {
-      navigate("/login");
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
       return;
     }
+
+    if (userRole !== "Admin") {
+      if (userRole) {
+        navigate(authService.getDashboardRoute(userRole), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, navigate]);
+
+  // =====================================================
+  // LOAD STUDENTS
+  // =====================================================
+
+  useEffect(() => {
+    if (!authenticated || userRole !== "Admin") {
+      return;
+    }
+
+    const controller = new AbortController();
 
     const fetchStudents = async () => {
       try {
         setLoading(true);
+
         setError("");
-        const response = await fetch("http://localhost:3000/api/students");
+
+        // ===============================================
+        // JWT AUTHENTICATED REQUEST
+        // ===============================================
+
+        const response = await authService.authFetch(API_BASE_URL, {
+          method: "GET",
+
+          signal: controller.signal,
+
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        // ===============================================
+        // SAFE RESPONSE
+        // ===============================================
+
+        const contentType = response.headers.get("content-type") || "";
+
+        let data: StudentRecord[] | StudentListResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        // ===============================================
+        // 401
+        // ===============================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // ===============================================
+        // 403
+        // ===============================================
+
+        if (response.status === 403) {
+          const responseObject = !Array.isArray(data) ? data : null;
+
+          throw new Error(
+            responseObject?.message ||
+              responseObject?.error ||
+              "You are not authorized to view the student list.",
+          );
+        }
+
+        // ===============================================
+        // HTTP ERROR
+        // ===============================================
 
         if (!response.ok) {
-          throw new Error("Unable to load student list.");
+          const responseObject = !Array.isArray(data) ? data : null;
+
+          throw new Error(
+            responseObject?.message ||
+              responseObject?.error ||
+              `Unable to load student list (${response.status}).`,
+          );
         }
 
-        const data = (await response.json()) as StudentRecord[];
-        if (data.length > 0) {
-          setStudents(data);
+        // ===============================================
+        // NORMALIZE RESPONSE
+        //
+        // Supports:
+        //
+        // [...]
+        //
+        // { students: [...] }
+        //
+        // { data: [...] }
+        // ===============================================
+
+        let loadedStudents: StudentRecord[] = [];
+
+        if (Array.isArray(data)) {
+          loadedStudents = data;
+        } else if (data && Array.isArray(data.students)) {
+          loadedStudents = data.students;
+        } else if (data && Array.isArray(data.data)) {
+          loadedStudents = data.data;
         }
-      } catch {
-        setStudents(fallbackStudents);
-        setError("Using saved student data while the server is unavailable.");
+
+        console.log("ADMIN STUDENTS:", loadedStudents);
+
+        setStudents(loadedStudents);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
+        console.error("ADMIN STUDENT LIST ERROR:", err);
+
+        // ===============================================
+        // FALLBACK DATA
+        //
+        // Keep your existing fallback behavior only for
+        // actual connectivity/runtime failure.
+        //
+        // Do NOT use fallback data to hide a 401 or 403.
+        // ===============================================
+
+        if (err instanceof TypeError) {
+          setStudents(fallbackStudents);
+
+          setError("Using saved student data while the server is unavailable.");
+
+          return;
+        }
+
+        setStudents([]);
+
+        setError(
+          err instanceof Error ? err.message : "Unable to load student list.",
+        );
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchStudents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate, user?.role]);
+    void fetchStudents();
 
-  // ---------- Build folder tree dynamically from students ----------
+    return () => {
+      controller.abort();
+    };
+  }, [authenticated, userRole, navigate]);
+
+  // =====================================================
+  // BUILD FOLDER TREE
+  // =====================================================
+
   const folderTree: FolderTree = useMemo(() => {
     const tree: FolderTree = {};
 
     for (const student of students) {
-      const year = student.yearLevel;
-      const course = student.course;
-      const section = student.section;
+      const year = student.yearLevel || "Unknown Year";
+
+      const course = student.course || "Unknown Course";
+
+      const section = student.section || "No Section";
 
       if (!tree[year]) {
         tree[year] = {};
       }
+
       if (!tree[year][course]) {
         tree[year][course] = {};
       }
+
       if (!tree[year][course][section]) {
         tree[year][course][section] = [];
       }
@@ -141,39 +366,63 @@ export default function StudentManagement() {
     return tree;
   }, [students]);
 
+  // =====================================================
+  // TOGGLE YEAR
+  // =====================================================
+
   const toggleYear = (year: string) => {
-    setExpandedYear((prev) => (prev === year ? null : year));
+    setExpandedYear((previous) => (previous === year ? null : year));
+
     setExpandedCourse(null);
   };
 
+  // =====================================================
+  // TOGGLE COURSE
+  // =====================================================
+
   const toggleCourse = (course: string) => {
-    setExpandedCourse((prev) => (prev === course ? null : course));
+    setExpandedCourse((previous) => (previous === course ? null : course));
   };
 
-  // ---------- Filter students based on selected folder ----------
+  // =====================================================
+  // FOLDER FILTER
+  // =====================================================
+
   const folderFilteredStudents = useMemo(() => {
     if (!selectedFolder) {
       return students;
     }
 
     return students.filter((student) => {
-      if (student.yearLevel !== selectedFolder.year) return false;
+      if (student.yearLevel !== selectedFolder.year) {
+        return false;
+      }
+
       if (selectedFolder.course && student.course !== selectedFolder.course) {
         return false;
       }
+
       if (
         selectedFolder.section &&
         student.section !== selectedFolder.section
       ) {
         return false;
       }
+
       return true;
     });
   }, [students, selectedFolder]);
 
-  // ---------- Apply search on top of folder filter ----------
+  // =====================================================
+  // SEARCH FILTER
+  // =====================================================
+
   const filteredStudents = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) {
+      return folderFilteredStudents;
+    }
 
     return folderFilteredStudents.filter((student) => {
       const values = [
@@ -186,29 +435,47 @@ export default function StudentManagement() {
         student.section,
       ];
 
-      return values.some((value) => value.toLowerCase().includes(term));
+      return values.some((value) =>
+        String(value ?? "")
+          .toLowerCase()
+          .includes(term),
+      );
     });
   }, [searchTerm, folderFilteredStudents]);
 
-  if (!user || user.role !== "Admin") {
+  // =====================================================
+  // AUTH GUARD
+  // =====================================================
+
+  if (!authenticated || !user || userRole !== "Admin") {
     return null;
   }
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <DashboardLayout>
       <div className="admin-manage-students">
         <h1>Student List</h1>
+
         <p className="student-subtitle">
           Manage and review the students registered in the system.
         </p>
 
         <div className="file-explorer">
-          {/* LEFT: Year > Course > Section tree */}
+          {/* =================================================
+              LEFT:
+              YEAR > COURSE > SECTION
+          ================================================= */}
+
           <div className="folder-tree">
             {Object.keys(folderTree)
               .sort()
               .map((year) => {
                 const isYearExpanded = expandedYear === year;
+
                 const courses = folderTree[year];
 
                 return (
@@ -217,12 +484,17 @@ export default function StudentManagement() {
                       className="folder-row"
                       onClick={() => {
                         toggleYear(year);
-                        setSelectedFolder({ year });
+
+                        setSelectedFolder({
+                          year,
+                        });
                       }}
                       type="button"
                     >
                       <ChevronIcon open={isYearExpanded} />
+
                       <FolderIcon open={isYearExpanded} />
+
                       <span className="folder-label">{year}</span>
                     </button>
 
@@ -232,6 +504,7 @@ export default function StudentManagement() {
                           .sort()
                           .map((course) => {
                             const isCourseExpanded = expandedCourse === course;
+
                             const sections = courses[course];
 
                             return (
@@ -240,12 +513,18 @@ export default function StudentManagement() {
                                   className="folder-row sub-row"
                                   onClick={() => {
                                     toggleCourse(course);
-                                    setSelectedFolder({ year, course });
+
+                                    setSelectedFolder({
+                                      year,
+                                      course,
+                                    });
                                   }}
                                   type="button"
                                 >
                                   <ChevronIcon open={isCourseExpanded} />
+
                                   <FolderIcon open={isCourseExpanded} />
+
                                   <span className="folder-label">{course}</span>
                                 </button>
 
@@ -275,6 +554,7 @@ export default function StudentManagement() {
                                             type="button"
                                           >
                                             <SectionIcon />
+
                                             <span>{section}</span>
                                           </button>
                                         );
@@ -291,7 +571,11 @@ export default function StudentManagement() {
               })}
           </div>
 
-          {/* RIGHT: Search + Stats + Student table */}
+          {/* =================================================
+              RIGHT:
+              SEARCH + STATS + TABLE
+          ================================================= */}
+
           <div className="folder-content">
             <div className="folder-content-header">
               <div>
@@ -307,6 +591,7 @@ export default function StudentManagement() {
                     : "All Students"}
                 </h2>
               </div>
+
               <div className="folder-search-wrap">
                 <input
                   type="text"
@@ -318,27 +603,55 @@ export default function StudentManagement() {
               </div>
             </div>
 
+            {/* =================================================
+                TOTAL
+            ================================================= */}
+
             <div className="student-total-box">
               <strong>Total students:</strong> {filteredStudents.length}
             </div>
 
+            {/* =================================================
+                LOADING
+            ================================================= */}
+
             {loading && <p>Loading student list...</p>}
+
+            {/* =================================================
+                ERROR
+            ================================================= */}
+
             {error && <p className="student-error-text">{error}</p>}
 
-            {!loading && !error && (
+            {/* =================================================
+                TABLE
+            ================================================= */}
+
+            {!loading && students.length === 0 && !error && (
+              <p>No students found.</p>
+            )}
+
+            {!loading && students.length > 0 && (
               <div className="student-table-wrap">
                 <table className="student-table">
                   <thead>
                     <tr>
                       <th>Student ID</th>
+
                       <th>Name</th>
+
                       <th>Email</th>
+
                       <th>Course</th>
+
                       <th>Year</th>
+
                       <th>Section</th>
+
                       <th>Profile</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {filteredStudents.length === 0 ? (
                       <tr>
@@ -350,12 +663,17 @@ export default function StudentManagement() {
                       filteredStudents.map((student) => (
                         <tr key={student.id}>
                           <td>{student.id}</td>
+
                           <td>
                             {student.firstName} {student.lastName}
                           </td>
+
                           <td>{student.email}</td>
+
                           <td>{student.course}</td>
+
                           <td>{student.yearLevel}</td>
+
                           <td>{student.section}</td>
 
                           <td>

@@ -4,203 +4,316 @@ import db from "../../db.js";
 const router = express.Router();
 
 // ======================================================
-// GET ALL ANNOUNCEMENTS BY USER ROLE
-// GET /api/announcements?role_id=5
+// SHARED AUTHENTICATED ANNOUNCEMENT ROUTES
+//
+// Expected server mount:
+//
+// app.use(
+//   "/api/announcements",
+//   authenticate,
+//   usersAnnouncementRoutes
+// );
+//
+// req.user is created by authenticate middleware.
+//
+// NEVER trust role_id from:
+// - req.query
+// - req.body
+// - req.params
+//
+// The current user's role comes from:
+//
+// req.user.role_id
+// req.user.role_name
+// ======================================================
+
+// ======================================================
+// GET ALL VISIBLE ANNOUNCEMENTS
+//
+// GET /api/announcements
 // ======================================================
 
 router.get("/", async (req, res) => {
   try {
-    const roleId = Number(req.query.role_id);
+    // ====================================================
+    // AUTH CHECK
+    // ====================================================
 
-    console.log("===== USER ANNOUNCEMENTS =====");
-    console.log("ROLE ID:", roleId);
-
-    if (!roleId || Number.isNaN(roleId)) {
-      return res.status(400).json({
-        error: "Valid role_id is required.",
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required.",
       });
     }
 
+    const roleId = Number(req.user.role_id);
+
+    if (!Number.isInteger(roleId) || roleId <= 0) {
+      return res.status(403).json({
+        error: "Authenticated user does not have a valid role.",
+      });
+    }
+
+    console.log("===== USER ANNOUNCEMENTS =====");
+    console.log("USER ID:", req.user.user_id);
+    console.log("ROLE:", req.user.role_name);
+    console.log("ROLE ID:", roleId);
+
+    // ====================================================
+    // GET ANNOUNCEMENTS FOR AUTHENTICATED ROLE
+    // ====================================================
+
     const [rows] = await db.execute(
       `
-SELECT DISTINCT
+      SELECT DISTINCT
 
-    a.announcement_id,
-    a.title,
-    a.content,
+          a.announcement_id,
+          a.title,
+          a.content,
 
-    u.username AS created_by,
+          u.username AS created_by,
 
-    a.publish_date,
-    a.expiry_date,
-    a.is_active,
-    a.created_at,
+          a.publish_date,
+          a.expiry_date,
+          a.is_active,
+          a.created_at,
 
-    GROUP_CONCAT(
-        DISTINCT f.original_name
-        ORDER BY f.original_name
-        SEPARATOR ', '
-    ) AS attachments
+          GROUP_CONCAT(
+              DISTINCT r.role_name
+              ORDER BY r.role_name
+              SEPARATOR ', '
+          ) AS recipients,
 
-FROM announcements a
+          GROUP_CONCAT(
+              DISTINCT f.original_name
+              ORDER BY f.original_name
+              SEPARATOR ', '
+          ) AS attachments
 
-INNER JOIN announcement_recipients ar
-ON ar.announcement_id = a.announcement_id
+      FROM announcements a
 
-LEFT JOIN users u
-ON u.user_id = a.created_by
+      INNER JOIN announcement_recipients ar
+          ON ar.announcement_id = a.announcement_id
 
-LEFT JOIN announcement_attachments aa
-ON aa.announcement_id = a.announcement_id
+      LEFT JOIN users u
+          ON u.user_id = a.created_by
 
-LEFT JOIN files f
-ON f.file_id = aa.file_id
+      LEFT JOIN roles r
+          ON r.role_id = ar.role_id
 
-WHERE
+      LEFT JOIN announcement_attachments aa
+          ON aa.announcement_id = a.announcement_id
 
-ar.role_id = ?
+      LEFT JOIN files f
+          ON f.file_id = aa.file_id
 
-AND a.is_active = 1
+      WHERE
+          ar.role_id = ?
 
-AND a.publish_date <= NOW()
+          AND a.is_active = 1
 
-AND (
-    a.expiry_date IS NULL
-    OR a.expiry_date >= NOW()
-)
+          AND a.publish_date <= NOW()
 
-GROUP BY
+          AND (
+              a.expiry_date IS NULL
+              OR a.expiry_date >= NOW()
+          )
 
-a.announcement_id,
-a.title,
-a.content,
-u.username,
-a.publish_date,
-a.expiry_date,
-a.is_active,
-a.created_at
+      GROUP BY
 
-ORDER BY
+          a.announcement_id,
+          a.title,
+          a.content,
+          u.username,
+          a.publish_date,
+          a.expiry_date,
+          a.is_active,
+          a.created_at
 
-a.publish_date DESC,
-a.created_at DESC
-`,
+      ORDER BY
+
+          a.publish_date DESC,
+          a.created_at DESC
+      `,
       [roleId],
     );
 
-    res.json(rows);
+    return res.json(rows);
   } catch (error) {
     console.error("GET USER ANNOUNCEMENTS ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to load announcements.",
     });
   }
 });
 
 // ======================================================
-// GET SINGLE ANNOUNCEMENT
-// GET /api/announcements/:id?role_id=5
+// GET SINGLE VISIBLE ANNOUNCEMENT
+//
+// GET /api/announcements/:id
 // ======================================================
 
 router.get("/:id", async (req, res) => {
   try {
+    // ====================================================
+    // AUTH CHECK
+    // ====================================================
+
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required.",
+      });
+    }
+
     const announcementId = Number(req.params.id);
-    const roleId = Number(req.query.role_id);
+    const roleId = Number(req.user.role_id);
 
-    console.log("===== USER ANNOUNCEMENT DETAILS =====");
-    console.log("Announcement ID:", announcementId);
-    console.log("Role ID:", roleId);
+    // ====================================================
+    // VALIDATE ANNOUNCEMENT ID
+    // ====================================================
 
-    if (!announcementId || Number.isNaN(announcementId)) {
+    if (!Number.isInteger(announcementId) || announcementId <= 0) {
       return res.status(400).json({
         error: "Invalid announcement id.",
       });
     }
 
-    if (!roleId || Number.isNaN(roleId)) {
-      return res.status(400).json({
-        error: "Valid role_id is required.",
+    // ====================================================
+    // VALIDATE ROLE
+    // ====================================================
+
+    if (!Number.isInteger(roleId) || roleId <= 0) {
+      return res.status(403).json({
+        error: "Authenticated user does not have a valid role.",
       });
     }
 
+    console.log("===== USER ANNOUNCEMENT DETAILS =====");
+    console.log("ANNOUNCEMENT ID:", announcementId);
+    console.log("USER ID:", req.user.user_id);
+    console.log("ROLE:", req.user.role_name);
+    console.log("ROLE ID:", roleId);
+
+    // ====================================================
+    // GET ANNOUNCEMENT
+    //
+    // The authenticated user's role must be a recipient.
+    // Only active, published, unexpired announcements
+    // are visible through this shared route.
+    // ====================================================
+
     const [rows] = await db.execute(
       `
-SELECT
+      SELECT DISTINCT
 
-    a.announcement_id,
-    a.title,
-    a.content,
+          a.announcement_id,
+          a.title,
+          a.content,
 
-    u.username AS created_by,
+          u.username AS created_by,
 
-    a.publish_date,
-    a.expiry_date,
-    a.is_active,
-    a.created_at
+          a.publish_date,
+          a.expiry_date,
+          a.is_active,
+          a.created_at
 
-FROM announcements a
+      FROM announcements a
 
-INNER JOIN announcement_recipients ar
-ON ar.announcement_id = a.announcement_id
+      INNER JOIN announcement_recipients ar
+          ON ar.announcement_id = a.announcement_id
 
-LEFT JOIN users u
-ON u.user_id = a.created_by
+      LEFT JOIN users u
+          ON u.user_id = a.created_by
 
-WHERE
+      WHERE
+          a.announcement_id = ?
 
-a.announcement_id = ?
+          AND ar.role_id = ?
 
-AND ar.role_id = ?
+          AND a.is_active = 1
 
-AND a.is_active = 1
+          AND a.publish_date <= NOW()
 
-AND a.publish_date <= NOW()
+          AND (
+              a.expiry_date IS NULL
+              OR a.expiry_date >= NOW()
+          )
 
-AND (
-    a.expiry_date IS NULL
-    OR a.expiry_date >= NOW()
-)
-`,
+      LIMIT 1
+      `,
       [announcementId, roleId],
     );
 
     if (rows.length === 0) {
       return res.status(404).json({
-        error: "Announcement not found.",
+        error: "Announcement not found or you do not have access to it.",
       });
     }
 
-    const [attachmentRows] = await db.execute(
+    // ====================================================
+    // RECIPIENTS
+    // ====================================================
+
+    const [recipientRows] = await db.execute(
       `
-SELECT
+      SELECT
 
-    f.file_id,
-    f.original_name,
-    f.file_path,
-    f.file_size,
-    f.mime_type
+          r.role_id,
+          r.role_name
 
-FROM announcement_attachments aa
+      FROM announcement_recipients ar
 
-INNER JOIN files f
-ON f.file_id = aa.file_id
+      INNER JOIN roles r
+          ON r.role_id = ar.role_id
 
-WHERE aa.announcement_id = ?
+      WHERE ar.announcement_id = ?
 
-ORDER BY f.original_name
-`,
+      ORDER BY r.role_name
+      `,
       [announcementId],
     );
 
+    // ====================================================
+    // ATTACHMENTS
+    // ====================================================
+
+    const [attachmentRows] = await db.execute(
+      `
+      SELECT
+
+          f.file_id,
+          f.original_name,
+          f.file_path,
+          f.file_size,
+          f.mime_type
+
+      FROM announcement_attachments aa
+
+      INNER JOIN files f
+          ON f.file_id = aa.file_id
+
+      WHERE aa.announcement_id = ?
+
+      ORDER BY f.original_name
+      `,
+      [announcementId],
+    );
+
+    // ====================================================
+    // RESPONSE
+    // ====================================================
+
     return res.json({
       ...rows[0],
+
+      recipients: recipientRows,
+
       attachments: attachmentRows,
     });
   } catch (error) {
     console.error("GET USER ANNOUNCEMENT DETAILS ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to load announcement.",
     });
   }

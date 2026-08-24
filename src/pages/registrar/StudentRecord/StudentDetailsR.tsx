@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+
 import { useNavigate, useParams } from "react-router-dom";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
 
 import "../../../styles/RegistrarStudentDetails.css";
@@ -14,7 +16,7 @@ const API_BASE_URL = "http://localhost:3000/api/registrar/students";
 
 // =====================================================
 // TYPES
-// ============================/=========================
+// =====================================================
 
 interface Student {
   student_id: number;
@@ -55,6 +57,7 @@ interface Student {
 interface StudentResponse {
   success: boolean;
   message?: string;
+  error?: string;
   student: Student;
 }
 
@@ -64,9 +67,20 @@ interface StudentResponse {
 
 export default function StudentDetailsR() {
   const navigate = useNavigate();
-  const { id } = useParams();
+
+  const { id } = useParams<{ id: string }>();
+
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
 
   const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // STATES
@@ -79,60 +93,211 @@ export default function StudentDetailsR() {
   const [error, setError] = useState("");
 
   // =====================================================
+  // AUTHORIZATION
+  // =====================================================
+
+  useEffect(() => {
+    // No local session or no JWT
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    // Logged in but wrong role
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, user, navigate]);
+
+  // =====================================================
   // FETCH STUDENT
   // =====================================================
 
-  const fetchStudent = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  useEffect(() => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
 
-      const response = await fetch(`${API_BASE_URL}/${id}`, {
-        method: "GET",
-      });
+    if (!id) {
+      setError("Invalid student ID.");
 
-      const data: StudentResponse = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load student.");
-      }
-
-      setStudent(data.student);
-    } catch (err) {
-      console.error(err);
-
-      setError("Unable to load student information.");
-    } finally {
       setLoading(false);
+
+      return;
     }
-  };
 
-  // =====================================================
-  // LOAD STUDENT
-  // =====================================================
+    const studentId = Number(id);
 
-  useEffect(() => {
-    if (id) {
-      fetchStudent();
+    if (!Number.isInteger(studentId) || studentId <= 0) {
+      setError("Invalid student ID.");
+
+      setLoading(false);
+
+      return;
     }
-  }, [id]);
+
+    const controller = new AbortController();
+
+    const fetchStudent = async () => {
+      try {
+        setLoading(true);
+
+        setError("");
+
+        const requestUrl = `${API_BASE_URL}/${studentId}`;
+
+        console.log("GET REGISTRAR STUDENT DETAILS:", requestUrl);
+
+        // =============================================
+        // JWT AUTHENTICATED REQUEST
+        //
+        // authFetch automatically adds:
+        //
+        // Authorization: Bearer <JWT>
+        // =============================================
+
+        const response = await authService.authFetch(requestUrl, {
+          method: "GET",
+
+          signal: controller.signal,
+
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        // =============================================
+        // SAFE RESPONSE READ
+        // =============================================
+
+        const contentType = response.headers.get("content-type") || "";
+
+        let data: StudentResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        // =============================================
+        // 401
+        // Missing / expired / invalid JWT
+        // =============================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =============================================
+        // 403
+        // JWT valid, but role is not Registrar
+        // =============================================
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message || "You are not authorized to view this student.",
+          );
+        }
+
+        // =============================================
+        // HTTP ERROR
+        // =============================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Unable to load student (${response.status}).`,
+          );
+        }
+
+        // =============================================
+        // API ERROR
+        // =============================================
+
+        if (!data?.success) {
+          throw new Error(data?.message || "Failed to load student.");
+        }
+
+        // =============================================
+        // SUCCESS
+        // =============================================
+
+        setStudent(data.student);
+      } catch (err) {
+        // Ignore aborted request
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
+        console.error("GET STUDENT DETAILS ERROR:", err);
+
+        setStudent(null);
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the student records server. Make sure the backend is running on port 3000.",
+          );
+
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load student information.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void fetchStudent();
+
+    return () => {
+      controller.abort();
+    };
+  }, [id, authenticated, userRole, navigate]);
 
   // =====================================================
-  // AUTHENTICATION
+  // AUTH RENDER GUARD
   // =====================================================
 
-  useEffect(() => {
-    if (!user || user.role !== "Registrar") {
-      navigate("/login");
-    }
-  }, [user, navigate]);
-
-  if (!user || user.role !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
 
   // =====================================================
-  // HELPER
+  // HELPERS
   // =====================================================
 
   const fullName = student
@@ -161,9 +326,9 @@ export default function StudentDetailsR() {
   return (
     <DashboardLayout>
       <div className="registrar-detailsR-container">
-        {/* ===================================================== */}
-        {/* HEADER */}
-        {/* ===================================================== */}
+        {/* =====================================================
+            HEADER
+        ===================================================== */}
 
         <div className="registrar-detailsR-header">
           <div>
@@ -173,6 +338,7 @@ export default function StudentDetailsR() {
           </div>
 
           <button
+            type="button"
             className="back-btn"
             onClick={() => navigate("/registrar/student/listR")}
           >
@@ -180,36 +346,36 @@ export default function StudentDetailsR() {
           </button>
         </div>
 
-        {/* ===================================================== */}
-        {/* LOADING */}
-        {/* ===================================================== */}
+        {/* =====================================================
+            LOADING
+        ===================================================== */}
 
         {loading && (
           <div className="details-message">Loading student information...</div>
         )}
 
-        {/* ===================================================== */}
-        {/* ERROR */}
-        {/* ===================================================== */}
+        {/* =====================================================
+            ERROR
+        ===================================================== */}
 
         {!loading && error && (
           <div className="details-message error">{error}</div>
         )}
 
-        {/* ===================================================== */}
-        {/* STUDENT DETAILS */}
-        {/* ===================================================== */}
+        {/* =====================================================
+            STUDENT DETAILS
+        ===================================================== */}
 
         {!loading && !error && student && (
           <>
-            {/* ================================================ */}
-            {/* PROFILE CARD */}
-            {/* ================================================ */}
+            {/* ================================================
+                  PROFILE CARD
+              ================================================ */}
 
             <div className="student-profile-card">
               <div className="student-profile-left">
                 <div className="student-profile-avatar">
-                  {student.first_name.charAt(0)}
+                  {student.first_name?.charAt(0).toUpperCase() || "S"}
                 </div>
 
                 <div className="student-profile-info">
@@ -218,7 +384,7 @@ export default function StudentDetailsR() {
                   <p>{student.student_number}</p>
 
                   <span
-                    className={`status ${student.status
+                    className={`status ${(student.status || "")
                       .toLowerCase()
                       .replace(/\s+/g, "-")}`}
                   >
@@ -243,20 +409,20 @@ export default function StudentDetailsR() {
                 <div className="profile-item">
                   <span>Section</span>
 
-                  <strong>{student.section_name}</strong>
+                  <strong>{student.section_name || "Not Assigned"}</strong>
                 </div>
 
                 <div className="profile-item">
                   <span>Semester</span>
 
-                  <strong>{student.semester_name}</strong>
+                  <strong>{student.semester_name || "—"}</strong>
                 </div>
               </div>
             </div>
 
-            {/* ================================================ */}
-            {/* PERSONAL INFORMATION */}
-            {/* ================================================ */}
+            {/* ================================================
+                  PERSONAL INFORMATION
+              ================================================ */}
 
             <div className="details-card">
               <h3>Personal Information</h3>
@@ -283,31 +449,36 @@ export default function StudentDetailsR() {
                 <div className="details-item">
                   <label>Gender</label>
 
-                  <p>{student.gender}</p>
+                  <p>{student.gender || "-"}</p>
                 </div>
 
                 <div className="details-item">
                   <label>Birth Date</label>
 
-                  <p>{new Date(student.birth_date).toLocaleDateString()}</p>
+                  <p>
+                    {student.birth_date
+                      ? new Date(student.birth_date).toLocaleDateString("en-PH")
+                      : "-"}
+                  </p>
                 </div>
 
                 <div className="details-item">
                   <label>Contact Number</label>
 
-                  <p>{student.contact_number}</p>
+                  <p>{student.contact_number || "-"}</p>
                 </div>
 
                 <div className="details-item">
                   <label>Email Address</label>
 
-                  <p>{student.email}</p>
+                  <p>{student.email || "-"}</p>
                 </div>
               </div>
             </div>
-            {/* ================================================ */}
-            {/* ACADEMIC INFORMATION */}
-            {/* ================================================ */}
+
+            {/* ================================================
+                  ACADEMIC INFORMATION
+              ================================================ */}
 
             <div className="details-card">
               <h3>Academic Information</h3>
@@ -322,7 +493,7 @@ export default function StudentDetailsR() {
                 <div className="details-item">
                   <label>Course</label>
 
-                  <p>{student.course_code}</p>
+                  <p>{student.course_code || "-"}</p>
                 </div>
 
                 <div className="details-item">
@@ -334,13 +505,13 @@ export default function StudentDetailsR() {
                 <div className="details-item">
                   <label>Section</label>
 
-                  <p>{student.section_name}</p>
+                  <p>{student.section_name || "Not Assigned"}</p>
                 </div>
 
                 <div className="details-item">
                   <label>Semester</label>
 
-                  <p>{student.semester_name}</p>
+                  <p>{student.semester_name || "-"}</p>
                 </div>
 
                 <div className="details-item">
@@ -351,9 +522,9 @@ export default function StudentDetailsR() {
               </div>
             </div>
 
-            {/* ================================================ */}
-            {/* ADDRESS INFORMATION */}
-            {/* ================================================ */}
+            {/* ================================================
+                  ADDRESS INFORMATION
+              ================================================ */}
 
             <div className="details-card">
               <h3>Address Information</h3>
@@ -403,12 +574,13 @@ export default function StudentDetailsR() {
               </div>
             </div>
 
-            {/* ================================================ */}
-            {/* ACTION BUTTONS */}
-            {/* ================================================ */}
+            {/* ================================================
+                  ACTION BUTTONS
+              ================================================ */}
 
             <div className="details-actions">
               <button
+                type="button"
                 className="record-btn"
                 onClick={() =>
                   navigate(`/registrar/student/${student.student_id}/AcadRecR`)
@@ -418,6 +590,7 @@ export default function StudentDetailsR() {
               </button>
 
               <button
+                type="button"
                 className="document-btn"
                 onClick={() =>
                   navigate(

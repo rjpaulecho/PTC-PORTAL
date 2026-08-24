@@ -5,137 +5,214 @@ import { logActivity } from "../../utils/activityLogger.js";
 const router = express.Router();
 
 // ======================================================
-// PERMISSION CHECK
-// ADMIN = 1
-// REGISTRAR = 5
+// ANNOUNCEMENT MANAGEMENT
+//
+// Expected server mount:
+//
+// app.use(
+//   "/api/announcement-management",
+//   authenticate,
+//   requireRole("Admin", "Registrar"),
+//   announcementManagementRouter
+// );
+//
+// SECURITY:
+//
+// Do NOT accept actor identity from frontend:
+//
+// created_by
+// updated_by
+// deleted_by
+// role_id
+//
+// Actor identity must always come from:
+//
+// req.user.user_id
+// req.user.role_name
+// req.user.role_id
 // ======================================================
 
-function hasAnnouncementPermission(role_id) {
-  return Number(role_id) === 1 || Number(role_id) === 2;
+// ======================================================
+// HELPERS
+// ======================================================
+
+function isPositiveInteger(value) {
+  return Number.isInteger(Number(value)) && Number(value) > 0;
+}
+
+function normalizeRecipientIds(recipients) {
+  if (!Array.isArray(recipients)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      recipients
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0),
+    ),
+  ];
+}
+
+function normalizeAttachmentIds(attachments) {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      attachments
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0),
+    ),
+  ];
 }
 
 // ======================================================
-// GET ALL ANNOUNCEMENTS
-// GET /api/announcements/manage
+// GET ALL ANNOUNCEMENTS FOR MANAGEMENT
+//
+// GET /api/announcement-management
+//
+// Admin + Registrar only via server middleware.
+// Includes inactive / future / expired announcements
+// because this is a management endpoint.
 // ======================================================
 
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await db.execute(`
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required.",
+      });
+    }
+
+    console.log("===== MANAGE ANNOUNCEMENTS =====");
+
+    console.log("ACTOR:", req.user.user_id, req.user.role_name);
+
+    const [rows] = await db.execute(
+      `
       SELECT
 
-        a.announcement_id,
-        a.title,
-        a.content,
+          a.announcement_id,
+          a.title,
+          a.content,
 
-        u.username AS created_by,
+          u.username AS created_by,
 
-        a.publish_date,
-        a.expiry_date,
-        a.is_active,
-        a.created_at,
+          a.publish_date,
+          a.expiry_date,
+          a.is_active,
+          a.created_at,
 
+          GROUP_CONCAT(
+              DISTINCT r.role_name
+              ORDER BY r.role_name
+              SEPARATOR ', '
+          ) AS recipients,
 
-        GROUP_CONCAT(
-          DISTINCT r.role_name
-          ORDER BY r.role_name
-          SEPARATOR ', '
-        ) AS recipients,
-
-
-        GROUP_CONCAT(
-          DISTINCT f.original_name
-          ORDER BY f.original_name
-          SEPARATOR ', '
-        ) AS attachments
-
+          GROUP_CONCAT(
+              DISTINCT f.original_name
+              ORDER BY f.original_name
+              SEPARATOR ', '
+          ) AS attachments
 
       FROM announcements a
 
-
       LEFT JOIN users u
-      ON u.user_id = a.created_by
-
+          ON u.user_id = a.created_by
 
       LEFT JOIN announcement_recipients ar
-      ON ar.announcement_id = a.announcement_id
-
+          ON ar.announcement_id = a.announcement_id
 
       LEFT JOIN roles r
-      ON r.role_id = ar.role_id
-
+          ON r.role_id = ar.role_id
 
       LEFT JOIN announcement_attachments aa
-      ON aa.announcement_id = a.announcement_id
-
+          ON aa.announcement_id = a.announcement_id
 
       LEFT JOIN files f
-      ON f.file_id = aa.file_id
-
+          ON f.file_id = aa.file_id
 
       GROUP BY
 
-        a.announcement_id,
-        a.title,
-        a.content,
-        u.username,
-        a.publish_date,
-        a.expiry_date,
-        a.is_active,
-        a.created_at
+          a.announcement_id,
+          a.title,
+          a.content,
+          u.username,
+          a.publish_date,
+          a.expiry_date,
+          a.is_active,
+          a.created_at
 
+      ORDER BY
+          a.created_at DESC
+      `,
+    );
 
-      ORDER BY a.created_at DESC
-
-    `);
-
-    res.json(rows);
+    return res.json(rows);
   } catch (error) {
     console.error("GET MANAGE ANNOUNCEMENTS ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to load announcements.",
     });
   }
 });
 
 // ======================================================
-// GET SINGLE ANNOUNCEMENT
-// GET /api/announcements/manage/:id
+// GET SINGLE ANNOUNCEMENT FOR MANAGEMENT
+//
+// GET /api/announcement-management/:id
 // ======================================================
 
 router.get("/:id", async (req, res) => {
   try {
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required.",
+      });
+    }
+
+    const announcementId = Number(req.params.id);
+
+    if (!Number.isInteger(announcementId) || announcementId <= 0) {
+      return res.status(400).json({
+        error: "Invalid announcement ID.",
+      });
+    }
+
+    // ====================================================
+    // ANNOUNCEMENT
+    // ====================================================
 
     const [rows] = await db.execute(
       `
-SELECT
+      SELECT
 
-a.announcement_id,
-a.title,
-a.content,
+          a.announcement_id,
+          a.title,
+          a.content,
 
-u.username AS created_by,
+          a.created_by,
 
-a.publish_date,
-a.expiry_date,
-a.is_active,
-a.created_at
+          u.username AS created_by_username,
 
+          a.publish_date,
+          a.expiry_date,
+          a.is_active,
+          a.created_at
 
-FROM announcements a
+      FROM announcements a
 
+      LEFT JOIN users u
+          ON u.user_id = a.created_by
 
-LEFT JOIN users u
+      WHERE a.announcement_id = ?
 
-ON u.user_id=a.created_by
-
-
-WHERE a.announcement_id=?
-
-`,
-      [id],
+      LIMIT 1
+      `,
+      [announcementId],
     );
 
     if (rows.length === 0) {
@@ -144,57 +221,73 @@ WHERE a.announcement_id=?
       });
     }
 
+    // ====================================================
+    // RECIPIENTS
+    // ====================================================
+
     const [recipientRows] = await db.execute(
       `
+      SELECT
 
-SELECT
+          r.role_id,
+          r.role_name
 
-r.role_id,
-r.role_name
+      FROM announcement_recipients ar
 
+      INNER JOIN roles r
+          ON r.role_id = ar.role_id
 
-FROM announcement_recipients ar
+      WHERE ar.announcement_id = ?
 
-
-INNER JOIN roles r
-
-ON r.role_id=ar.role_id
-
-
-WHERE ar.announcement_id=?
-
-`,
-      [id],
+      ORDER BY r.role_name
+      `,
+      [announcementId],
     );
+
+    // ====================================================
+    // ATTACHMENTS
+    // ====================================================
 
     const [attachmentRows] = await db.execute(
       `
+      SELECT
 
-SELECT
+          f.file_id,
+          f.original_name,
+          f.file_path,
+          f.file_size,
+          f.mime_type
 
-f.file_id,
-f.original_name,
-f.file_path,
-f.file_size,
-f.mime_type
+      FROM announcement_attachments aa
 
+      INNER JOIN files f
+          ON f.file_id = aa.file_id
 
-FROM announcement_attachments aa
+      WHERE aa.announcement_id = ?
 
-
-INNER JOIN files f
-
-ON f.file_id=aa.file_id
-
-
-WHERE aa.announcement_id=?
-
-`,
-      [id],
+      ORDER BY f.original_name
+      `,
+      [announcementId],
     );
 
-    res.json({
-      ...rows[0],
+    return res.json({
+      announcement_id: rows[0].announcement_id,
+
+      title: rows[0].title,
+
+      content: rows[0].content,
+
+      created_by: rows[0].created_by_username,
+
+      created_by_user_id: rows[0].created_by,
+
+      publish_date: rows[0].publish_date,
+
+      expiry_date: rows[0].expiry_date,
+
+      is_active: rows[0].is_active,
+
+      created_at: rows[0].created_at,
 
       recipients: recipientRows,
 
@@ -203,7 +296,7 @@ WHERE aa.announcement_id=?
   } catch (error) {
     console.error("GET SINGLE MANAGE ANNOUNCEMENT ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to load announcement.",
     });
   }
@@ -211,360 +304,555 @@ WHERE aa.announcement_id=?
 
 // ======================================================
 // CREATE ANNOUNCEMENT
-// POST /api/announcements/manage
+//
+// POST /api/announcement-management
+//
+// BODY:
+// {
+//   title,
+//   content,
+//   publish_date,
+//   expiry_date,
+//   is_active,
+//   recipients: [role_id, ...],
+//   attachments: [file_id, ...]
+// }
+//
+// DO NOT SEND:
+// created_by
+// role_id
+//
+// created_by = req.user.user_id
 // ======================================================
 
 router.post("/", async (req, res) => {
   const connection = await db.getConnection();
 
   try {
-    await connection.beginTransaction();
+    if (!req.user) {
+      connection.release();
 
-    const {
-      title,
-
-      content,
-
-      created_by,
-
-      role_id,
-
-      publish_date,
-
-      expiry_date,
-
-      is_active,
-
-      recipients,
-
-      attachments,
-    } = req.body;
-
-    if (!hasAnnouncementPermission(role_id)) {
-      return res.status(403).json({
-        error: "No permission to create announcement.",
+      return res.status(401).json({
+        error: "Authentication required.",
       });
     }
 
+    const actorUserId = Number(req.user.user_id);
+
+    if (!Number.isInteger(actorUserId) || actorUserId <= 0) {
+      connection.release();
+
+      return res.status(401).json({
+        error: "Invalid authenticated user.",
+      });
+    }
+
+    const {
+      title,
+      content,
+      publish_date,
+      expiry_date,
+      is_active,
+      recipients,
+      attachments,
+    } = req.body;
+
+    // ====================================================
+    // VALIDATION
+    // ====================================================
+
+    const cleanTitle = String(title ?? "").trim();
+
+    const cleanContent = String(content ?? "").trim();
+
+    if (!cleanTitle) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Announcement title is required.",
+      });
+    }
+
+    if (!cleanContent) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Announcement content is required.",
+      });
+    }
+
+    if (!publish_date) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Publish date is required.",
+      });
+    }
+
+    const recipientIds = normalizeRecipientIds(recipients);
+
+    if (recipientIds.length === 0) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "At least one recipient role is required.",
+      });
+    }
+
+    const attachmentIds = normalizeAttachmentIds(attachments);
+
+    const activeValue = Number(is_active) === 1 ? 1 : 0;
+
+    // ====================================================
+    // START TRANSACTION
+    // ====================================================
+
+    await connection.beginTransaction();
+
+    // ====================================================
+    // CREATE ANNOUNCEMENT
+    // ====================================================
+
     const [result] = await connection.execute(
       `
+        INSERT INTO announcements
+        (
+            title,
+            content,
+            created_by,
+            publish_date,
+            expiry_date,
+            is_active
+        )
 
-INSERT INTO announcements
-
-(
-
-title,
-content,
-created_by,
-publish_date,
-expiry_date,
-is_active
-
-)
-
-VALUES (?,?,?,?,?,?)
-
-`,
-
-      [title, content, created_by, publish_date, expiry_date, is_active],
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+      [
+        cleanTitle,
+        cleanContent,
+        actorUserId,
+        publish_date,
+        expiry_date || null,
+        activeValue,
+      ],
     );
 
-    const announcementId = result.insertId;
+    const announcementId = Number(result.insertId);
 
-    if (Array.isArray(recipients)) {
-      for (const recipient of recipients) {
-        await connection.execute(
-          `
+    // ====================================================
+    // RECIPIENTS
+    // ====================================================
 
-INSERT INTO announcement_recipients
+    for (const recipientId of recipientIds) {
+      await connection.execute(
+        `
+        INSERT INTO announcement_recipients
+        (
+            announcement_id,
+            role_id
+        )
 
-(
-
-announcement_id,
-role_id
-
-)
-
-VALUES (?,?)
-
-`,
-
-          [announcementId, recipient],
-        );
-      }
+        VALUES (?, ?)
+        `,
+        [announcementId, recipientId],
+      );
     }
 
-    if (Array.isArray(attachments)) {
-      for (const fileId of attachments) {
-        await connection.execute(
-          `
+    // ====================================================
+    // ATTACHMENTS
+    // ====================================================
 
-INSERT INTO announcement_attachments
+    for (const fileId of attachmentIds) {
+      await connection.execute(
+        `
+        INSERT INTO announcement_attachments
+        (
+            announcement_id,
+            file_id
+        )
 
-(
-
-announcement_id,
-file_id
-
-)
-
-VALUES (?,?)
-
-`,
-
-          [announcementId, fileId],
-        );
-      }
+        VALUES (?, ?)
+        `,
+        [announcementId, fileId],
+      );
     }
+
+    // ====================================================
+    // COMMIT
+    // ====================================================
 
     await connection.commit();
 
-    await logActivity(
-      created_by,
+    // ====================================================
+    // AUDIT
+    // ====================================================
 
-      "Create",
+    try {
+      await logActivity(
+        actorUserId,
+        "Create",
+        "Announcements",
+        `Created announcement "${cleanTitle}".`,
+      );
+    } catch (logError) {
+      console.error("ANNOUNCEMENT CREATE ACTIVITY LOG ERROR:", logError);
+    }
 
-      "Announcements",
+    return res.status(201).json({
+      success: true,
 
-      `Created announcement "${title}".`,
-    );
-
-    res.status(201).json({
       message: "Announcement created successfully.",
 
       announcement_id: announcementId,
     });
   } catch (error) {
-    await connection.rollback();
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("CREATE ANNOUNCEMENT ROLLBACK ERROR:", rollbackError);
+    }
 
     console.error("CREATE ANNOUNCEMENT ERROR:", error);
 
-    res.status(500).json({
-      error: error.message,
+    return res.status(500).json({
+      error: "Failed to create announcement.",
     });
   } finally {
-    connection.release();
+    try {
+      connection.release();
+    } catch {
+      // Connection may already have been released
+      // during an early validation return.
+    }
   }
 });
+
 // ======================================================
 // UPDATE ANNOUNCEMENT
-// PUT /api/announcements/manage/:id
+//
+// PUT /api/announcement-management/:id
+//
+// DO NOT SEND:
+// updated_by
+// role_id
+//
+// updated_by = req.user.user_id
 // ======================================================
 
 router.put("/:id", async (req, res) => {
   const connection = await db.getConnection();
 
   try {
-    await connection.beginTransaction();
+    if (!req.user) {
+      connection.release();
 
-    const { id } = req.params;
-
-    const {
-      title,
-
-      content,
-
-      publish_date,
-
-      expiry_date,
-
-      is_active,
-
-      recipients,
-
-      attachments,
-
-      updated_by,
-
-      role_id,
-    } = req.body;
-
-    if (!hasAnnouncementPermission(role_id)) {
-      return res.status(403).json({
-        error: "No permission to update announcement.",
+      return res.status(401).json({
+        error: "Authentication required.",
       });
     }
 
+    const actorUserId = Number(req.user.user_id);
+
+    const announcementId = Number(req.params.id);
+
+    if (!Number.isInteger(actorUserId) || actorUserId <= 0) {
+      connection.release();
+
+      return res.status(401).json({
+        error: "Invalid authenticated user.",
+      });
+    }
+
+    if (!Number.isInteger(announcementId) || announcementId <= 0) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Invalid announcement ID.",
+      });
+    }
+
+    const {
+      title,
+      content,
+      publish_date,
+      expiry_date,
+      is_active,
+      recipients,
+      attachments,
+    } = req.body;
+
+    // ====================================================
+    // VALIDATION
+    // ====================================================
+
+    const cleanTitle = String(title ?? "").trim();
+
+    const cleanContent = String(content ?? "").trim();
+
+    if (!cleanTitle) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Announcement title is required.",
+      });
+    }
+
+    if (!cleanContent) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Announcement content is required.",
+      });
+    }
+
+    if (!publish_date) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Publish date is required.",
+      });
+    }
+
+    const recipientIds = normalizeRecipientIds(recipients);
+
+    if (recipientIds.length === 0) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "At least one recipient role is required.",
+      });
+    }
+
+    const attachmentIds = normalizeAttachmentIds(attachments);
+
+    const activeValue = Number(is_active) === 1 ? 1 : 0;
+
+    // ====================================================
+    // CHECK ANNOUNCEMENT
+    // ====================================================
+
+    const [existingRows] = await connection.execute(
+      `
+        SELECT announcement_id
+        FROM announcements
+        WHERE announcement_id = ?
+        LIMIT 1
+        `,
+      [announcementId],
+    );
+
+    if (existingRows.length === 0) {
+      connection.release();
+
+      return res.status(404).json({
+        error: "Announcement not found.",
+      });
+    }
+
+    // ====================================================
+    // START TRANSACTION
+    // ====================================================
+
+    await connection.beginTransaction();
+
+    // ====================================================
+    // UPDATE ANNOUNCEMENT
+    // ====================================================
+
     await connection.execute(
       `
-
       UPDATE announcements
 
       SET
+          title = ?,
+          content = ?,
+          publish_date = ?,
+          expiry_date = ?,
+          is_active = ?
 
-      title=?,
-
-      content=?,
-
-      publish_date=?,
-
-      expiry_date=?,
-
-      is_active=?
-
-
-      WHERE announcement_id=?
-
+      WHERE announcement_id = ?
       `,
-
-      [title, content, publish_date, expiry_date, is_active, id],
+      [
+        cleanTitle,
+        cleanContent,
+        publish_date,
+        expiry_date || null,
+        activeValue,
+        announcementId,
+      ],
     );
 
+    // ====================================================
     // REMOVE OLD RECIPIENTS
+    // ====================================================
 
     await connection.execute(
       `
-
       DELETE FROM announcement_recipients
 
-      WHERE announcement_id=?
-
+      WHERE announcement_id = ?
       `,
-
-      [id],
+      [announcementId],
     );
 
+    // ====================================================
     // INSERT NEW RECIPIENTS
+    // ====================================================
 
-    if (Array.isArray(recipients)) {
-      for (const roleId of recipients) {
-        await connection.execute(
-          `
+    for (const recipientId of recipientIds) {
+      await connection.execute(
+        `
+        INSERT INTO announcement_recipients
+        (
+            announcement_id,
+            role_id
+        )
 
-          INSERT INTO announcement_recipients
-
-          (
-
-          announcement_id,
-
-          role_id
-
-          )
-
-
-          VALUES (?,?)
-
-          `,
-
-          [id, roleId],
-        );
-      }
+        VALUES (?, ?)
+        `,
+        [announcementId, recipientId],
+      );
     }
 
+    // ====================================================
     // REMOVE OLD ATTACHMENTS
+    // ====================================================
 
     await connection.execute(
       `
-
       DELETE FROM announcement_attachments
 
-      WHERE announcement_id=?
-
+      WHERE announcement_id = ?
       `,
-
-      [id],
+      [announcementId],
     );
 
+    // ====================================================
     // INSERT NEW ATTACHMENTS
+    // ====================================================
 
-    if (Array.isArray(attachments)) {
-      for (const fileId of attachments) {
-        await connection.execute(
-          `
+    for (const fileId of attachmentIds) {
+      await connection.execute(
+        `
+        INSERT INTO announcement_attachments
+        (
+            announcement_id,
+            file_id
+        )
 
-          INSERT INTO announcement_attachments
-
-          (
-
-          announcement_id,
-
-          file_id
-
-          )
-
-
-          VALUES (?,?)
-
-          `,
-
-          [id, fileId],
-        );
-      }
+        VALUES (?, ?)
+        `,
+        [announcementId, fileId],
+      );
     }
+
+    // ====================================================
+    // COMMIT
+    // ====================================================
 
     await connection.commit();
 
-    await logActivity(
-      updated_by,
+    // ====================================================
+    // AUDIT
+    // ====================================================
 
-      "Update",
+    try {
+      await logActivity(
+        actorUserId,
+        "Update",
+        "Announcements",
+        `Updated announcement "${cleanTitle}".`,
+      );
+    } catch (logError) {
+      console.error("ANNOUNCEMENT UPDATE ACTIVITY LOG ERROR:", logError);
+    }
 
-      "Announcements",
+    return res.json({
+      success: true,
 
-      `Updated announcement "${title}".`,
-    );
-
-    res.json({
       message: "Announcement updated successfully.",
     });
   } catch (error) {
-    await connection.rollback();
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("UPDATE ANNOUNCEMENT ROLLBACK ERROR:", rollbackError);
+    }
 
-    console.error(
-      "UPDATE ANNOUNCEMENT ERROR:",
+    console.error("UPDATE ANNOUNCEMENT ERROR:", error);
 
-      error,
-    );
-
-    res.status(500).json({
-      error: error.message,
+    return res.status(500).json({
+      error: "Failed to update announcement.",
     });
   } finally {
-    connection.release();
+    try {
+      connection.release();
+    } catch {
+      // Ignore already released connection.
+    }
   }
 });
 
 // ======================================================
 // DELETE ANNOUNCEMENT
-// DELETE /api/announcements/manage/:id
+//
+// DELETE /api/announcement-management/:id
+//
+// No actor body required.
+// Actor comes from req.user.user_id
 // ======================================================
 
 router.delete("/:id", async (req, res) => {
   const connection = await db.getConnection();
 
   try {
-    await connection.beginTransaction();
+    if (!req.user) {
+      connection.release();
 
-    const { id } = req.params;
-
-    const {
-      deleted_by,
-
-      role_id,
-    } = req.body;
-
-    if (!hasAnnouncementPermission(role_id)) {
-      return res.status(403).json({
-        error: "No permission to delete announcement.",
+      return res.status(401).json({
+        error: "Authentication required.",
       });
     }
 
+    const actorUserId = Number(req.user.user_id);
+
+    const announcementId = Number(req.params.id);
+
+    if (!Number.isInteger(actorUserId) || actorUserId <= 0) {
+      connection.release();
+
+      return res.status(401).json({
+        error: "Invalid authenticated user.",
+      });
+    }
+
+    if (!Number.isInteger(announcementId) || announcementId <= 0) {
+      connection.release();
+
+      return res.status(400).json({
+        error: "Invalid announcement ID.",
+      });
+    }
+
+    // ====================================================
+    // GET ANNOUNCEMENT
+    // ====================================================
+
     const [rows] = await connection.execute(
       `
+        SELECT title
 
-SELECT title
+        FROM announcements
 
-FROM announcements
+        WHERE announcement_id = ?
 
-WHERE announcement_id=?
-
-`,
-
-      [id],
+        LIMIT 1
+        `,
+      [announcementId],
     );
 
     if (rows.length === 0) {
-      await connection.rollback();
+      connection.release();
 
       return res.status(404).json({
         error: "Announcement not found.",
@@ -573,132 +861,213 @@ WHERE announcement_id=?
 
     const title = rows[0].title;
 
-    await connection.execute(
-      `
+    // ====================================================
+    // START TRANSACTION
+    // ====================================================
 
-DELETE FROM announcement_attachments
+    await connection.beginTransaction();
 
-WHERE announcement_id=?
-
-`,
-
-      [id],
-    );
+    // ====================================================
+    // REMOVE ATTACHMENT MAPPINGS
+    // ====================================================
 
     await connection.execute(
       `
+      DELETE FROM announcement_attachments
 
-DELETE FROM announcement_recipients
-
-WHERE announcement_id=?
-
-`,
-
-      [id],
+      WHERE announcement_id = ?
+      `,
+      [announcementId],
     );
+
+    // ====================================================
+    // REMOVE RECIPIENT MAPPINGS
+    // ====================================================
 
     await connection.execute(
       `
+      DELETE FROM announcement_recipients
 
-DELETE FROM announcements
-
-WHERE announcement_id=?
-
-`,
-
-      [id],
+      WHERE announcement_id = ?
+      `,
+      [announcementId],
     );
+
+    // ====================================================
+    // DELETE ANNOUNCEMENT
+    // ====================================================
+
+    await connection.execute(
+      `
+      DELETE FROM announcements
+
+      WHERE announcement_id = ?
+      `,
+      [announcementId],
+    );
+
+    // ====================================================
+    // COMMIT
+    // ====================================================
 
     await connection.commit();
 
-    await logActivity(
-      deleted_by,
+    // ====================================================
+    // AUDIT
+    // ====================================================
 
-      "Delete",
+    try {
+      await logActivity(
+        actorUserId,
+        "Delete",
+        "Announcements",
+        `Deleted announcement "${title}".`,
+      );
+    } catch (logError) {
+      console.error("ANNOUNCEMENT DELETE ACTIVITY LOG ERROR:", logError);
+    }
 
-      "Announcements",
+    return res.json({
+      success: true,
 
-      `Deleted announcement "${title}".`,
-    );
-
-    res.json({
       message: "Announcement deleted successfully.",
     });
   } catch (error) {
-    await connection.rollback();
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("DELETE ANNOUNCEMENT ROLLBACK ERROR:", rollbackError);
+    }
 
-    console.error(
-      "DELETE ANNOUNCEMENT ERROR:",
+    console.error("DELETE ANNOUNCEMENT ERROR:", error);
 
-      error,
-    );
-
-    res.status(500).json({
-      error: error.message,
+    return res.status(500).json({
+      error: "Failed to delete announcement.",
     });
   } finally {
-    connection.release();
+    try {
+      connection.release();
+    } catch {
+      // Ignore already released connection.
+    }
   }
 });
 
 // ======================================================
-// CHANGE STATUS
-// PATCH /api/announcements/manage/:id/status
+// CHANGE ANNOUNCEMENT STATUS
+//
+// PATCH /api/announcement-management/:id/status
+//
+// BODY:
+// {
+//   is_active: 0 | 1
+// }
+//
+// No updated_by or role_id from frontend.
 // ======================================================
 
 router.patch("/:id/status", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const {
-      is_active,
-
-      role_id,
-
-      updated_by,
-    } = req.body;
-
-    if (!hasAnnouncementPermission(role_id)) {
-      return res.status(403).json({
-        error: "No permission to change status.",
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Authentication required.",
       });
     }
 
+    const actorUserId = Number(req.user.user_id);
+
+    const announcementId = Number(req.params.id);
+
+    if (!Number.isInteger(actorUserId) || actorUserId <= 0) {
+      return res.status(401).json({
+        error: "Invalid authenticated user.",
+      });
+    }
+
+    if (!Number.isInteger(announcementId) || announcementId <= 0) {
+      return res.status(400).json({
+        error: "Invalid announcement ID.",
+      });
+    }
+
+    const { is_active } = req.body;
+
+    const activeValue = Number(is_active);
+
+    if (activeValue !== 0 && activeValue !== 1) {
+      return res.status(400).json({
+        error: "is_active must be either 0 or 1.",
+      });
+    }
+
+    // ====================================================
+    // CHECK ANNOUNCEMENT
+    // ====================================================
+
+    const [rows] = await db.execute(
+      `
+        SELECT
+            announcement_id,
+            title
+
+        FROM announcements
+
+        WHERE announcement_id = ?
+
+        LIMIT 1
+        `,
+      [announcementId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: "Announcement not found.",
+      });
+    }
+
+    // ====================================================
+    // UPDATE
+    // ====================================================
+
     await db.execute(
       `
+      UPDATE announcements
 
-UPDATE announcements
+      SET is_active = ?
 
-SET is_active=?
-
-WHERE announcement_id=?
-
-`,
-
-      [is_active, id],
+      WHERE announcement_id = ?
+      `,
+      [activeValue, announcementId],
     );
 
-    await logActivity(
-      updated_by,
+    // ====================================================
+    // AUDIT
+    // ====================================================
 
-      "Update",
+    try {
+      await logActivity(
+        actorUserId,
+        "Update",
+        "Announcements",
+        `Changed announcement "${rows[0].title}" status to ${
+          activeValue === 1 ? "Active" : "Inactive"
+        }.`,
+      );
+    } catch (logError) {
+      console.error("ANNOUNCEMENT STATUS ACTIVITY LOG ERROR:", logError);
+    }
 
-      "Announcements",
+    return res.json({
+      success: true,
 
-      `Changed announcement status.`,
-    );
+      message: "Announcement status updated successfully.",
 
-    res.json({
-      message: "Announcement status updated.",
+      is_active: activeValue,
     });
   } catch (error) {
-    console.error(
-      "STATUS UPDATE ERROR:",
+    console.error("STATUS UPDATE ERROR:", error);
 
-      error,
-    );
-
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to update status.",
     });
   }

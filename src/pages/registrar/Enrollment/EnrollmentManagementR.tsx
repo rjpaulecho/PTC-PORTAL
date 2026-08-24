@@ -1,8 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import DashboardLayout from "../../../components/Layout/DashboardLayout";
-import { authService } from "../../../services/auth.service";
+
 import { useNavigate } from "react-router-dom";
+
+import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
+import { authService } from "../../../services/auth.service";
+
 import "../../../styles/EnrollmentManagementR.css";
+
+// =====================================================
+// API
+// =====================================================
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/enrollments";
 
@@ -43,6 +51,7 @@ interface Enrollment {
   };
 
   enrollment_status: string;
+
   remarks: string | null;
 
   approval: {
@@ -57,7 +66,9 @@ interface Enrollment {
 
 interface EnrollmentResponse {
   success: boolean;
+
   data: Enrollment[];
+
   pagination: {
     page: number;
     limit: number;
@@ -66,7 +77,9 @@ interface EnrollmentResponse {
     hasNextPage: boolean;
     hasPreviousPage: boolean;
   };
+
   message?: string;
+  error?: string;
 }
 
 // =====================================================
@@ -77,18 +90,25 @@ export default function EnrollmentManagementR() {
   const navigate = useNavigate();
 
   // =====================================================
-  // AUTH SESSION
+  // AUTHENTICATION
   // =====================================================
 
   const user = authService.getSession();
+
+  const token = authService.getToken();
+
   const userRole = user?.role;
 
+  const authenticated = Boolean(user && token);
+
   // =====================================================
-  // STATES
+  // DATA
   // =====================================================
 
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
 
   // =====================================================
@@ -96,11 +116,17 @@ export default function EnrollmentManagementR() {
   // =====================================================
 
   const [search, setSearch] = useState("");
+
   const [status, setStatus] = useState("Pending");
+
   const [course, setCourse] = useState("All");
+
   const [year, setYear] = useState("All");
+
   const [section, setSection] = useState("All");
+
   const [academicYear, setAcademicYear] = useState("All");
+
   const [semester, setSemester] = useState("All");
 
   // =====================================================
@@ -108,25 +134,41 @@ export default function EnrollmentManagementR() {
   // =====================================================
 
   const [currentPage, setCurrentPage] = useState(1);
+
   const [totalPages, setTotalPages] = useState(1);
+
   const [totalEnrollments, setTotalEnrollments] = useState(0);
 
   // =====================================================
-  // AUTHENTICATION
+  // PAGE AUTH GUARD
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
-      navigate("/login");
+    // No session or no JWT
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
     }
-  }, [userRole, navigate]);
+
+    // Logged in but wrong role
+    if (userRole !== "Registrar") {
+      navigate(authService.getDashboardRoute(user!.role), {
+        replace: true,
+      });
+    }
+  }, [authenticated, userRole, navigate, user]);
 
   // =====================================================
   // FETCH ENROLLMENTS
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
+    if (!authenticated || userRole !== "Registrar") {
       return;
     }
 
@@ -135,11 +177,17 @@ export default function EnrollmentManagementR() {
     const loadEnrollments = async () => {
       try {
         setLoading(true);
+
         setError("");
+
+        // =============================================
+        // QUERY PARAMETERS
+        // =============================================
 
         const params = new URLSearchParams();
 
         params.set("page", String(currentPage));
+
         params.set("limit", "10");
 
         if (search.trim()) {
@@ -174,17 +222,29 @@ export default function EnrollmentManagementR() {
 
         console.log("GET REGISTRAR ENROLLMENTS:", requestUrl);
 
-        const response = await fetch(requestUrl, {
+        // =============================================
+        // IMPORTANT:
+        //
+        // authFetch() automatically sends:
+        //
+        // Authorization:
+        // Bearer <JWT>
+        //
+        // =============================================
+
+        const response = await authService.authFetch(requestUrl, {
           method: "GET",
+
           signal: controller.signal,
+
           headers: {
             Accept: "application/json",
           },
         });
 
-        // -----------------------------------------------
-        // READ RESPONSE SAFELY
-        // -----------------------------------------------
+        // =============================================
+        // READ RESPONSE
+        // =============================================
 
         const contentType = response.headers.get("content-type") || "";
 
@@ -203,27 +263,56 @@ export default function EnrollmentManagementR() {
           );
         }
 
-        // -----------------------------------------------
-        // HTTP ERROR
-        // -----------------------------------------------
+        // =============================================
+        // 401
+        // JWT missing / invalid / expired
+        // =============================================
 
-        if (!response.ok) {
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =============================================
+        // 403
+        // JWT valid but role not allowed
+        // =============================================
+
+        if (response.status === 403) {
           throw new Error(
-            data?.message || `Request failed with status ${response.status}.`,
+            data?.message ||
+              "You are not authorized to access Registrar enrollments.",
           );
         }
 
-        // -----------------------------------------------
+        // =============================================
+        // HTTP ERROR
+        // =============================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Request failed with status ${response.status}.`,
+          );
+        }
+
+        // =============================================
         // API ERROR
-        // -----------------------------------------------
+        // =============================================
 
         if (!data?.success) {
           throw new Error(data?.message || "Failed to load enrollments.");
         }
 
-        // -----------------------------------------------
+        // =============================================
         // SUCCESS
-        // -----------------------------------------------
+        // =============================================
 
         setEnrollments(Array.isArray(data.data) ? data.data : []);
 
@@ -231,7 +320,7 @@ export default function EnrollmentManagementR() {
 
         setTotalEnrollments(data.pagination?.total || 0);
       } catch (err) {
-        // Ignore aborted requests
+        // Request cancelled
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
@@ -258,12 +347,13 @@ export default function EnrollmentManagementR() {
       }
     };
 
-    loadEnrollments();
+    void loadEnrollments();
 
     return () => {
       controller.abort();
     };
   }, [
+    authenticated,
     userRole,
     currentPage,
     search,
@@ -273,6 +363,7 @@ export default function EnrollmentManagementR() {
     section,
     academicYear,
     semester,
+    navigate,
   ]);
 
   // =====================================================
@@ -282,6 +373,7 @@ export default function EnrollmentManagementR() {
   const courseOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         enrollments
           .map((item) => item.course.course_id.toString())
@@ -293,6 +385,7 @@ export default function EnrollmentManagementR() {
   const yearOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         enrollments
           .map((item) => item.section.year_level?.toString())
@@ -304,6 +397,7 @@ export default function EnrollmentManagementR() {
   const sectionOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         enrollments
           .map((item) => item.section.section_id?.toString())
@@ -315,6 +409,7 @@ export default function EnrollmentManagementR() {
   const academicYearOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         enrollments
           .map((item) => item.academic_period.academic_year_id.toString())
@@ -326,6 +421,7 @@ export default function EnrollmentManagementR() {
   const semesterOptions = useMemo(() => {
     return [
       "All",
+
       ...new Set(
         enrollments
           .map((item) => item.academic_period.semester_id.toString())
@@ -340,26 +436,29 @@ export default function EnrollmentManagementR() {
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(event.target.value);
+
     setCurrentPage(1);
   };
 
   const handleFilterChange = (
     setter: React.Dispatch<React.SetStateAction<string>>,
+
     value: string,
   ) => {
     setter(value);
+
     setCurrentPage(1);
   };
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
-      setCurrentPage((prev) => prev - 1);
+      setCurrentPage((previous) => previous - 1);
     }
   };
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
-      setCurrentPage((prev) => prev + 1);
+      setCurrentPage((previous) => previous + 1);
     }
   };
 
@@ -368,10 +467,10 @@ export default function EnrollmentManagementR() {
   };
 
   // =====================================================
-  // AUTH GUARD
+  // DON'T RENDER IF NOT AUTHORIZED
   // =====================================================
 
-  if (!user || userRole !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
 
@@ -382,9 +481,9 @@ export default function EnrollmentManagementR() {
   return (
     <DashboardLayout>
       <div className="registrar-enrollment-management">
-        {/* =================================================
+        {/* ===============================================
             HEADER
-        ================================================= */}
+        =============================================== */}
 
         <div className="registrar-enrollment-header">
           <div>
@@ -394,13 +493,14 @@ export default function EnrollmentManagementR() {
           </div>
         </div>
 
-        {/* =================================================
+        {/* ===============================================
             STATISTICS
-        ================================================= */}
+        =============================================== */}
 
         <div className="registrar-enrollment-statistics">
           <div className="registrar-enrollment-card">
             <span>Total Enrollments</span>
+
             <h2>{totalEnrollments}</h2>
           </div>
 
@@ -441,9 +541,9 @@ export default function EnrollmentManagementR() {
           </div>
         </div>
 
-        {/* =================================================
+        {/* ===============================================
             TOOLBAR
-        ================================================= */}
+        =============================================== */}
 
         <div className="registrar-enrollment-toolbar">
           <div className="registrar-enrollment-search">
@@ -460,7 +560,9 @@ export default function EnrollmentManagementR() {
 
             <select
               value={status}
-              onChange={(e) => handleFilterChange(setStatus, e.target.value)}
+              onChange={(event) =>
+                handleFilterChange(setStatus, event.target.value)
+              }
             >
               <option value="All">All Status</option>
 
@@ -477,7 +579,9 @@ export default function EnrollmentManagementR() {
 
             <select
               value={course}
-              onChange={(e) => handleFilterChange(setCourse, e.target.value)}
+              onChange={(event) =>
+                handleFilterChange(setCourse, event.target.value)
+              }
             >
               {courseOptions.map((item) => (
                 <option key={item} value={item}>
@@ -490,7 +594,9 @@ export default function EnrollmentManagementR() {
 
             <select
               value={year}
-              onChange={(e) => handleFilterChange(setYear, e.target.value)}
+              onChange={(event) =>
+                handleFilterChange(setYear, event.target.value)
+              }
             >
               {yearOptions.map((item) => (
                 <option key={item} value={item}>
@@ -503,7 +609,9 @@ export default function EnrollmentManagementR() {
 
             <select
               value={section}
-              onChange={(e) => handleFilterChange(setSection, e.target.value)}
+              onChange={(event) =>
+                handleFilterChange(setSection, event.target.value)
+              }
             >
               {sectionOptions.map((item) => (
                 <option key={item} value={item}>
@@ -516,8 +624,8 @@ export default function EnrollmentManagementR() {
 
             <select
               value={academicYear}
-              onChange={(e) =>
-                handleFilterChange(setAcademicYear, e.target.value)
+              onChange={(event) =>
+                handleFilterChange(setAcademicYear, event.target.value)
               }
             >
               {academicYearOptions.map((item) => (
@@ -533,7 +641,9 @@ export default function EnrollmentManagementR() {
 
             <select
               value={semester}
-              onChange={(e) => handleFilterChange(setSemester, e.target.value)}
+              onChange={(event) =>
+                handleFilterChange(setSemester, event.target.value)
+              }
             >
               {semesterOptions.map((item) => (
                 <option key={item} value={item}>
@@ -544,9 +654,9 @@ export default function EnrollmentManagementR() {
           </div>
         </div>
 
-        {/* =================================================
+        {/* ===============================================
             TABLE
-        ================================================= */}
+        =============================================== */}
 
         <div className="registrar-enrollment-table-wrapper">
           <div className="enrollment-table-container">
@@ -554,15 +664,25 @@ export default function EnrollmentManagementR() {
               <thead>
                 <tr>
                   <th>ID</th>
+
                   <th>Student Name</th>
+
                   <th>Student No.</th>
+
                   <th>Course</th>
+
                   <th>Year</th>
+
                   <th>Section</th>
+
                   <th>Semester</th>
+
                   <th>Subjects</th>
+
                   <th>Units</th>
+
                   <th>Status</th>
+
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -675,6 +795,7 @@ export default function EnrollmentManagementR() {
                       <td>
                         <div className="action-buttons">
                           <button
+                            type="button"
                             className="view-btn"
                             onClick={() =>
                               navigate(
@@ -693,12 +814,13 @@ export default function EnrollmentManagementR() {
           </div>
         </div>
 
-        {/* =================================================
+        {/* ===============================================
             PAGINATION
-        ================================================= */}
+        =============================================== */}
 
         <div className="registrar-enrollment-pagination">
           <button
+            type="button"
             className="pagination-btn"
             disabled={currentPage === 1}
             onClick={handlePreviousPage}
@@ -711,9 +833,11 @@ export default function EnrollmentManagementR() {
               {
                 length: totalPages,
               },
+
               (_, index) => index + 1,
             ).map((page) => (
               <button
+                type="button"
                 key={page}
                 className={
                   currentPage === page
@@ -728,6 +852,7 @@ export default function EnrollmentManagementR() {
           </div>
 
           <button
+            type="button"
             className="pagination-btn"
             disabled={currentPage === totalPages}
             onClick={handleNextPage}

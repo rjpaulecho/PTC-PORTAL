@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from "react";
+
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
+
 import { useNavigate } from "react-router-dom";
 
 import DepartmentModal from "./DepartmentModal";
+
 import type { Department } from "./DepartmentModal";
-import "../../../styles/DepartmentModal.css";
+
 import "../../../styles/DepartmentManagementR.css";
 
 // =====================================================
@@ -26,6 +30,8 @@ interface DepartmentResponse {
   departments?: Department[];
 
   message?: string;
+
+  error?: string;
 }
 
 // =====================================================
@@ -35,9 +41,17 @@ interface DepartmentResponse {
 export default function DepartmentManagementR() {
   const navigate = useNavigate();
 
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
   const user = authService.getSession();
 
+  const token = authService.getToken();
+
   const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // DEPARTMENTS
@@ -65,25 +79,60 @@ export default function DepartmentManagementR() {
     useState<Department | null>(null);
 
   // =====================================================
-  // AUTHENTICATION
+  // AUTHORIZATION
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
-      navigate("/login");
+    // No session or token
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
     }
-  }, [userRole, navigate]);
+
+    // Logged in but wrong role
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, user, navigate]);
 
   // =====================================================
   // LOAD DEPARTMENTS
   // =====================================================
 
   const loadDepartments = async () => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
     try {
       setLoading(true);
+
       setError("");
 
-      const response = await fetch(API_BASE_URL, {
+      console.log("GET REGISTRAR DEPARTMENTS:", API_BASE_URL);
+
+      // ===============================================
+      // AUTHENTICATED REQUEST
+      //
+      // authFetch automatically adds:
+      //
+      // Authorization: Bearer <JWT>
+      // ===============================================
+
+      const response = await authService.authFetch(API_BASE_URL, {
         method: "GET",
 
         headers: {
@@ -91,13 +140,17 @@ export default function DepartmentManagementR() {
         },
       });
 
-      // =================================================
+      // ===============================================
       // CHECK CONTENT TYPE
-      // =================================================
+      // ===============================================
 
       const contentType = response.headers.get("content-type") || "";
 
-      if (!contentType.includes("application/json")) {
+      let data: DepartmentResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
         const text = await response.text();
 
         throw new Error(
@@ -108,31 +161,55 @@ export default function DepartmentManagementR() {
         );
       }
 
-      // =================================================
-      // RESPONSE
-      // =================================================
+      // ===============================================
+      // 401
+      // ===============================================
 
-      const data: DepartmentResponse = await response.json();
+      if (response.status === 401) {
+        authService.logout();
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load departments.");
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
       }
 
-      // =================================================
+      // ===============================================
+      // 403
+      // ===============================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "You are not authorized to manage departments.",
+        );
+      }
+
+      // ===============================================
+      // HTTP ERROR
+      // ===============================================
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Failed to load departments (${response.status}).`,
+        );
+      }
+
+      // ===============================================
+      // API ERROR
+      // ===============================================
+
+      if (!data?.success) {
+        throw new Error(data?.message || "Failed to load departments.");
+      }
+
+      // ===============================================
       // SUPPORT BOTH RESPONSE FORMATS
-      //
-      // {
-      //   success: true,
-      //   data: [...]
-      // }
-      //
-      // OR
-      //
-      // {
-      //   success: true,
-      //   departments: [...]
-      // }
-      // =================================================
+      // ===============================================
 
       const loadedDepartments = Array.isArray(data.data)
         ? data.data
@@ -140,11 +217,23 @@ export default function DepartmentManagementR() {
           ? data.departments
           : [];
 
+      // ===============================================
+      // SUCCESS
+      // ===============================================
+
       setDepartments(loadedDepartments);
     } catch (err) {
       console.error("GET DEPARTMENTS ERROR:", err);
 
       setDepartments([]);
+
+      if (err instanceof TypeError) {
+        setError(
+          "Unable to connect to the department server. Make sure the backend is running on port 3000.",
+        );
+
+        return;
+      }
 
       setError(
         err instanceof Error ? err.message : "Unable to load departments.",
@@ -159,12 +248,12 @@ export default function DepartmentManagementR() {
   // =====================================================
 
   useEffect(() => {
-    if (userRole !== "Registrar") {
+    if (!authenticated || userRole !== "Registrar") {
       return;
     }
 
-    loadDepartments();
-  }, [userRole]);
+    void loadDepartments();
+  }, [authenticated, userRole]);
 
   // =====================================================
   // ADD DEPARTMENT
@@ -233,7 +322,7 @@ export default function DepartmentManagementR() {
   // AUTH GUARD
   // =====================================================
 
-  if (!user || userRole !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
 
@@ -299,7 +388,7 @@ export default function DepartmentManagementR() {
           <button
             type="button"
             className="refresh-department-btn"
-            onClick={loadDepartments}
+            onClick={() => void loadDepartments()}
             disabled={loading}
           >
             {loading ? "Loading..." : "Refresh"}
@@ -374,11 +463,7 @@ export default function DepartmentManagementR() {
                   !error &&
                   filteredDepartments.map((department) => (
                     <tr key={department.department_id}>
-                      {/* ID */}
-
                       <td>{department.department_id}</td>
-
-                      {/* CODE */}
 
                       <td>
                         <span className="department-code">
@@ -386,23 +471,19 @@ export default function DepartmentManagementR() {
                         </span>
                       </td>
 
-                      {/* NAME */}
-
                       <td>
                         <div className="department-name">
                           <strong>{department.department_name}</strong>
                         </div>
                       </td>
 
-                      {/* CREATED */}
-
                       <td>
                         {department.created_at
-                          ? new Date(department.created_at).toLocaleDateString()
+                          ? new Date(department.created_at).toLocaleDateString(
+                              "en-PH",
+                            )
                           : "—"}
                       </td>
-
-                      {/* ACTIONS */}
 
                       <td>
                         <div className="department-actions">

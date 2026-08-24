@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+
 import { useNavigate, useParams } from "react-router-dom";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
+
 import { authService } from "../../../services/auth.service";
 
 import "../../../styles/RegistrarStudentDocument.css";
@@ -64,12 +66,19 @@ interface DocumentResponse {
   success: boolean;
 
   message?: string;
+  error?: string;
 
   student: Student;
 
   totalDocuments: number;
 
   documents: StudentDocument[];
+}
+
+interface VerifyDocumentResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
 }
 
 // =====================================================
@@ -79,9 +88,19 @@ interface DocumentResponse {
 export default function StudentDocumentsR() {
   const navigate = useNavigate();
 
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
+
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
 
   const user = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
 
   // =====================================================
   // STATES
@@ -93,37 +112,222 @@ export default function StudentDocumentsR() {
 
   const [loading, setLoading] = useState(true);
 
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+
   const [error, setError] = useState("");
+
+  // =====================================================
+  // AUTHORIZATION
+  // =====================================================
+
+  useEffect(() => {
+    // No session or JWT
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    // Authenticated but not Registrar
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, user, navigate]);
 
   // =====================================================
   // FETCH DOCUMENTS
   // =====================================================
 
-  const fetchDocuments = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      setError("");
-
-      const response = await fetch(`${API_BASE_URL}/${id}/documents`);
-
-      const data: DocumentResponse = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to fetch student documents.");
+  const fetchDocuments = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!authenticated || userRole !== "Registrar") {
+        return;
       }
 
-      setStudent(data.student);
+      if (!id) {
+        setError("Invalid student ID.");
 
-      setDocuments(data.documents);
-    } catch (error) {
-      console.error(error);
+        setLoading(false);
 
-      setError("Unable to load student documents.");
-    } finally {
-      setLoading(false);
+        return;
+      }
+
+      const studentId = Number(id);
+
+      if (!Number.isInteger(studentId) || studentId <= 0) {
+        setError("Invalid student ID.");
+
+        setLoading(false);
+
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        setError("");
+
+        const requestUrl = `${API_BASE_URL}/${studentId}/documents`;
+
+        console.log("GET STUDENT DOCUMENTS:", requestUrl);
+
+        // =============================================
+        // JWT AUTHENTICATED REQUEST
+        //
+        // authFetch automatically sends:
+        //
+        // Authorization: Bearer <JWT>
+        // =============================================
+
+        const response = await authService.authFetch(requestUrl, {
+          method: "GET",
+
+          signal,
+
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        // =============================================
+        // SAFE RESPONSE READ
+        // =============================================
+
+        const contentType = response.headers.get("content-type") || "";
+
+        let data: DocumentResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        // =============================================
+        // 401
+        // Missing / invalid / expired JWT
+        // =============================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // =============================================
+        // 403
+        // Valid JWT, wrong role
+        // =============================================
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.message ||
+              "You are not authorized to access student documents.",
+          );
+        }
+
+        // =============================================
+        // HTTP ERROR
+        // =============================================
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              `Unable to load student documents (${response.status}).`,
+          );
+        }
+
+        // =============================================
+        // API ERROR
+        // =============================================
+
+        if (!data?.success) {
+          throw new Error(
+            data?.message || "Failed to fetch student documents.",
+          );
+        }
+
+        // =============================================
+        // SUCCESS
+        // =============================================
+
+        setStudent(data.student);
+
+        setDocuments(Array.isArray(data.documents) ? data.documents : []);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
+        console.error("GET STUDENT DOCUMENTS ERROR:", err);
+
+        setStudent(null);
+
+        setDocuments([]);
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the student documents server. Make sure the backend is running on port 3000.",
+          );
+
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load student documents.",
+        );
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [authenticated, userRole, id, navigate],
+  );
+
+  // =====================================================
+  // LOAD DATA
+  // =====================================================
+
+  useEffect(() => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
     }
-  }, [id]);
+
+    const controller = new AbortController();
+
+    void fetchDocuments(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [authenticated, userRole, fetchDocuments]);
 
   // =====================================================
   // VERIFY DOCUMENT
@@ -131,46 +335,119 @@ export default function StudentDocumentsR() {
 
   const handleVerifyDocument = async (
     documentId: number,
+
     status: "Verified" | "Rejected",
   ) => {
+    if (!authenticated || userRole !== "Registrar") {
+      return;
+    }
+
+    let remarks = "";
+
+    // =============================================
+    // REJECTION REMARKS
+    // =============================================
+
+    if (status === "Rejected") {
+      remarks = window.prompt("Enter rejection remarks:") || "";
+
+      if (!remarks.trim()) {
+        return;
+      }
+    }
+
     try {
-      let remarks = "";
+      setActionLoading(documentId);
 
-      if (status === "Rejected") {
-        remarks = window.prompt("Enter rejection remarks:") || "";
+      setError("");
 
-        if (!remarks.trim()) {
-          return;
-        }
+      const requestUrl = `${API_BASE_URL}/documents/${documentId}/verify`;
+
+      console.log("VERIFY STUDENT DOCUMENT:", requestUrl);
+
+      // =============================================
+      // JWT AUTHENTICATED REQUEST
+      // =============================================
+
+      const response = await authService.authFetch(requestUrl, {
+        method: "PUT",
+
+        body: JSON.stringify({
+          verification_status: status,
+
+          remarks: remarks.trim(),
+        }),
+      });
+
+      // =============================================
+      // SAFE RESPONSE READ
+      // =============================================
+
+      const contentType = response.headers.get("content-type") || "";
+
+      let data: VerifyDocumentResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+
+        throw new Error(
+          `Server returned a non-JSON response (${response.status}): ${text.slice(
+            0,
+            200,
+          )}`,
+        );
       }
 
-      const response = await fetch(
-        `${API_BASE_URL}/documents/${documentId}/verify`,
-        {
-          method: "PUT",
+      // =============================================
+      // 401
+      // =============================================
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+      if (response.status === 401) {
+        authService.logout();
 
-          body: JSON.stringify({
-            verification_status: status,
-            remarks,
-          }),
-        },
-      );
+        navigate("/login", {
+          replace: true,
+        });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Verification failed.");
+        return;
       }
+
+      // =============================================
+      // 403
+      // =============================================
+
+      if (response.status === 403) {
+        throw new Error(
+          data?.message ||
+            "You are not authorized to verify student documents.",
+        );
+      }
+
+      // =============================================
+      // HTTP / API ERROR
+      // =============================================
+
+      if (!response.ok || !data?.success) {
+        throw new Error(
+          data?.message || data?.error || "Document verification failed.",
+        );
+      }
+
+      // =============================================
+      // RELOAD DOCUMENTS
+      // =============================================
 
       await fetchDocuments();
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error("VERIFY DOCUMENT ERROR:", err);
 
-      alert("Unable to verify document.");
+      setError(
+        err instanceof Error ? err.message : "Unable to verify document.",
+      );
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -180,23 +457,24 @@ export default function StudentDocumentsR() {
 
   const statistics = useMemo(() => {
     let pending = 0;
-
     let verified = 0;
-
     let rejected = 0;
 
-    documents.forEach((doc) => {
-      switch (doc.verification_status) {
+    documents.forEach((document) => {
+      switch (document.verification_status) {
         case "Pending":
           pending++;
+
           break;
 
         case "Verified":
           verified++;
+
           break;
 
         case "Rejected":
           rejected++;
+
           break;
 
         default:
@@ -216,34 +494,23 @@ export default function StudentDocumentsR() {
   }, [documents]);
 
   // =====================================================
-  // LOAD DATA
+  // AUTH RENDER GUARD
   // =====================================================
 
-  useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
-
-  // =====================================================
-  // AUTHORIZATION
-  // =====================================================
-
-  useEffect(() => {
-    if (!user || user.role !== "Registrar") {
-      navigate("/login");
-    }
-  }, [user, navigate]);
-
-  if (!user || user.role !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
-  } // =====================================================
+  }
+
+  // =====================================================
   // RENDER
   // =====================================================
+
   return (
     <DashboardLayout>
       <div className="registrar-documentsR-container">
-        {/* ===================================================== */}
-        {/* HEADER */}
-        {/* ===================================================== */}
+        {/* ===============================================
+            HEADER
+        =============================================== */}
 
         <div className="registrar-documentsR-header">
           <div>
@@ -253,43 +520,44 @@ export default function StudentDocumentsR() {
           </div>
 
           <button
+            type="button"
             className="back-btn"
-            onClick={() => navigate(`/registrar/student/listR/${id}`)}
+            onClick={() => navigate("/registrar/student/listR")}
           >
             ← Back to Student list
           </button>
         </div>
 
-        {/* ===================================================== */}
-        {/* LOADING */}
-        {/* ===================================================== */}
+        {/* ===============================================
+            LOADING
+        =============================================== */}
 
         {loading && (
           <div className="details-message">Loading student documents...</div>
         )}
 
-        {/* ===================================================== */}
-        {/* ERROR */}
-        {/* ===================================================== */}
+        {/* ===============================================
+            ERROR
+        =============================================== */}
 
         {!loading && error && (
           <div className="details-message error">{error}</div>
         )}
 
-        {/* ===================================================== */}
-        {/* CONTENT */}
-        {/* ===================================================== */}
+        {/* ===============================================
+            CONTENT
+        =============================================== */}
 
         {!loading && !error && student && (
           <>
-            {/* ================================================ */}
-            {/* STUDENT SUMMARY */}
-            {/* ================================================ */}
+            {/* =========================================
+                  STUDENT SUMMARY
+              ========================================= */}
 
             <div className="student-summary-card">
               <div className="student-summary-left">
                 <div className="student-avatar">
-                  {student.first_name.charAt(0)}
+                  {student.first_name?.charAt(0).toUpperCase() || "S"}
                 </div>
 
                 <div>
@@ -304,7 +572,7 @@ export default function StudentDocumentsR() {
                   <p>{student.student_number}</p>
 
                   <span
-                    className={`status ${student.status
+                    className={`status ${(student.status || "")
                       .toLowerCase()
                       .replace(/\s+/g, "-")}`}
                   >
@@ -316,55 +584,63 @@ export default function StudentDocumentsR() {
               <div className="student-summary-right">
                 <div className="summary-item">
                   <span>Course</span>
+
                   <strong>{student.course_code}</strong>
                 </div>
 
                 <div className="summary-item">
                   <span>Year Level</span>
+
                   <strong>Year {student.year_level}</strong>
                 </div>
 
                 <div className="summary-item">
                   <span>Section</span>
-                  <strong>{student.section_name}</strong>
+
+                  <strong>{student.section_name || "Not Assigned"}</strong>
                 </div>
 
                 <div className="summary-item">
                   <span>Semester</span>
-                  <strong>{student.semester_name}</strong>
+
+                  <strong>{student.semester_name || "—"}</strong>
                 </div>
               </div>
             </div>
 
-            {/* ================================================ */}
-            {/* DOCUMENT STATISTICS */}
-            {/* ================================================ */}
+            {/* =========================================
+                  DOCUMENT STATISTICS
+              ========================================= */}
 
             <div className="document-statistics">
               <div className="document-card">
                 <span>Total Documents</span>
+
                 <h2>{statistics.total}</h2>
               </div>
 
               <div className="document-card">
                 <span>Pending</span>
+
                 <h2>{statistics.pending}</h2>
               </div>
 
               <div className="document-card">
                 <span>Verified</span>
+
                 <h2>{statistics.verified}</h2>
               </div>
 
               <div className="document-card">
                 <span>Rejected</span>
+
                 <h2>{statistics.rejected}</h2>
               </div>
             </div>
 
-            {/* ================================================ */}
-            {/* DOCUMENTS TABLE */}
-            {/* ================================================ */}
+            {/* =========================================
+                  DOCUMENTS TABLE
+              ========================================= */}
 
             <div className="documents-card">
               <h3>Uploaded Documents</h3>
@@ -374,11 +650,17 @@ export default function StudentDocumentsR() {
                   <thead>
                     <tr>
                       <th>Document Type</th>
+
                       <th>File Name</th>
+
                       <th>Uploaded</th>
+
                       <th>Status</th>
+
                       <th>Verified By</th>
+
                       <th>Verified At</th>
+
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -405,7 +687,9 @@ export default function StudentDocumentsR() {
 
                           <td>
                             <span
-                              className={`status ${document.verification_status
+                              className={`status ${(
+                                document.verification_status || ""
+                              )
                                 .toLowerCase()
                                 .replace(/\s+/g, "-")}`}
                             >
@@ -423,6 +707,8 @@ export default function StudentDocumentsR() {
 
                           <td>
                             <div className="document-actions">
+                              {/* PREVIEW / DOWNLOAD */}
+
                               {document.document_url && (
                                 <>
                                   <a
@@ -444,10 +730,16 @@ export default function StudentDocumentsR() {
                                 </>
                               )}
 
+                              {/* VERIFY / REJECT */}
+
                               {document.verification_status === "Pending" && (
                                 <>
                                   <button
+                                    type="button"
                                     className="approve-btn"
+                                    disabled={
+                                      actionLoading === document.document_id
+                                    }
                                     onClick={() =>
                                       handleVerifyDocument(
                                         document.document_id,
@@ -455,11 +747,17 @@ export default function StudentDocumentsR() {
                                       )
                                     }
                                   >
-                                    Approve
+                                    {actionLoading === document.document_id
+                                      ? "Processing..."
+                                      : "Approve"}
                                   </button>
 
                                   <button
+                                    type="button"
                                     className="reject-btn"
+                                    disabled={
+                                      actionLoading === document.document_id
+                                    }
                                     onClick={() =>
                                       handleVerifyDocument(
                                         document.document_id,
@@ -472,8 +770,11 @@ export default function StudentDocumentsR() {
                                 </>
                               )}
 
+                              {/* REMARKS */}
+
                               {document.remarks && (
                                 <button
+                                  type="button"
                                   className="remarks-btn"
                                   onClick={() => alert(document.remarks)}
                                 >
@@ -490,12 +791,13 @@ export default function StudentDocumentsR() {
               </div>
             </div>
 
-            {/* ================================================ */}
-            {/* FOOTER ACTIONS */}
-            {/* ================================================ */}
+            {/* =========================================
+                  FOOTER ACTIONS
+              ========================================= */}
 
             <div className="documents-actions">
               <button
+                type="button"
                 className="back-btn"
                 onClick={() =>
                   navigate(`/registrar/student/DetailsR/${student.student_id}`)
@@ -505,6 +807,7 @@ export default function StudentDocumentsR() {
               </button>
 
               <button
+                type="button"
                 className="record-btn"
                 onClick={() =>
                   navigate(`/registrar/student/${student.student_id}/AcadRecR`)

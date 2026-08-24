@@ -1,16 +1,65 @@
 import DashboardLayout from "../../../../components/Layout/DashboardLayout";
 import { authService } from "../../../../services/auth.service";
 import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+
 import "../../../../styles/SubjectManagementR.css";
 
 export default function SubjectManagementR() {
   const navigate = useNavigate();
-  const user = authService.getSession();
 
-  if (!user || user.role !== "Registrar") {
-    navigate("/login");
+  // =====================================================
+  // AUTHENTICATION
+  // =====================================================
+
+  const user = authService.getSession();
+  const token = authService.getToken();
+
+  const userRole = user?.role;
+
+  const authenticated = Boolean(user && token);
+
+  // =====================================================
+  // AUTHORIZATION
+  // =====================================================
+
+  useEffect(() => {
+    // No valid session or JWT
+    if (!authenticated) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    // Logged in but wrong role
+    if (userRole !== "Registrar") {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+    }
+  }, [authenticated, userRole, user, navigate]);
+
+  // =====================================================
+  // AUTH RENDER GUARD
+  // =====================================================
+
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <DashboardLayout>
@@ -32,7 +81,7 @@ export default function SubjectManagementR() {
           <button
             type="button"
             className="back-btn"
-            onClick={() => navigate("/registrar/enrollment")}
+            onClick={() => navigate("/registrar/enrollment/management")}
           >
             ← Back to Enrollments
           </button>
@@ -65,7 +114,7 @@ export default function SubjectManagementR() {
             <button
               type="button"
               className="primary-btn"
-              onClick={() => navigate("/registrar/enrollment")}
+              onClick={() => navigate("/registrar/enrollment/management")}
             >
               Go to Enrollment Management
             </button>

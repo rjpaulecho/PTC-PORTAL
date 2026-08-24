@@ -2,8 +2,12 @@ import express from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import jwt from "jsonwebtoken";
+import authenticate from "../middleware/authenticate.js";
+
 import db from "../db.js";
 import { logActivity } from "../utils/activityLogger.js";
+
 const router = express.Router();
 
 // =======================
@@ -23,8 +27,13 @@ const transporter = nodemailer.createTransport({
 // LOGIN
 // =======================
 router.post("/login", async (req, res) => {
-  console.log("LOGIN REQUEST:", req.body);
-  const { username, password } = req.body;
+  console.log("LOGIN REQUEST FOR:", req.body.username);
+
+  const username =
+    typeof req.body.username === "string" ? req.body.username.trim() : "";
+
+  const password =
+    typeof req.body.password === "string" ? req.body.password : "";
 
   if (!username || !password) {
     return res.status(400).json({
@@ -129,11 +138,11 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// =======================
-// VERIFY OTP
-// =======================
 router.post("/verify-otp", async (req, res) => {
-  const { username, otp } = req.body;
+  const username =
+    typeof req.body.username === "string" ? req.body.username.trim() : "";
+
+  const otp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
 
   if (!username || !otp) {
     return res.status(400).json({
@@ -142,6 +151,10 @@ router.post("/verify-otp", async (req, res) => {
   }
 
   try {
+    // ==========================================
+    // 1. Find user + current role
+    // ==========================================
+
     const [users] = await db.execute(
       `
       SELECT
@@ -156,6 +169,7 @@ router.post("/verify-otp", async (req, res) => {
       INNER JOIN roles r
         ON u.role_id = r.role_id
       WHERE u.username = ?
+      LIMIT 1
       `,
       [username],
     );
@@ -168,11 +182,28 @@ router.post("/verify-otp", async (req, res) => {
 
     const user = users[0];
 
+    // ==========================================
+    // 2. Make sure account is still active
+    // ==========================================
+
+    if (!user.is_active) {
+      return res.status(403).json({
+        error: "Your account has been deactivated.",
+      });
+    }
+
+    // ==========================================
+    // 3. Find OTP
+    // ==========================================
+
     const [otpRows] = await db.execute(
       `
-      SELECT otp_code, expires_at
+      SELECT
+        otp_code,
+        expires_at
       FROM otp_codes
       WHERE user_id = ?
+      LIMIT 1
       `,
       [user.user_id],
     );
@@ -185,23 +216,38 @@ router.post("/verify-otp", async (req, res) => {
 
     const storedOtp = otpRows[0];
 
+    // ==========================================
+    // 4. Check expiration
+    // ==========================================
+
     if (new Date() > new Date(storedOtp.expires_at)) {
-      await db.execute("DELETE FROM otp_codes WHERE user_id = ?", [
-        user.user_id,
-      ]);
+      await db.execute(
+        `
+        DELETE FROM otp_codes
+        WHERE user_id = ?
+        `,
+        [user.user_id],
+      );
 
       return res.status(400).json({
         error: "OTP has expired.",
       });
     }
 
-    if (storedOtp.otp_code !== otp) {
+    // ==========================================
+    // 5. Compare OTP
+    // ==========================================
+
+    if (String(storedOtp.otp_code) !== String(otp)) {
       return res.status(400).json({
         error: "Invalid OTP.",
       });
     }
 
-    // Verify account after successful OTP
+    // ==========================================
+    // 6. Verify account
+    // ==========================================
+
     if (!user.is_verified) {
       await db.execute(
         `
@@ -211,10 +257,52 @@ router.post("/verify-otp", async (req, res) => {
         `,
         [user.user_id],
       );
+
+      user.is_verified = 1;
     }
 
-    // Delete used OTP (no re-insert needed)
-    await db.execute("DELETE FROM otp_codes WHERE user_id = ?", [user.user_id]);
+    // ==========================================
+    // 7. Delete used OTP
+    // ==========================================
+
+    await db.execute(
+      `
+      DELETE FROM otp_codes
+      WHERE user_id = ?
+      `,
+      [user.user_id],
+    );
+
+    // ==========================================
+    // 8. Check JWT configuration
+    // ==========================================
+
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured.");
+
+      return res.status(500).json({
+        success: false,
+        error: "Authentication configuration error.",
+      });
+    }
+
+    // ==========================================
+    // 9. Create JWT
+    // ==========================================
+
+    const token = jwt.sign(
+      {
+        user_id: Number(user.user_id),
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "8h",
+      },
+    );
+
+    // ==========================================
+    // 10. Log successful login
+    // ==========================================
 
     await logActivity(
       user.user_id,
@@ -223,19 +311,197 @@ router.post("/verify-otp", async (req, res) => {
       `${user.username} logged in successfully.`,
     );
 
-    res.json({
-      user_id: user.user_id,
-      username: user.username,
-      email: user.email,
-      role: user.role_name,
-      role_id: user.role_id,
+    // ==========================================
+    // 11. Return authenticated session
+    // ==========================================
+
+    return res.json({
+      success: true,
+      message: "Login successful.",
+
+      token,
+
+      user: {
+        user_id: Number(user.user_id),
+        username: user.username,
+        email: user.email,
+        role_id: Number(user.role_id),
+        role_name: user.role_name,
+      },
     });
   } catch (err) {
-    console.error("VERIFY OTP ERROR:");
-    console.error(err);
+    console.error("VERIFY OTP ERROR:", err);
 
-    res.status(500).json({
-      error: err.message,
+    return res.status(500).json({
+      success: false,
+      error: "Server error.",
+    });
+  }
+});
+// =======================
+// CURRENT AUTHENTICATED USER
+// =======================
+router.get("/me", authenticate, async (req, res) => {
+  try {
+    return res.json({
+      success: true,
+
+      user: {
+        user_id: req.user.user_id,
+        username: req.user.username,
+        email: req.user.email,
+        role_id: req.user.role_id,
+        role_name: req.user.role_name,
+      },
+    });
+  } catch (error) {
+    console.error("GET /auth/me ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load authenticated user.",
+    });
+  }
+});
+
+// =======================
+// DEVELOPMENT LOGIN
+// =======================
+//
+// IMPORTANT:
+// This route must NEVER be enabled in production.
+//
+router.post("/dev-login", async (req, res) => {
+  // Disable this endpoint in production.
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({
+      success: false,
+      message: "Endpoint not found.",
+    });
+  }
+
+  const { username } = req.body;
+
+  if (!username) {
+    return res.status(400).json({
+      success: false,
+      message: "Username is required.",
+    });
+  }
+
+  try {
+    // ------------------------------------------
+    // Load REAL user + REAL role from database
+    // ------------------------------------------
+
+    const [rows] = await db.execute(
+      `
+      SELECT
+        u.user_id,
+        u.username,
+        u.email,
+        u.role_id,
+        u.is_active,
+        u.is_verified,
+        r.role_name
+      FROM users u
+      INNER JOIN roles r
+        ON r.role_id = u.role_id
+      WHERE u.username = ?
+      LIMIT 1
+      `,
+      [username],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Development user not found.",
+      });
+    }
+
+    const user = rows[0];
+
+    // ------------------------------------------
+    // Account validation
+    // ------------------------------------------
+
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        message: "Development account is inactive.",
+      });
+    }
+
+    if (!user.is_verified) {
+      return res.status(403).json({
+        success: false,
+        message: "Development account is not verified.",
+      });
+    }
+
+    // ------------------------------------------
+    // JWT configuration
+    // ------------------------------------------
+
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured.");
+
+      return res.status(500).json({
+        success: false,
+        message: "Authentication configuration error.",
+      });
+    }
+
+    // ------------------------------------------
+    // Create REAL JWT
+    // ------------------------------------------
+
+    const token = jwt.sign(
+      {
+        user_id: Number(user.user_id),
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "8h",
+      },
+    );
+
+    // ------------------------------------------
+    // Optional activity log
+    // ------------------------------------------
+
+    await logActivity(
+      user.user_id,
+      "DEV LOGIN",
+      "Authentication",
+      `${user.username} logged in using development access.`,
+    );
+
+    // ------------------------------------------
+    // Return exactly the same structure as OTP
+    // ------------------------------------------
+
+    return res.json({
+      success: true,
+      message: "Development login successful.",
+
+      token,
+
+      user: {
+        user_id: Number(user.user_id),
+        username: user.username,
+        email: user.email,
+        role_id: Number(user.role_id),
+        role_name: user.role_name,
+      },
+    });
+  } catch (error) {
+    console.error("DEV LOGIN ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Development login failed.",
     });
   }
 });
