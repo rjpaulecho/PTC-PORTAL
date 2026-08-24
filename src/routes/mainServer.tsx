@@ -1,11 +1,19 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import type { UserRole } from "../services/auth.service";
 import { authService } from "../services/auth.service";
+
+
+
+import Navbar from "../components/Forms/HomeNavbar";
+
 // login and otp form here
 import Home from "../pages/auth/Index";
 import LoginAuth from "../pages/auth/Login";
-import RegisterAuth from "../pages/auth/Register";
 import OtpAuth from "../pages/auth/Otp";
+import About from "../components/Forms/about";
+import Programs from "../components/Forms/programs";
+import Contact from "../components/Forms/contact";
+
 
 // Student pages
 import StudentDashboard from "../pages/student/Dashboard";
@@ -192,11 +200,54 @@ function RegistrarRoute({ element }: { element: ReactElement }) {
 // ─── Routes ───────────────────────────────────────────────────
 export default function AppRoutes() {
   return (
-    <Routes>
-      {/* ── Public ── */}
-      <Route path="/" element={<Home />} />
+    <>
+
+      <Routes>
+
+
+    {/* ── Public ── */}
+    <Route
+      path="/"
+      element={
+        <>
+          <Navbar />
+          <Home />
+        </>
+      }
+    />
+
+    <Route
+      path="/about"
+      element={
+        <>
+          <Navbar />
+          <About />
+        </>
+      }
+    />
+
+    <Route
+      path="/programs"
+      element={
+        <>
+          <Navbar />
+          <Programs />
+        </>
+      }
+    />
+
+    <Route
+      path="/contact"
+      element={
+        <>
+          <Navbar />
+          <Contact />
+        </>
+      }
+    />
+
+
       <Route path="/login" element={<LoginAuth />} />
-      <Route path="/register" element={<RegisterAuth />} />
       <Route path="/otp" element={<OtpAuth />} />
 
       {/* ── Student: Solo links ── */}
@@ -614,7 +665,9 @@ export default function AppRoutes() {
       />
 
       {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+  <Route path="*" element={<Navigate to="/" replace />} />
+
+      </Routes>
+    </>
   );
 }

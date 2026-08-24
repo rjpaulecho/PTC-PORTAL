@@ -164,30 +164,42 @@
   max-width: 380px;
 }
 
-/* ── Right Panel — Scroll Gallery ────────────────── */
+/* ── Right Panel — Automatic Image Slideshow ─────── */
+
 .rightPanel {
-  overflow-y: scroll;
   height: calc(100vh - 64px);
-  scrollbar-width: none;
   position: sticky;
   top: 64px;
-}
-
-.rightPanel::-webkit-scrollbar {
-  display: none;
+  overflow: hidden;
+  background: #000;
 }
 
 .gallery {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
 .galleryItem {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  height: 100%;
   overflow: hidden;
-  position: relative;
+
+  opacity: 0;
+  visibility: hidden;
+
+  transition:
+    opacity 1s ease,
+    visibility 1s ease;
+}
+
+.galleryItem.active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 2;
 }
 
 .galleryItem img {
@@ -195,30 +207,88 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.5s ease;
+
+  /* Start slightly zoomed out */
+  transform: scale(1);
+
+  /* 5 second zoom animation */
+  transition: transform 5s ease;
 }
 
-.galleryItem:hover img {
-  transform: scale(1.04);
+/*
+   When the image becomes active,
+   slowly zoom it in.
+*/
+.galleryItem.active img {
+  transform: scale(1.12);
 }
+
+/* Caption */
 
 .galleryCaption {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 32px 24px 18px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.65) 0%, transparent 100%);
+
+  padding: 80px 32px 30px;
+
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.75),
+    rgba(0, 0, 0, 0)
+  );
+
   color: #fff;
-  font-size: 14px;
+
+  font-size: 16px;
   font-family: "Helvetica Neue", sans-serif;
-  letter-spacing: 0.3px;
-  opacity: 0;
-  transition: opacity 0.3s;
+  letter-spacing: 0.5px;
+
+  opacity: 1;
+
+  z-index: 3;
 }
 
-.galleryItem:hover .galleryCaption {
-  opacity: 1;
+/* ── Image Indicators ────────────────────────────── */
+
+.galleryIndicators {
+  position: absolute;
+
+  bottom: 25px;
+  right: 30px;
+
+  display: flex;
+  gap: 8px;
+
+  z-index: 10;
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.45);
+
+  cursor: pointer;
+
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
+}
+
+.indicator.active {
+  width: 28px;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.indicator:hover {
+  background: #ffffff;
 }
 
 /* ── Responsive ──────────────────────────────────── */

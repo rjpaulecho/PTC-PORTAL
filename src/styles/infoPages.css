@@ -1,0 +1,398 @@
+/* =====================================================
+   PTC INFORMATION PAGES
+   About / Programs / Contact
+   ===================================================== */
+
+.infoPage {
+  min-height: 100vh;
+  background: #f7f5f0;
+  color: #171717;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+
+/* =====================================================
+   HEADER
+   ===================================================== */
+
+.infoHeader {
+  height: 76px;
+  padding: 0 6%;
+
+  display: flex;
+  align-items: center;
+  gap: 28px;
+
+  background: #ffffff;
+  border-bottom: 1px solid #e7e3dc;
+
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.infoHeader h1 {
+  margin: 0;
+
+  font-size: 24px;
+  font-weight: 700;
+}
+
+
+/* =====================================================
+   BACK BUTTON
+   ===================================================== */
+
+.backButton {
+  border: none;
+  background: transparent;
+
+  padding: 8px 0;
+
+  color: #171717;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.backButton:hover {
+  opacity: 0.65;
+  transform: translateX(-3px);
+}
+
+.backButton:focus-visible {
+  outline: 2px solid #171717;
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+
+
+/* =====================================================
+   MAIN CONTENT
+   ===================================================== */
+
+.infoContent {
+  width: min(1100px, 88%);
+
+  margin: 0 auto;
+
+  padding: 80px 0;
+}
+
+
+/* =====================================================
+   HERO / INTRODUCTION
+   ===================================================== */
+
+.infoHero {
+  max-width: 760px;
+
+  margin-bottom: 55px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  letter-spacing: 2px;
+}
+
+.infoHero h2 {
+  margin: 0 0 20px;
+
+  font-size: clamp(38px, 6vw, 68px);
+  line-height: 1;
+
+  letter-spacing: -2px;
+}
+
+.infoHero p:not(.eyebrow) {
+  margin: 0;
+
+  font-size: 18px;
+  line-height: 1.7;
+
+  color: #666666;
+}
+
+
+/* =====================================================
+   ABOUT CARDS
+   ===================================================== */
+
+.infoCards {
+  display: grid;
+
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 22px;
+}
+
+.infoCards article {
+  background: #ffffff;
+
+  padding: 30px;
+
+  border: 1px solid #e7e3dc;
+  border-radius: 18px;
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.infoCards article:hover {
+  transform: translateY(-5px);
+
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.infoCards h3 {
+  margin: 0 0 14px;
+
+  font-size: 21px;
+}
+
+.infoCards p {
+  margin: 0;
+
+  color: #666666;
+
+  line-height: 1.65;
+}
+
+
+/* =====================================================
+   PROGRAMS
+   ===================================================== */
+
+.programGrid {
+  display: grid;
+
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 22px;
+}
+
+.programCard {
+  background: #ffffff;
+
+  padding: 30px;
+
+  border: 1px solid #e7e3dc;
+  border-radius: 18px;
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.programCard:hover {
+  transform: translateY(-5px);
+
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+
+/* Program icon */
+
+.programIcon {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 52px;
+  height: 52px;
+
+  margin-bottom: 22px;
+
+  border-radius: 50%;
+
+  background: #171717;
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.programCard h3 {
+  margin: 0 0 14px;
+
+  font-size: 21px;
+  line-height: 1.3;
+}
+
+.programCard p {
+  margin: 0;
+
+  color: #666666;
+
+  line-height: 1.65;
+}
+
+
+/* Apply button */
+
+.programCard button {
+  margin-top: 22px;
+
+  padding: 11px 17px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #171717;
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.programCard button:hover {
+  background: #333333;
+  transform: translateY(-2px);
+}
+
+.programCard button:active {
+  transform: translateY(0);
+}
+
+
+/* =====================================================
+   CONTACT
+   ===================================================== */
+
+.contactGrid {
+  display: grid;
+
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 22px;
+}
+
+.contactCard {
+  background: #ffffff;
+
+  padding: 30px;
+
+  border: 1px solid #e7e3dc;
+  border-radius: 18px;
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.contactCard:hover {
+  transform: translateY(-5px);
+
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.contactCard > span {
+  display: block;
+
+  margin-bottom: 18px;
+
+  font-size: 28px;
+}
+
+.contactCard h3 {
+  margin: 0 0 14px;
+
+  font-size: 21px;
+}
+
+.contactCard p {
+  margin: 5px 0;
+
+  color: #666666;
+
+  line-height: 1.65;
+}
+
+
+/* =====================================================
+   TABLET
+   ===================================================== */
+
+@media (max-width: 900px) {
+
+  .infoCards,
+  .programGrid,
+  .contactGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 600px) {
+
+  .infoHeader {
+    height: 65px;
+
+    padding: 0 20px;
+
+    gap: 18px;
+  }
+
+  .infoHeader h1 {
+    font-size: 20px;
+  }
+
+  .infoContent {
+    width: 90%;
+
+    padding: 55px 0;
+  }
+
+  .infoHero {
+    margin-bottom: 40px;
+  }
+
+  .infoHero h2 {
+    font-size: 42px;
+
+    letter-spacing: -1px;
+  }
+
+  .infoHero p:not(.eyebrow) {
+    font-size: 16px;
+  }
+
+  .infoCards,
+  .programGrid,
+  .contactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .infoCards article,
+  .programCard,
+  .contactCard {
+    padding: 25px;
+  }
+
+}
