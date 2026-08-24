@@ -17,7 +17,7 @@ export const studentNavGroups = [
       { label: "Available Courses", path: "/student/enrollment/courses" },
       { label: "Add / Drop Subjects", path: "/student/enrollment/add-drop" },
       { label: "Submit Enrollment", path: "/student/enrollment/submit" },
-      { label: "Enrollment Status", path: "/student/enrollment/status" },
+      { label: "Enrollment", path: "/student/enrollment/main" },
     ],
   },
   {

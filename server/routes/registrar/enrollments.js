@@ -4,7 +4,919 @@ import express from "express";
 import db from "../../db.js";
 
 const router = express.Router();
+// =====================================================
+// GET ENROLLMENT PERIOD MANAGEMENT DATA
+//
+// GET /api/registrar/enrollments/period
+//
+// Purpose:
+// - Load the latest enrollment period
+// - Load academic years
+// - Load semesters
+// - Used by Registrar EnrollmentPeriodMR.tsx
+//
+// IMPORTANT:
+// - Returns the latest period whether Open or Closed.
+// - This allows the frontend to correctly show
+//   "Reopen Enrollment" after closing a period.
+// =====================================================
 
+router.get("/period", async (req, res) => {
+  let connection;
+
+  try {
+    connection = await db.getConnection();
+
+    // =================================================
+    // GET LATEST ENROLLMENT PERIOD
+    // =================================================
+
+    const [periodRows] = await connection.execute(
+      `
+      SELECT
+          ep.enrollment_period_id,
+
+          ep.academic_year_id,
+          ay.academic_year,
+
+          ep.semester_id,
+          sem.semester_name,
+
+          ep.status,
+
+          ep.opened_by,
+          opener.username AS opened_by_username,
+
+          ep.opened_at,
+
+          ep.closed_by,
+          closer.username AS closed_by_username,
+
+          ep.closed_at,
+
+          ep.remarks
+
+      FROM enrollment_periods ep
+
+      INNER JOIN academic_years ay
+          ON ay.academic_year_id = ep.academic_year_id
+
+      INNER JOIN semesters sem
+          ON sem.semester_id = ep.semester_id
+
+      LEFT JOIN users opener
+          ON opener.user_id = ep.opened_by
+
+      LEFT JOIN users closer
+          ON closer.user_id = ep.closed_by
+
+      ORDER BY
+          ep.updated_at DESC,
+          ep.opened_at DESC
+
+      LIMIT 1
+      `,
+    );
+
+    // =================================================
+    // GET ACADEMIC YEARS
+    // =================================================
+
+    const [academicYearRows] = await connection.execute(
+      `
+      SELECT
+          academic_year_id,
+          academic_year,
+          is_current
+
+      FROM academic_years
+
+      ORDER BY academic_year DESC
+      `,
+    );
+
+    // =================================================
+    // GET SEMESTERS
+    // =================================================
+
+    const [semesterRows] = await connection.execute(
+      `
+      SELECT
+          semester_id,
+          semester_name
+
+      FROM semesters
+
+      ORDER BY semester_id ASC
+      `,
+    );
+
+    // =================================================
+    // FORMAT ENROLLMENT PERIOD
+    // =================================================
+
+    let enrollmentPeriod = null;
+
+    if (periodRows.length > 0) {
+      const period = periodRows[0];
+
+      enrollmentPeriod = {
+        enrollment_period_id: Number(period.enrollment_period_id),
+
+        academic_year_id: Number(period.academic_year_id),
+
+        academic_year: period.academic_year,
+
+        semester_id: Number(period.semester_id),
+
+        semester_name: period.semester_name,
+
+        status: period.status,
+
+        opened_by: period.opened_by ? Number(period.opened_by) : null,
+
+        opened_by_username: period.opened_by_username || null,
+
+        opened_at: period.opened_at,
+
+        closed_by: period.closed_by ? Number(period.closed_by) : null,
+
+        closed_by_username: period.closed_by_username || null,
+
+        closed_at: period.closed_at,
+
+        remarks: period.remarks || null,
+      };
+    }
+
+    // =================================================
+    // SUCCESS
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      enrollment_period: enrollmentPeriod,
+
+      academic_years: academicYearRows.map((year) => ({
+        academic_year_id: Number(year.academic_year_id),
+
+        academic_year: year.academic_year,
+
+        is_current: Number(year.is_current) === 1,
+      })),
+
+      semesters: semesterRows.map((semester) => ({
+        semester_id: Number(semester.semester_id),
+
+        semester_name: semester.semester_name,
+      })),
+    });
+  } catch (error) {
+    console.error("GET ENROLLMENT PERIOD MANAGEMENT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+
+      message: "Failed to load enrollment period management data.",
+
+      error: error.message,
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// =====================================================
+// OPEN ENROLLMENT PERIOD
+//
+// POST /api/registrar/enrollments/period/open
+//
+// Body:
+//
+// {
+//   "academic_year_id": 2,
+//   "semester_id": 1,
+//   "user_id": 2,
+//   "remarks": "Enrollment for 2026-2027 First Semester"
+// }
+//
+// Purpose:
+// - Registrar opens enrollment
+// - Validates academic year
+// - Validates semester
+// - Prevents multiple Open periods
+// - Records opened_by
+// - Records opened_at
+// - Reopens an existing Closed period
+// =====================================================
+
+router.post("/period/open", async (req, res) => {
+  let connection;
+
+  try {
+    const { academic_year_id, semester_id, user_id, remarks } = req.body;
+
+    const academicYearId = Number(academic_year_id);
+    const semesterId = Number(semester_id);
+    const openedBy = Number(user_id);
+
+    // =================================================
+    // VALIDATE ACADEMIC YEAR ID
+    // =================================================
+
+    if (!Number.isInteger(academicYearId) || academicYearId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid academic year ID.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE SEMESTER ID
+    // =================================================
+
+    if (!Number.isInteger(semesterId) || semesterId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid semester ID.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE REGISTRAR USER ID
+    // =================================================
+
+    if (!Number.isInteger(openedBy) || openedBy <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Registrar user_id.",
+      });
+    }
+
+    connection = await db.getConnection();
+
+    await connection.beginTransaction();
+
+    // =================================================
+    // VERIFY ACADEMIC YEAR
+    // =================================================
+
+    const [academicYearRows] = await connection.execute(
+      `
+        SELECT
+            academic_year_id,
+            academic_year
+
+        FROM academic_years
+
+        WHERE academic_year_id = ?
+
+        LIMIT 1
+        `,
+      [academicYearId],
+    );
+
+    if (academicYearRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Academic year not found.",
+        academic_year_id: academicYearId,
+      });
+    }
+
+    const academicYear = academicYearRows[0];
+
+    // =================================================
+    // VERIFY SEMESTER
+    // =================================================
+
+    const [semesterRows] = await connection.execute(
+      `
+        SELECT
+            semester_id,
+            semester_name
+
+        FROM semesters
+
+        WHERE semester_id = ?
+
+        LIMIT 1
+        `,
+      [semesterId],
+    );
+
+    if (semesterRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Semester not found.",
+        semester_id: semesterId,
+      });
+    }
+
+    const semester = semesterRows[0];
+
+    // =================================================
+    // VERIFY REGISTRAR
+    // =================================================
+
+    const [registrarRows] = await connection.execute(
+      `
+        SELECT
+            u.user_id,
+            u.username,
+            r.role_name
+
+        FROM users u
+
+        INNER JOIN roles r
+            ON r.role_id = u.role_id
+
+        WHERE u.user_id = ?
+
+        LIMIT 1
+        `,
+      [openedBy],
+    );
+
+    if (
+      registrarRows.length === 0 ||
+      registrarRows[0].role_name !== "Registrar"
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        success: false,
+        message: "Only a Registrar can open an enrollment period.",
+      });
+    }
+
+    // =================================================
+    // CHECK IF ANOTHER PERIOD IS ALREADY OPEN
+    //
+    // Only ONE enrollment period may be Open.
+    // =================================================
+
+    const [openRows] = await connection.execute(
+      `
+        SELECT
+            ep.enrollment_period_id,
+
+            ep.academic_year_id,
+            ay.academic_year,
+
+            ep.semester_id,
+            sem.semester_name,
+
+            ep.status
+
+        FROM enrollment_periods ep
+
+        INNER JOIN academic_years ay
+            ON ay.academic_year_id =
+               ep.academic_year_id
+
+        INNER JOIN semesters sem
+            ON sem.semester_id =
+               ep.semester_id
+
+        WHERE ep.status = 'Open'
+
+        LIMIT 1
+
+        FOR UPDATE
+        `,
+    );
+
+    if (openRows.length > 0) {
+      const existingPeriod = openRows[0];
+
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        message: "Another enrollment period is already open.",
+
+        enrollment_period: {
+          enrollment_period_id: Number(existingPeriod.enrollment_period_id),
+
+          academic_year_id: Number(existingPeriod.academic_year_id),
+
+          academic_year: existingPeriod.academic_year,
+
+          semester_id: Number(existingPeriod.semester_id),
+
+          semester_name: existingPeriod.semester_name,
+
+          status: existingPeriod.status,
+        },
+      });
+    }
+
+    // =================================================
+    // FIND EXISTING PERIOD
+    //
+    // Because the database uses:
+    //
+    // UNIQUE KEY
+    // (academic_year_id, semester_id)
+    //
+    // an existing Closed period must be reopened
+    // instead of inserting a duplicate row.
+    // =================================================
+
+    const [existingPeriodRows] = await connection.execute(
+      `
+        SELECT
+            enrollment_period_id,
+            academic_year_id,
+            semester_id,
+            status,
+            opened_by,
+            opened_at,
+            closed_by,
+            closed_at,
+            remarks
+
+        FROM enrollment_periods
+
+        WHERE academic_year_id = ?
+          AND semester_id = ?
+
+        LIMIT 1
+
+        FOR UPDATE
+        `,
+      [academicYearId, semesterId],
+    );
+
+    let enrollmentPeriodId;
+
+    // =================================================
+    // EXISTING PERIOD
+    // =================================================
+
+    if (existingPeriodRows.length > 0) {
+      const existingPeriod = existingPeriodRows[0];
+
+      // =================================================
+      // SAFETY CHECK
+      // =================================================
+
+      if (existingPeriod.status === "Open") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+
+          message: "This enrollment period is already open.",
+
+          enrollment_period: {
+            enrollment_period_id: Number(existingPeriod.enrollment_period_id),
+
+            academic_year_id: Number(existingPeriod.academic_year_id),
+
+            semester_id: Number(existingPeriod.semester_id),
+
+            status: existingPeriod.status,
+          },
+        });
+      }
+
+      // =================================================
+      // REOPEN CLOSED PERIOD
+      // =================================================
+
+      enrollmentPeriodId = Number(existingPeriod.enrollment_period_id);
+
+      const finalRemarks =
+        remarks ||
+        `Enrollment for ${academicYear.academic_year} ${semester.semester_name}`;
+
+      await connection.execute(
+        `
+        UPDATE enrollment_periods
+
+        SET
+            status = 'Open',
+
+            opened_by = ?,
+
+            opened_at = CURRENT_TIMESTAMP,
+
+            closed_by = NULL,
+
+            closed_at = NULL,
+
+            remarks = ?,
+
+            updated_at = CURRENT_TIMESTAMP
+
+        WHERE enrollment_period_id = ?
+        `,
+        [openedBy, finalRemarks, enrollmentPeriodId],
+      );
+    }
+
+    // =================================================
+    // CREATE NEW PERIOD
+    // =================================================
+    else {
+      const finalRemarks =
+        remarks ||
+        `Enrollment for ${academicYear.academic_year} ${semester.semester_name}`;
+
+      const [insertResult] = await connection.execute(
+        `
+          INSERT INTO enrollment_periods (
+              academic_year_id,
+              semester_id,
+              status,
+              opened_by,
+              opened_at,
+              remarks
+          )
+
+          VALUES (
+              ?,
+              ?,
+              'Open',
+              ?,
+              CURRENT_TIMESTAMP,
+              ?
+          )
+          `,
+        [academicYearId, semesterId, openedBy, finalRemarks],
+      );
+
+      enrollmentPeriodId = Number(insertResult.insertId);
+    }
+
+    // =================================================
+    // COMMIT
+    // =================================================
+
+    await connection.commit();
+
+    // =================================================
+    // SUCCESS
+    // =================================================
+
+    return res.status(201).json({
+      success: true,
+
+      message: "Enrollment period opened successfully.",
+
+      enrollment_period: {
+        enrollment_period_id: Number(enrollmentPeriodId),
+
+        academic_year_id: academicYearId,
+
+        academic_year: academicYear.academic_year,
+
+        semester_id: semesterId,
+
+        semester_name: semester.semester_name,
+
+        status: "Open",
+
+        opened_by: Number(openedBy),
+
+        opened_by_username: registrarRows[0].username,
+
+        opened_at: new Date(),
+
+        closed_by: null,
+
+        closed_at: null,
+
+        remarks:
+          remarks ||
+          `Enrollment for ${academicYear.academic_year} ${semester.semester_name}`,
+      },
+    });
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("OPEN ENROLLMENT ROLLBACK ERROR:", rollbackError);
+      }
+    }
+
+    console.error("OPEN ENROLLMENT PERIOD ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+
+      message: "Failed to open enrollment period.",
+
+      error: error.message,
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// =====================================================
+// CLOSE ENROLLMENT PERIOD
+//
+// POST /api/registrar/enrollments/period/close
+//
+// Body:
+//
+// {
+//   "enrollment_period_id": 1,
+//   "user_id": 2,
+//   "remarks": "Enrollment period closed."
+// }
+//
+// Purpose:
+// - Registrar closes an OPEN enrollment period
+// - Validates Registrar
+// - Records closed_by
+// - Records closed_at
+// - Changes Open -> Closed
+// =====================================================
+
+router.post("/period/close", async (req, res) => {
+  let connection;
+
+  try {
+    const { enrollment_period_id, user_id, remarks } = req.body;
+
+    const enrollmentPeriodId = Number(enrollment_period_id);
+
+    const closedBy = Number(user_id);
+
+    // =================================================
+    // VALIDATE ENROLLMENT PERIOD ID
+    // =================================================
+
+    if (!Number.isInteger(enrollmentPeriodId) || enrollmentPeriodId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment period ID.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE REGISTRAR USER ID
+    // =================================================
+
+    if (!Number.isInteger(closedBy) || closedBy <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Registrar user_id.",
+      });
+    }
+
+    connection = await db.getConnection();
+
+    await connection.beginTransaction();
+
+    // =================================================
+    // VERIFY REGISTRAR
+    // =================================================
+
+    const [registrarRows] = await connection.execute(
+      `
+        SELECT
+            u.user_id,
+            u.username,
+            r.role_name
+
+        FROM users u
+
+        INNER JOIN roles r
+            ON r.role_id = u.role_id
+
+        WHERE u.user_id = ?
+
+        LIMIT 1
+        `,
+      [closedBy],
+    );
+
+    if (
+      registrarRows.length === 0 ||
+      registrarRows[0].role_name !== "Registrar"
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        success: false,
+        message: "Only a Registrar can close an enrollment period.",
+      });
+    }
+
+    // =================================================
+    // GET ENROLLMENT PERIOD
+    // =================================================
+
+    const [periodRows] = await connection.execute(
+      `
+        SELECT
+            ep.enrollment_period_id,
+
+            ep.academic_year_id,
+            ay.academic_year,
+
+            ep.semester_id,
+            sem.semester_name,
+
+            ep.status,
+
+            ep.opened_by,
+            opener.username AS opened_by_username,
+
+            ep.opened_at,
+
+            ep.closed_by,
+            ep.closed_at,
+
+            ep.remarks
+
+        FROM enrollment_periods ep
+
+        INNER JOIN academic_years ay
+            ON ay.academic_year_id =
+               ep.academic_year_id
+
+        INNER JOIN semesters sem
+            ON sem.semester_id =
+               ep.semester_id
+
+        LEFT JOIN users opener
+            ON opener.user_id =
+               ep.opened_by
+
+        WHERE ep.enrollment_period_id = ?
+
+        LIMIT 1
+
+        FOR UPDATE
+        `,
+      [enrollmentPeriodId],
+    );
+
+    // =================================================
+    // PERIOD NOT FOUND
+    // =================================================
+
+    if (periodRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+
+        message: "Enrollment period not found.",
+
+        enrollment_period_id: enrollmentPeriodId,
+      });
+    }
+
+    const period = periodRows[0];
+
+    // =================================================
+    // VERIFY PERIOD IS OPEN
+    // =================================================
+
+    if (period.status !== "Open") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        message: "Enrollment period is not currently open.",
+
+        enrollment_period: {
+          enrollment_period_id: Number(period.enrollment_period_id),
+
+          academic_year_id: Number(period.academic_year_id),
+
+          academic_year: period.academic_year,
+
+          semester_id: Number(period.semester_id),
+
+          semester_name: period.semester_name,
+
+          status: period.status,
+        },
+      });
+    }
+
+    // =================================================
+    // FINAL REMARKS
+    // =================================================
+
+    const finalRemarks =
+      remarks ||
+      period.remarks ||
+      `Enrollment closed for ${period.academic_year} ${period.semester_name}`;
+
+    // =================================================
+    // CLOSE PERIOD
+    // =================================================
+
+    await connection.execute(
+      `
+      UPDATE enrollment_periods
+
+      SET
+          status = 'Closed',
+
+          closed_by = ?,
+
+          closed_at = CURRENT_TIMESTAMP,
+
+          remarks = ?,
+
+          updated_at = CURRENT_TIMESTAMP
+
+      WHERE enrollment_period_id = ?
+
+        AND status = 'Open'
+      `,
+      [closedBy, finalRemarks, enrollmentPeriodId],
+    );
+
+    // =================================================
+    // COMMIT
+    // =================================================
+
+    await connection.commit();
+
+    // =================================================
+    // SUCCESS
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      message: "Enrollment period closed successfully.",
+
+      enrollment_period: {
+        enrollment_period_id: Number(period.enrollment_period_id),
+
+        academic_year_id: Number(period.academic_year_id),
+
+        academic_year: period.academic_year,
+
+        semester_id: Number(period.semester_id),
+
+        semester_name: period.semester_name,
+
+        status: "Closed",
+
+        opened_by: period.opened_by ? Number(period.opened_by) : null,
+
+        opened_by_username: period.opened_by_username || null,
+
+        opened_at: period.opened_at,
+
+        closed_by: Number(closedBy),
+
+        closed_by_username: registrarRows[0].username,
+
+        closed_at: new Date(),
+
+        remarks: finalRemarks,
+      },
+    });
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("CLOSE ENROLLMENT ROLLBACK ERROR:", rollbackError);
+      }
+    }
+
+    console.error("CLOSE ENROLLMENT PERIOD ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+
+      message: "Failed to close enrollment period.",
+
+      error: error.message,
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
 // =====================================================
 // GET PENDING ENROLLMENTS
 //
@@ -583,221 +1495,6 @@ router.get("/", async (req, res) => {
 });
 
 // =====================================================
-// GET SINGLE ENROLLMENT
-//
-// GET /api/registrar/enrollments/:id
-//
-// Returns:
-// - Enrollment information
-// - Student information
-// - Course
-// - Academic year
-// - Semester
-// - Enrollment status
-// - All enrolled subjects
-// - Subject offering
-// - Section
-// - Faculty
-// - Room
-// - Schedule
-// =====================================================
-
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // =================================================
-    // VALIDATE ENROLLMENT ID
-    // =================================================
-
-    const enrollmentId = Number(id);
-
-    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid enrollment ID.",
-      });
-    }
-
-    // =================================================
-    // GET ENROLLMENT HEADER
-    // =================================================
-
-    const [enrollmentRows] = await db.execute(
-      `
-      SELECT
-
-          e.enrollment_id,
-          e.student_id,
-
-          -- Student
-          s.student_number,
-          s.first_name,
-          s.middle_name,
-          s.last_name,
-          s.gender,
-          s.birth_date,
-          s.contact_number,
-          s.year_level,
-
-          -- Course
-          c.course_id,
-          c.course_code,
-
-          -- Student section
-          sec_student.section_id AS student_section_id,
-          sec_student.section_name AS student_section_name,
-
-          -- Academic year
-          ay.academic_year_id,
-          ay.academic_year,
-
-          -- Semester
-          sem.semester_id,
-          sem.semester_name,
-
-          -- Enrollment
-          e.enrollment_status,
-          e.remarks,
-
-          -- Approval
-          e.approved_by,
-          u.username AS approved_by_username,
-          e.approved_at,
-
-          e.created_at
-
-      FROM enrollments e
-
-      INNER JOIN students s
-          ON s.student_id = e.student_id
-
-      LEFT JOIN courses c
-          ON c.course_id = s.course_id
-
-      LEFT JOIN sections sec_student
-          ON sec_student.section_id = s.section_id
-
-      INNER JOIN academic_years ay
-          ON ay.academic_year_id = e.academic_year_id
-
-      INNER JOIN semesters sem
-          ON sem.semester_id = e.semester_id
-
-      LEFT JOIN users u
-          ON u.user_id = e.approved_by
-
-      WHERE e.enrollment_id = ?
-      `,
-      [enrollmentId],
-    );
-
-    // =================================================
-    // CHECK ENROLLMENT
-    // =================================================
-
-    if (enrollmentRows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Enrollment not found.",
-      });
-    }
-
-    const enrollment = enrollmentRows[0];
-
-    // =================================================
-    // GET ENROLLED SUBJECTS
-    // =================================================
-
-    const [subjects] = await db.execute(
-      `
-      SELECT
-
-          es.enrollment_subject_id,
-
-          -- Subject
-          es.subject_id,
-          sub.subject_code,
-          sub.subject_name,
-          sub.units,
-          sub.lecture_hours,
-          sub.laboratory_hours,
-
-          -- Enrollment subject status
-          es.status AS subject_status,
-
-          -- Section
-          es.section_id,
-          sec.section_name,
-
-          -- Section subject
-          es.section_subject_id,
-
-          -- Offering
-          es.offering_id,
-
-          -- Faculty
-          f.faculty_id,
-
-          -- Room
-          r.room_id,
-
-          -- Schedule
-          so.schedule_days,
-          so.schedule_time,
-
-          -- Offering capacity
-          so.max_students
-
-      FROM enrollment_subjects es
-
-      INNER JOIN subjects sub
-          ON sub.subject_id = es.subject_id
-
-      LEFT JOIN sections sec
-          ON sec.section_id = es.section_id
-
-      LEFT JOIN subject_offerings so
-          ON so.offering_id = es.offering_id
-
-      LEFT JOIN faculty f
-          ON f.faculty_id = so.faculty_id
-
-      LEFT JOIN rooms r
-          ON r.room_id = so.room_id
-
-      WHERE es.enrollment_id = ?
-
-      ORDER BY
-          sub.subject_code ASC
-      `,
-      [enrollmentId],
-    );
-
-    // =================================================
-    // RESPONSE
-    // =================================================
-
-    res.json({
-      success: true,
-
-      enrollment,
-
-      totalSubjects: subjects.length,
-
-      subjects,
-    });
-  } catch (error) {
-    console.error("GET ENROLLMENT ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch enrollment.",
-    });
-  }
-});
-
-// =====================================================
 // GET AVAILABLE SUBJECT OFFERINGS
 //
 // GET /api/registrar/enrollments/:id/available-offerings
@@ -1081,6 +1778,1083 @@ router.get("/:id/available-offerings", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch available subject offerings.",
+    });
+  }
+});
+
+// =====================================================
+// GET SINGLE ENROLLMENT
+//
+// GET /api/registrar/enrollments/:id
+//
+// Returns:
+// - Enrollment information
+// - Student information
+// - Course
+// - Academic year
+// - Semester
+// - Enrollment status
+// - All enrolled subjects
+// - Subject offering
+// - Section
+// - Faculty
+// - Room
+// - Schedule
+// =====================================================
+
+// =====================================================
+// GET ENROLLMENT CORRECTION HISTORY
+//
+// GET /api/registrar/enrollments/:id/corrections
+//
+// Purpose:
+// - View all Registrar corrections for an enrollment
+// - Shows ADD / DROP / REMOVE / CHANGE history
+// - Shows old and new section information
+// - Shows reason
+// - Shows Registrar who performed the correction
+// =====================================================
+
+router.get("/:id/corrections", async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const enrollmentId = Number(req.params.id);
+
+    // =================================================
+    // VALIDATE ENROLLMENT ID
+    // =================================================
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment ID.",
+      });
+    }
+
+    // =================================================
+    // GET ENROLLMENT
+    // =================================================
+
+    const [enrollmentRows] = await connection.execute(
+      `
+      SELECT
+          e.enrollment_id,
+          e.student_id,
+
+          s.student_number,
+
+          CONCAT(
+              s.first_name,
+              ' ',
+              COALESCE(CONCAT(s.middle_name, ' '), ''),
+              s.last_name
+          ) AS student_name,
+
+          e.academic_year_id,
+          e.semester_id,
+          e.enrollment_status
+
+      FROM enrollments e
+
+      INNER JOIN students s
+          ON s.student_id = e.student_id
+
+      WHERE e.enrollment_id = ?
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // ENROLLMENT NOT FOUND
+    // =================================================
+
+    if (enrollmentRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // GET CORRECTION HISTORY
+    // =================================================
+
+    const [historyRows] = await connection.execute(
+      `
+      SELECT
+
+          esc.change_id,
+          esc.enrollment_id,
+          esc.enrollment_subject_id,
+          esc.subject_id,
+
+          -- SUBJECT
+          sub.subject_code,
+          sub.subject_name,
+          sub.units,
+
+          -- CHANGE
+          esc.change_type,
+
+          -- OLD OFFERING
+          esc.old_offering_id,
+
+          old_so.section_id AS old_section_id,
+
+          old_so.section_subject_id
+              AS old_section_subject_id,
+
+          old_sec.section_name
+              AS old_section_name,
+
+          -- NEW OFFERING
+          esc.new_offering_id,
+
+          new_so.section_id AS new_section_id,
+
+          new_so.section_subject_id
+              AS new_section_subject_id,
+
+          new_sec.section_name
+              AS new_section_name,
+
+          -- REASON
+          esc.reason,
+
+          -- REGISTRAR
+          esc.changed_by,
+
+          u.username AS changed_by_username,
+
+          -- DATE
+          esc.created_at
+
+      FROM enrollment_subject_changes esc
+
+      LEFT JOIN subjects sub
+          ON sub.subject_id = esc.subject_id
+
+      -- OLD OFFERING
+      LEFT JOIN subject_offerings old_so
+          ON old_so.offering_id = esc.old_offering_id
+
+      LEFT JOIN sections old_sec
+          ON old_sec.section_id = old_so.section_id
+
+      -- NEW OFFERING
+      LEFT JOIN subject_offerings new_so
+          ON new_so.offering_id = esc.new_offering_id
+
+      LEFT JOIN sections new_sec
+          ON new_sec.section_id = new_so.section_id
+
+      -- REGISTRAR
+      LEFT JOIN users u
+          ON u.user_id = esc.changed_by
+
+      WHERE esc.enrollment_id = ?
+
+      ORDER BY
+          esc.created_at DESC,
+          esc.change_id DESC
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // FORMAT HISTORY
+    // =================================================
+
+    const history = historyRows.map((row) => ({
+      change_id: row.change_id,
+
+      enrollment_id: row.enrollment_id,
+
+      enrollment_subject_id: row.enrollment_subject_id,
+
+      subject_id: row.subject_id,
+
+      subject_code: row.subject_code,
+
+      subject_name: row.subject_name,
+
+      units: row.units,
+
+      change_type: row.change_type,
+
+      old: {
+        offering_id: row.old_offering_id,
+
+        section_id: row.old_section_id,
+
+        section_subject_id: row.old_section_subject_id,
+
+        section_name: row.old_section_name,
+      },
+
+      new: {
+        offering_id: row.new_offering_id,
+
+        section_id: row.new_section_id,
+
+        section_subject_id: row.new_section_subject_id,
+
+        section_name: row.new_section_name,
+      },
+
+      reason: row.reason,
+
+      changed_by: row.changed_by,
+
+      changed_by_username: row.changed_by_username,
+
+      created_at: row.created_at,
+    }));
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      enrollment: {
+        enrollment_id: enrollment.enrollment_id,
+
+        student_id: enrollment.student_id,
+
+        student_number: enrollment.student_number,
+
+        student_name: enrollment.student_name,
+
+        academic_year_id: enrollment.academic_year_id,
+
+        semester_id: enrollment.semester_id,
+
+        enrollment_status: enrollment.enrollment_status,
+      },
+
+      count: history.length,
+
+      history,
+    });
+  } catch (error) {
+    console.error("GET ENROLLMENT CORRECTION HISTORY ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load enrollment correction history.",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// =====================================================
+// TRANSFER SUBJECT TO ANOTHER SECTION
+//
+// PUT /api/registrar/enrollments/:id/subjects/:enrollmentSubjectId/transfer
+//
+// Body:
+// {
+//   "target_section_subject_id": 5,
+//   "reason": "Transfer to another section."
+// }
+//
+// Purpose:
+// - Transfer an enrolled subject to another section
+// - Only Approved enrollments
+// - Same subject only
+// - Same academic year
+// - Same semester
+// - Target section subject must be Open
+// - Checks target offering capacity
+// - Updates existing enrollment_subject
+// - Records CHANGE history
+// =====================================================
+
+router.put("/:id/subjects/:enrollmentSubjectId/transfer", async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const enrollmentId = Number(req.params.id);
+    const enrollmentSubjectId = Number(req.params.enrollmentSubjectId);
+
+    const { target_section_subject_id, reason } = req.body;
+
+    const targetSectionSubjectId = Number(target_section_subject_id);
+
+    // =================================================
+    // VALIDATE ENROLLMENT ID
+    // =================================================
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment ID.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE ENROLLMENT SUBJECT ID
+    // =================================================
+
+    if (!Number.isInteger(enrollmentSubjectId) || enrollmentSubjectId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment subject ID.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE TARGET SECTION SUBJECT ID
+    // =================================================
+
+    if (
+      !Number.isInteger(targetSectionSubjectId) ||
+      targetSectionSubjectId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid target section subject ID.",
+      });
+    }
+
+    // =================================================
+    // START TRANSACTION
+    // =================================================
+
+    await connection.beginTransaction();
+
+    // =================================================
+    // GET ENROLLMENT
+    // =================================================
+
+    const [enrollmentRows] = await connection.execute(
+      `
+          SELECT
+
+              e.enrollment_id,
+              e.student_id,
+              e.academic_year_id,
+              e.semester_id,
+              e.enrollment_status,
+
+              s.student_number,
+              s.first_name,
+              s.middle_name,
+              s.last_name,
+
+              c.course_id,
+              c.course_code
+
+          FROM enrollments e
+
+          INNER JOIN students s
+              ON s.student_id = e.student_id
+
+          LEFT JOIN courses c
+              ON c.course_id = s.course_id
+
+          WHERE e.enrollment_id = ?
+
+          FOR UPDATE
+          `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // CHECK ENROLLMENT
+    // =================================================
+
+    if (enrollmentRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // ONLY APPROVED ENROLLMENTS
+    // =================================================
+
+    if (enrollment.enrollment_status !== "Approved") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Only approved enrollments can have subjects transferred.",
+      });
+    }
+
+    // =================================================
+    // GET CURRENT ENROLLMENT SUBJECT
+    // =================================================
+
+    const [currentRows] = await connection.execute(
+      `
+          SELECT
+
+              es.enrollment_subject_id,
+              es.enrollment_id,
+              es.subject_id,
+              es.offering_id,
+              es.section_id,
+              es.section_subject_id,
+              es.status,
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+
+              so.academic_year_id,
+              so.semester_id,
+
+              so.faculty_id,
+              so.room_id,
+
+              so.schedule_days,
+              so.schedule_time,
+
+              so.max_students,
+
+              sec.section_name
+
+          FROM enrollment_subjects es
+
+          INNER JOIN subjects sub
+              ON sub.subject_id = es.subject_id
+
+          LEFT JOIN subject_offerings so
+              ON so.offering_id = es.offering_id
+
+          LEFT JOIN sections sec
+              ON sec.section_id = es.section_id
+
+          WHERE es.enrollment_subject_id = ?
+            AND es.enrollment_id = ?
+
+          FOR UPDATE
+          `,
+      [enrollmentSubjectId, enrollmentId],
+    );
+
+    // =================================================
+    // CHECK CURRENT SUBJECT
+    // =================================================
+
+    if (currentRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment subject not found.",
+      });
+    }
+
+    const currentSubject = currentRows[0];
+
+    // =================================================
+    // CHECK CURRENT STATUS
+    // =================================================
+
+    if (currentSubject.status !== "Enrolled") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: `Subject cannot be transferred because its current status is '${currentSubject.status}'.`,
+      });
+    }
+
+    // =================================================
+    // GET TARGET SECTION SUBJECT
+    // =================================================
+
+    const [targetRows] = await connection.execute(
+      `
+          SELECT
+
+              ss.section_subject_id,
+              ss.section_id,
+              ss.subject_id,
+              ss.status AS section_subject_status,
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+
+              sec.section_name,
+
+              so.offering_id,
+              so.academic_year_id,
+              so.semester_id,
+
+              so.faculty_id,
+              so.room_id,
+
+              so.schedule_days,
+              so.schedule_time,
+
+              so.max_students
+
+          FROM section_subjects ss
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 ss.subject_id
+
+          INNER JOIN sections sec
+              ON sec.section_id =
+                 ss.section_id
+
+          LEFT JOIN subject_offerings so
+              ON so.section_subject_id =
+                 ss.section_subject_id
+
+          WHERE ss.section_subject_id = ?
+
+            AND so.offering_id IS NOT NULL
+
+          FOR UPDATE
+          `,
+      [targetSectionSubjectId],
+    );
+
+    // =================================================
+    // TARGET NOT FOUND
+    // =================================================
+
+    if (targetRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Target section subject not found.",
+      });
+    }
+
+    const target = targetRows[0];
+
+    // =================================================
+    // CHECK TARGET STATUS
+    // =================================================
+
+    if (target.section_subject_status !== "Open") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: `Target section subject is ${target.section_subject_status.toLowerCase()}.`,
+      });
+    }
+
+    // =================================================
+    // CHECK SAME SUBJECT
+    // =================================================
+
+    if (Number(target.subject_id) !== Number(currentSubject.subject_id)) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Target section subject must belong to the same subject.",
+      });
+    }
+
+    // =================================================
+    // CHECK SAME OFFERING
+    // =================================================
+
+    if (Number(target.offering_id) === Number(currentSubject.offering_id)) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Subject is already assigned to this offering.",
+      });
+    }
+
+    // =================================================
+    // CHECK ACADEMIC YEAR
+    // =================================================
+
+    if (
+      Number(target.academic_year_id) !== Number(enrollment.academic_year_id)
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message:
+          "Target offering does not belong to the enrollment academic year.",
+      });
+    }
+
+    // =================================================
+    // CHECK SEMESTER
+    // =================================================
+
+    if (Number(target.semester_id) !== Number(enrollment.semester_id)) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Target offering does not belong to the enrollment semester.",
+      });
+    }
+
+    // =================================================
+    // CHECK TARGET COURSE / SECTION
+    // =================================================
+
+    if (Number(target.section_id) <= 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Target section is invalid.",
+      });
+    }
+
+    // =================================================
+    // CHECK CAPACITY
+    // =================================================
+
+    const [capacityRows] = await connection.execute(
+      `
+          SELECT
+              COUNT(*) AS enrolled_count
+
+          FROM enrollment_subjects es
+
+          INNER JOIN enrollments e
+              ON e.enrollment_id =
+                 es.enrollment_id
+
+          WHERE es.offering_id = ?
+
+            AND es.status = 'Enrolled'
+
+            AND e.enrollment_status IN (
+                'Pending',
+                'Approved'
+            )
+
+            AND es.enrollment_subject_id <> ?
+          `,
+      [target.offering_id, enrollmentSubjectId],
+    );
+
+    const enrolledCount = Number(capacityRows[0]?.enrolled_count || 0);
+
+    const maxStudents = Number(target.max_students || 0);
+
+    if (maxStudents > 0 && enrolledCount >= maxStudents) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Target subject offering is already full.",
+
+        capacity: {
+          max_students: maxStudents,
+          enrolled_count: enrolledCount,
+          available_slots: 0,
+        },
+      });
+    }
+
+    // =================================================
+    // SAVE OLD VALUES
+    // =================================================
+
+    const oldOfferingId = currentSubject.offering_id;
+
+    const oldSectionId = currentSubject.section_id;
+
+    const oldSectionSubjectId = currentSubject.section_subject_id;
+
+    // =================================================
+    // UPDATE ENROLLMENT SUBJECT
+    // =================================================
+
+    await connection.execute(
+      `
+        UPDATE enrollment_subjects
+
+        SET
+            offering_id = ?,
+            section_id = ?,
+            section_subject_id = ?,
+            subject_id = ?
+
+        WHERE enrollment_subject_id = ?
+          AND enrollment_id = ?
+        `,
+      [
+        target.offering_id,
+        target.section_id,
+        target.section_subject_id,
+        target.subject_id,
+
+        enrollmentSubjectId,
+        enrollmentId,
+      ],
+    );
+
+    // =================================================
+    // GET REGISTRAR
+    // =================================================
+
+    const changedBy = req.user?.user_id || null;
+
+    // =================================================
+    // RECORD CHANGE HISTORY
+    // =================================================
+
+    await connection.execute(
+      `
+        INSERT INTO enrollment_subject_changes (
+
+            enrollment_id,
+            enrollment_subject_id,
+            subject_id,
+
+            change_type,
+
+            old_offering_id,
+            old_section_id,
+            old_section_subject_id,
+
+            new_offering_id,
+            new_section_id,
+            new_section_subject_id,
+
+            reason,
+            changed_by
+
+        )
+        VALUES (
+
+            ?,
+            ?,
+            ?,
+
+            'CHANGE',
+
+            ?,
+            ?,
+            ?,
+
+            ?,
+            ?,
+            ?,
+
+            ?,
+            ?
+        )
+        `,
+      [
+        enrollmentId,
+        enrollmentSubjectId,
+        currentSubject.subject_id,
+
+        oldOfferingId,
+        oldSectionId,
+        oldSectionSubjectId,
+
+        target.offering_id,
+        target.section_id,
+        target.section_subject_id,
+
+        reason || "Registrar transferred subject",
+
+        changedBy,
+      ],
+    );
+
+    // =================================================
+    // COMMIT
+    // =================================================
+
+    await connection.commit();
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      message: "Subject transferred successfully.",
+
+      enrollment_subject: {
+        enrollment_subject_id: enrollmentSubjectId,
+
+        enrollment_id: enrollmentId,
+
+        subject_id: target.subject_id,
+
+        subject_code: target.subject_code,
+
+        subject_name: target.subject_name,
+
+        units: target.units,
+
+        status: "Enrolled",
+
+        old: {
+          offering_id: oldOfferingId,
+
+          section_id: oldSectionId,
+
+          section_subject_id: oldSectionSubjectId,
+
+          section_name: currentSubject.section_name,
+        },
+
+        new: {
+          offering_id: target.offering_id,
+
+          section_id: target.section_id,
+
+          section_subject_id: target.section_subject_id,
+
+          section_name: target.section_name,
+        },
+
+        schedule_days: target.schedule_days,
+
+        schedule_time: target.schedule_time,
+
+        faculty_id: target.faculty_id,
+
+        room_id: target.room_id,
+      },
+
+      history: {
+        change_type: "CHANGE",
+
+        reason: reason || "Registrar transferred subject",
+      },
+    });
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("ROLLBACK TRANSFER SUBJECT ERROR:", rollbackError);
+    }
+
+    console.error("TRANSFER SUBJECT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to transfer subject.",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // =================================================
+    // VALIDATE ENROLLMENT ID
+    // =================================================
+
+    const enrollmentId = Number(id);
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment ID.",
+      });
+    }
+
+    // =================================================
+    // GET ENROLLMENT HEADER
+    // =================================================
+
+    const [enrollmentRows] = await db.execute(
+      `
+      SELECT
+
+          e.enrollment_id,
+          e.student_id,
+
+          -- Student
+          s.student_number,
+          s.first_name,
+          s.middle_name,
+          s.last_name,
+          s.gender,
+          s.birth_date,
+          s.contact_number,
+          s.year_level,
+
+          -- Course
+          c.course_id,
+          c.course_code,
+
+          -- Student section
+          sec_student.section_id AS student_section_id,
+          sec_student.section_name AS student_section_name,
+
+          -- Academic year
+          ay.academic_year_id,
+          ay.academic_year,
+
+          -- Semester
+          sem.semester_id,
+          sem.semester_name,
+
+          -- Enrollment
+          e.enrollment_status,
+          e.remarks,
+
+          -- Approval
+          e.approved_by,
+          u.username AS approved_by_username,
+          e.approved_at,
+
+          e.created_at
+
+      FROM enrollments e
+
+      INNER JOIN students s
+          ON s.student_id = e.student_id
+
+      LEFT JOIN courses c
+          ON c.course_id = s.course_id
+
+      LEFT JOIN sections sec_student
+          ON sec_student.section_id = s.section_id
+
+      INNER JOIN academic_years ay
+          ON ay.academic_year_id = e.academic_year_id
+
+      INNER JOIN semesters sem
+          ON sem.semester_id = e.semester_id
+
+      LEFT JOIN users u
+          ON u.user_id = e.approved_by
+
+      WHERE e.enrollment_id = ?
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // CHECK ENROLLMENT
+    // =================================================
+
+    if (enrollmentRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // GET ENROLLED SUBJECTS
+    // =================================================
+
+    const [subjects] = await db.execute(
+      `
+      SELECT
+
+          es.enrollment_subject_id,
+
+          -- Subject
+          es.subject_id,
+          sub.subject_code,
+          sub.subject_name,
+          sub.units,
+          sub.lecture_hours,
+          sub.laboratory_hours,
+
+          -- Enrollment subject status
+          es.status AS subject_status,
+
+          -- Section
+          es.section_id,
+          sec.section_name,
+
+          -- Section subject
+          es.section_subject_id,
+
+          -- Offering
+          es.offering_id,
+
+          -- Faculty
+          f.faculty_id,
+
+          -- Room
+          r.room_id,
+
+          -- Schedule
+          so.schedule_days,
+          so.schedule_time,
+
+          -- Offering capacity
+          so.max_students
+
+      FROM enrollment_subjects es
+
+      INNER JOIN subjects sub
+          ON sub.subject_id = es.subject_id
+
+      LEFT JOIN sections sec
+          ON sec.section_id = es.section_id
+
+      LEFT JOIN subject_offerings so
+          ON so.offering_id = es.offering_id
+
+      LEFT JOIN faculty f
+          ON f.faculty_id = so.faculty_id
+
+      LEFT JOIN rooms r
+          ON r.room_id = so.room_id
+
+      WHERE es.enrollment_id = ?
+
+      ORDER BY
+          sub.subject_code ASC
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    res.json({
+      success: true,
+
+      enrollment,
+
+      totalSubjects: subjects.length,
+
+      subjects,
+    });
+  } catch (error) {
+    console.error("GET ENROLLMENT ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch enrollment.",
     });
   }
 });
@@ -1471,54 +3245,55 @@ router.post("/:id/subjects", async (req, res) => {
     // =================================================
     // RECORD HISTORY
     // =================================================
-
     await connection.execute(
       `
-      INSERT INTO enrollment_subject_changes (
+    INSERT INTO enrollment_subject_changes (
+        enrollment_id,
+        enrollment_subject_id,
+        subject_id,
 
-          enrollment_id,
-          enrollment_subject_id,
-          subject_id,
+        change_type,
 
-          change_type,
+        old_offering_id,
+        old_section_id,
+        old_section_subject_id,
 
-          old_offering_id,
-          old_section_id,
-          old_section_subject_id,
+        new_offering_id,
+        new_section_id,
+        new_section_subject_id,
 
-          new_offering_id,
-          new_section_id,
-          new_section_subject_id,
+        reason,
+        changed_by
+    )
+    VALUES (
+        ?,
+        ?,
+        ?,
 
-          reason,
-          changed_by
+        'DROP',
 
-      )
-      VALUES (
-          ?,
-          ?,
-          ?,
-          'ADD',
-          NULL,
-          NULL,
-          NULL,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?
-      )
-      `,
+        ?,
+        ?,
+        ?,
+
+        NULL,
+        NULL,
+        NULL,
+
+        ?,
+        ?
+    )
+  `,
       [
         enrollmentId,
         enrollmentSubjectId,
-        offering.subject_id,
+        subject.subject_id,
 
-        offering.offering_id,
-        offering.section_id,
-        offering.section_subject_id,
+        subject.offering_id,
+        subject.section_id,
+        subject.section_subject_id,
 
-        reason || "Registrar added subject",
+        reason || "Registrar dropped subject",
 
         changedBy,
       ],
@@ -1596,7 +3371,1507 @@ router.post("/:id/subjects", async (req, res) => {
   } finally {
     connection.release();
   }
-}); // =====================================================
+});
+
+// =====================================================
+// DROP SUBJECT FROM ENROLLMENT
+//
+// PATCH /api/registrar/enrollments/:id/subjects/:enrollmentSubjectId/drop
+//
+// Body:
+// {
+//   "reason": "Registrar dropped subject for enrollment correction."
+// }
+//
+// Purpose:
+// - Drop an enrolled subject
+// - Does NOT delete the enrollment_subject record
+// - Changes status to Dropped
+// - Supports Pending and Approved enrollments
+// - Records DROP history
+// =====================================================
+
+router.patch("/:id/subjects/:enrollmentSubjectId/drop", async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const { id, enrollmentSubjectId } = req.params;
+
+    const enrollmentId = Number(id);
+    const subjectEnrollmentId = Number(enrollmentSubjectId);
+
+    // =================================================
+    // VALIDATE ENROLLMENT ID
+    // =================================================
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment ID.",
+      });
+    }
+
+    // =================================================
+    // VALIDATE ENROLLMENT SUBJECT ID
+    // =================================================
+
+    if (!Number.isInteger(subjectEnrollmentId) || subjectEnrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment subject ID.",
+      });
+    }
+
+    // =================================================
+    // REQUEST DATA
+    // =================================================
+
+    const { reason } = req.body;
+
+    const dropReason = reason || "Registrar dropped subject";
+
+    // =================================================
+    // START TRANSACTION
+    // =================================================
+
+    await connection.beginTransaction();
+
+    // =================================================
+    // GET ENROLLMENT
+    // =================================================
+
+    const [enrollmentRows] = await connection.execute(
+      `
+        SELECT
+
+            e.enrollment_id,
+            e.student_id,
+            e.academic_year_id,
+            e.semester_id,
+            e.enrollment_status,
+
+            s.student_number,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+
+            c.course_id,
+            c.course_code
+
+        FROM enrollments e
+
+        INNER JOIN students s
+            ON s.student_id = e.student_id
+
+        LEFT JOIN courses c
+            ON c.course_id = s.course_id
+
+        WHERE e.enrollment_id = ?
+
+        FOR UPDATE
+        `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // CHECK ENROLLMENT
+    // =================================================
+
+    if (enrollmentRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // CHECK ENROLLMENT STATUS
+    // =================================================
+
+    if (
+      enrollment.enrollment_status !== "Pending" &&
+      enrollment.enrollment_status !== "Approved"
+    ) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: `Subject cannot be dropped because enrollment status is '${enrollment.enrollment_status}'.`,
+      });
+    }
+
+    // =================================================
+    // GET ENROLLMENT SUBJECT
+    // =================================================
+
+    const [subjectRows] = await connection.execute(
+      `
+        SELECT
+
+            es.enrollment_subject_id,
+            es.enrollment_id,
+            es.subject_id,
+            es.offering_id,
+            es.section_id,
+            es.section_subject_id,
+            es.status,
+
+            sub.subject_code,
+            sub.subject_name,
+            sub.units,
+
+            sec.section_name,
+
+            so.schedule_days,
+            so.schedule_time,
+            so.faculty_id,
+            so.room_id
+
+        FROM enrollment_subjects es
+
+        INNER JOIN subjects sub
+            ON sub.subject_id = es.subject_id
+
+        LEFT JOIN sections sec
+            ON sec.section_id = es.section_id
+
+        LEFT JOIN subject_offerings so
+            ON so.offering_id = es.offering_id
+
+        WHERE es.enrollment_subject_id = ?
+
+          AND es.enrollment_id = ?
+
+        FOR UPDATE
+        `,
+      [subjectEnrollmentId, enrollmentId],
+    );
+
+    // =================================================
+    // CHECK SUBJECT
+    // =================================================
+
+    if (subjectRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment subject not found.",
+      });
+    }
+
+    const enrolledSubject = subjectRows[0];
+
+    // =================================================
+    // CHECK SUBJECT STATUS
+    // =================================================
+
+    if (enrolledSubject.status !== "Enrolled") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: `Subject cannot be dropped because its current status is '${enrolledSubject.status}'.`,
+      });
+    }
+
+    // =================================================
+    // SAVE OLD VALUES FOR HISTORY
+    // =================================================
+
+    const oldOfferingId = enrolledSubject.offering_id;
+
+    const oldSectionId = enrolledSubject.section_id;
+
+    const oldSectionSubjectId = enrolledSubject.section_subject_id;
+
+    // =================================================
+    // UPDATE SUBJECT STATUS
+    // =================================================
+
+    await connection.execute(
+      `
+        UPDATE enrollment_subjects
+
+        SET status = 'Dropped'
+
+        WHERE enrollment_subject_id = ?
+
+          AND enrollment_id = ?
+        `,
+      [subjectEnrollmentId, enrollmentId],
+    );
+
+    // =================================================
+    // GET REGISTRAR
+    // =================================================
+
+    const changedBy = req.user?.user_id || null;
+
+    // =================================================
+    // RECORD HISTORY
+    // =================================================
+
+    await connection.execute(
+      `
+        INSERT INTO enrollment_subject_changes (
+
+            enrollment_id,
+            enrollment_subject_id,
+            subject_id,
+
+            change_type,
+
+            old_offering_id,
+            old_section_id,
+            old_section_subject_id,
+
+            new_offering_id,
+            new_section_id,
+            new_section_subject_id,
+
+            reason,
+            changed_by
+
+        )
+        VALUES (
+            ?,
+            ?,
+            ?,
+
+            'DROP',
+
+            ?,
+            ?,
+            ?,
+
+            NULL,
+            NULL,
+            NULL,
+
+            ?,
+            ?
+        )
+        `,
+      [
+        enrollmentId,
+        subjectEnrollmentId,
+        enrolledSubject.subject_id,
+
+        oldOfferingId,
+        oldSectionId,
+        oldSectionSubjectId,
+
+        dropReason,
+        changedBy,
+      ],
+    );
+
+    // =================================================
+    // COMMIT
+    // =================================================
+
+    await connection.commit();
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      message: "Subject dropped from enrollment successfully.",
+
+      enrollment_subject: {
+        enrollment_subject_id: enrolledSubject.enrollment_subject_id,
+
+        enrollment_id: enrolledSubject.enrollment_id,
+
+        subject_id: enrolledSubject.subject_id,
+
+        subject_code: enrolledSubject.subject_code,
+
+        subject_name: enrolledSubject.subject_name,
+
+        units: enrolledSubject.units,
+
+        offering_id: enrolledSubject.offering_id,
+
+        section_subject_id: enrolledSubject.section_subject_id,
+
+        section_id: enrolledSubject.section_id,
+
+        section_name: enrolledSubject.section_name,
+
+        status: "Dropped",
+
+        schedule_days: enrolledSubject.schedule_days,
+
+        schedule_time: enrolledSubject.schedule_time,
+
+        faculty_id: enrolledSubject.faculty_id,
+
+        room_id: enrolledSubject.room_id,
+      },
+
+      history: {
+        change_type: "DROP",
+        old_offering_id: oldOfferingId,
+        old_section_id: oldSectionId,
+        old_section_subject_id: oldSectionSubjectId,
+        reason: dropReason,
+        changed_by: changedBy,
+      },
+    });
+  } catch (error) {
+    // =================================================
+    // ROLLBACK
+    // =================================================
+
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("ROLLBACK DROP SUBJECT ERROR:", rollbackError);
+    }
+
+    console.error("DROP SUBJECT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to drop subject from enrollment.",
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// =====================================================
+// TRANSFER SUBJECT
+//
+// PATCH /api/registrar/enrollments/:id/subjects/:enrollmentSubjectId/transfer
+//
+// Body:
+// {
+//   "offering_id": 3,
+//   "reason": "Registrar transferred student to another section."
+// }
+//
+// Purpose:
+// - Transfer an enrolled subject to another offering
+// - Keeps the same enrollment_subject_id
+// - Updates offering / section / section_subject
+// - Supports Pending and Approved enrollments
+// - Validates academic year
+// - Validates semester
+// - Validates subject consistency
+// - Validates section subject status
+// - Checks capacity
+// - Prevents transferring to the same offering
+// - Records TRANSFER history
+// =====================================================
+
+router.patch(
+  "/:id/subjects/:enrollmentSubjectId/transfer",
+  async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+      const { id, enrollmentSubjectId } = req.params;
+
+      const enrollmentId = Number(id);
+      const subjectEnrollmentId = Number(enrollmentSubjectId);
+
+      // =================================================
+      // VALIDATE ENROLLMENT ID
+      // =================================================
+
+      if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid enrollment ID.",
+        });
+      }
+
+      // =================================================
+      // VALIDATE ENROLLMENT SUBJECT ID
+      // =================================================
+
+      if (!Number.isInteger(subjectEnrollmentId) || subjectEnrollmentId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid enrollment subject ID.",
+        });
+      }
+
+      // =================================================
+      // GET REQUEST DATA
+      // =================================================
+
+      const { offering_id, reason } = req.body;
+
+      const newOfferingId = Number(offering_id);
+
+      // =================================================
+      // VALIDATE OFFERING ID
+      // =================================================
+
+      if (!Number.isInteger(newOfferingId) || newOfferingId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid offering ID.",
+        });
+      }
+
+      const transferReason =
+        reason || "Registrar transferred subject to another section";
+
+      // =================================================
+      // START TRANSACTION
+      // =================================================
+
+      await connection.beginTransaction();
+
+      // =================================================
+      // GET ENROLLMENT
+      // =================================================
+
+      const [enrollmentRows] = await connection.execute(
+        `
+        SELECT
+
+            e.enrollment_id,
+            e.student_id,
+            e.academic_year_id,
+            e.semester_id,
+            e.enrollment_status,
+
+            s.student_number,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
+
+            c.course_id,
+            c.course_code
+
+        FROM enrollments e
+
+        INNER JOIN students s
+            ON s.student_id = e.student_id
+
+        LEFT JOIN courses c
+            ON c.course_id = s.course_id
+
+        WHERE e.enrollment_id = ?
+
+        FOR UPDATE
+        `,
+        [enrollmentId],
+      );
+
+      // =================================================
+      // CHECK ENROLLMENT
+      // =================================================
+
+      if (enrollmentRows.length === 0) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          success: false,
+          message: "Enrollment not found.",
+        });
+      }
+
+      const enrollment = enrollmentRows[0];
+
+      // =================================================
+      // CHECK ENROLLMENT STATUS
+      // =================================================
+
+      if (
+        enrollment.enrollment_status !== "Pending" &&
+        enrollment.enrollment_status !== "Approved"
+      ) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: `Subject cannot be transferred because enrollment status is '${enrollment.enrollment_status}'.`,
+        });
+      }
+
+      // =================================================
+      // GET CURRENT ENROLLMENT SUBJECT
+      // =================================================
+
+      const [currentSubjectRows] = await connection.execute(
+        `
+          SELECT
+
+              es.enrollment_subject_id,
+              es.enrollment_id,
+              es.subject_id,
+              es.offering_id,
+              es.section_id,
+              es.section_subject_id,
+              es.status,
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+
+              sec.section_name,
+
+              so.schedule_days,
+              so.schedule_time,
+              so.faculty_id,
+              so.room_id
+
+          FROM enrollment_subjects es
+
+          INNER JOIN subjects sub
+              ON sub.subject_id = es.subject_id
+
+          LEFT JOIN sections sec
+              ON sec.section_id = es.section_id
+
+          LEFT JOIN subject_offerings so
+              ON so.offering_id = es.offering_id
+
+          WHERE es.enrollment_subject_id = ?
+
+            AND es.enrollment_id = ?
+
+          FOR UPDATE
+          `,
+        [subjectEnrollmentId, enrollmentId],
+      );
+
+      // =================================================
+      // CHECK CURRENT SUBJECT
+      // =================================================
+
+      if (currentSubjectRows.length === 0) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          success: false,
+          message: "Enrollment subject not found.",
+        });
+      }
+
+      const currentSubject = currentSubjectRows[0];
+
+      // =================================================
+      // CHECK CURRENT STATUS
+      // =================================================
+
+      if (currentSubject.status !== "Enrolled") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: `Subject cannot be transferred because its current status is '${currentSubject.status}'.`,
+        });
+      }
+
+      // =================================================
+      // CHECK SAME OFFERING
+      // =================================================
+
+      if (Number(currentSubject.offering_id) === Number(newOfferingId)) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: "Subject is already assigned to this offering.",
+        });
+      }
+
+      // =================================================
+      // GET NEW OFFERING
+      // =================================================
+
+      const [offeringRows] = await connection.execute(
+        `
+          SELECT
+
+              so.offering_id,
+              so.section_subject_id,
+              so.subject_id,
+              so.section_id,
+
+              so.faculty_id,
+              so.room_id,
+
+              so.academic_year_id,
+              so.semester_id,
+
+              so.schedule_days,
+              so.schedule_time,
+
+              so.max_students,
+              so.status AS offering_status,
+
+              -- Section Subject
+              ss.status AS section_subject_status,
+
+              -- Subject
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+
+              -- Section
+              sec.section_name
+
+          FROM subject_offerings so
+
+          INNER JOIN section_subjects ss
+              ON ss.section_subject_id =
+                 so.section_subject_id
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 so.subject_id
+
+          INNER JOIN sections sec
+              ON sec.section_id =
+                 so.section_id
+
+          WHERE so.offering_id = ?
+
+          FOR UPDATE
+          `,
+        [newOfferingId],
+      );
+
+      // =================================================
+      // CHECK OFFERING
+      // =================================================
+
+      if (offeringRows.length === 0) {
+        await connection.rollback();
+
+        return res.status(404).json({
+          success: false,
+          message: "Subject offering not found.",
+        });
+      }
+
+      const newOffering = offeringRows[0];
+
+      // =================================================
+      // CHECK ACADEMIC YEAR
+      // =================================================
+
+      if (
+        Number(newOffering.academic_year_id) !==
+        Number(enrollment.academic_year_id)
+      ) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message:
+            "Subject offering does not belong to the enrollment academic year.",
+        });
+      }
+
+      // =================================================
+      // CHECK SEMESTER
+      // =================================================
+
+      if (Number(newOffering.semester_id) !== Number(enrollment.semester_id)) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message:
+            "Subject offering does not belong to the enrollment semester.",
+        });
+      }
+
+      // =================================================
+      // CHECK SUBJECT
+      //
+      // IT101 can only be transferred to another IT101
+      // offering.
+      // =================================================
+
+      if (
+        Number(newOffering.subject_id) !== Number(currentSubject.subject_id)
+      ) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: "The new offering does not belong to the same subject.",
+        });
+      }
+
+      // =================================================
+      // CHECK OFFERING STATUS
+      // =================================================
+
+      if (newOffering.offering_status !== "Open") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: `Subject offering is ${newOffering.offering_status.toLowerCase()}.`,
+        });
+      }
+
+      // =================================================
+      // CHECK SECTION SUBJECT STATUS
+      // =================================================
+
+      if (newOffering.section_subject_status !== "Open") {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: `Subject offering is ${newOffering.section_subject_status.toLowerCase()}.`,
+        });
+      }
+
+      // =================================================
+      // CHECK CAPACITY
+      // =================================================
+
+      const [capacityRows] = await connection.execute(
+        `
+          SELECT
+
+              COUNT(*) AS enrolled_count
+
+          FROM enrollment_subjects es
+
+          INNER JOIN enrollments e
+              ON e.enrollment_id =
+                 es.enrollment_id
+
+          WHERE es.offering_id = ?
+
+            AND es.status = 'Enrolled'
+
+            AND e.enrollment_status IN (
+                'Pending',
+                'Approved'
+            )
+
+            AND es.enrollment_subject_id <> ?
+          `,
+        [newOfferingId, subjectEnrollmentId],
+      );
+
+      const enrolledCount = Number(capacityRows[0]?.enrolled_count || 0);
+
+      const maxStudents = Number(newOffering.max_students || 0);
+
+      if (maxStudents > 0 && enrolledCount >= maxStudents) {
+        await connection.rollback();
+
+        return res.status(409).json({
+          success: false,
+          message: "Subject offering is already full.",
+          capacity: {
+            max_students: maxStudents,
+            enrolled_count: enrolledCount,
+            available_slots: 0,
+          },
+        });
+      }
+
+      // =================================================
+      // SAVE OLD VALUES
+      // =================================================
+
+      const oldOfferingId = currentSubject.offering_id;
+
+      const oldSectionId = currentSubject.section_id;
+
+      const oldSectionSubjectId = currentSubject.section_subject_id;
+
+      // =================================================
+      // UPDATE ENROLLMENT SUBJECT
+      // =================================================
+
+      await connection.execute(
+        `
+        UPDATE enrollment_subjects
+
+        SET
+
+            offering_id = ?,
+            section_id = ?,
+            section_subject_id = ?,
+            status = 'Enrolled'
+
+        WHERE enrollment_subject_id = ?
+
+          AND enrollment_id = ?
+        `,
+        [
+          newOffering.offering_id,
+          newOffering.section_id,
+          newOffering.section_subject_id,
+
+          subjectEnrollmentId,
+          enrollmentId,
+        ],
+      );
+
+      // =================================================
+      // GET REGISTRAR
+      // =================================================
+
+      const changedBy = req.user?.user_id || null;
+
+      // =================================================
+      // RECORD HISTORY
+      // =================================================
+
+      await connection.execute(
+        `
+        INSERT INTO enrollment_subject_changes (
+
+            enrollment_id,
+            enrollment_subject_id,
+            subject_id,
+
+            change_type,
+
+            old_offering_id,
+            old_section_id,
+            old_section_subject_id,
+
+            new_offering_id,
+            new_section_id,
+            new_section_subject_id,
+
+            reason,
+            changed_by
+
+        )
+        VALUES (
+
+            ?,
+            ?,
+            ?,
+
+            'TRANSFER',
+
+            ?,
+            ?,
+            ?,
+
+            ?,
+            ?,
+            ?,
+
+            ?,
+            ?
+        )
+        `,
+        [
+          enrollmentId,
+          subjectEnrollmentId,
+          currentSubject.subject_id,
+
+          oldOfferingId,
+          oldSectionId,
+          oldSectionSubjectId,
+
+          newOffering.offering_id,
+          newOffering.section_id,
+          newOffering.section_subject_id,
+
+          transferReason,
+          changedBy,
+        ],
+      );
+
+      // =================================================
+      // COMMIT
+      // =================================================
+
+      await connection.commit();
+
+      // =================================================
+      // RESPONSE
+      // =================================================
+
+      return res.status(200).json({
+        success: true,
+
+        message: "Subject transferred successfully.",
+
+        enrollment_subject: {
+          enrollment_subject_id: subjectEnrollmentId,
+
+          enrollment_id: enrollmentId,
+
+          subject_id: currentSubject.subject_id,
+
+          subject_code: currentSubject.subject_code,
+
+          subject_name: currentSubject.subject_name,
+
+          units: currentSubject.units,
+
+          offering_id: newOffering.offering_id,
+
+          section_subject_id: newOffering.section_subject_id,
+
+          section_id: newOffering.section_id,
+
+          section_name: newOffering.section_name,
+
+          status: "Enrolled",
+
+          schedule_days: newOffering.schedule_days,
+
+          schedule_time: newOffering.schedule_time,
+
+          faculty_id: newOffering.faculty_id,
+
+          room_id: newOffering.room_id,
+        },
+
+        history: {
+          change_type: "TRANSFER",
+
+          old_offering_id: oldOfferingId,
+
+          old_section_id: oldSectionId,
+
+          old_section_subject_id: oldSectionSubjectId,
+
+          new_offering_id: newOffering.offering_id,
+
+          new_section_id: newOffering.section_id,
+
+          new_section_subject_id: newOffering.section_subject_id,
+
+          reason: transferReason,
+
+          changed_by: changedBy,
+        },
+      });
+    } catch (error) {
+      // =================================================
+      // ROLLBACK
+      // =================================================
+
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("ROLLBACK TRANSFER SUBJECT ERROR:", rollbackError);
+      }
+
+      console.error("TRANSFER SUBJECT ERROR:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to transfer subject.",
+      });
+    } finally {
+      connection.release();
+    }
+  },
+);
+
+// =====================================================
+// GET ENROLLMENT CORRECTION HISTORY
+//
+// GET /api/registrar/enrollments/:id/changes
+//
+// Purpose:
+// - View all Registrar changes made to an enrollment
+// - Includes ADD
+// - Includes DROP
+// - Includes TRANSFER
+// - Shows old and new offering/section information
+// - Shows reason
+// - Shows who made the change
+// - Shows date/time of change
+// =====================================================
+
+router.get("/:id/changes", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // =================================================
+    // VALIDATE ENROLLMENT ID
+    // =================================================
+
+    const enrollmentId = Number(id);
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment ID.",
+      });
+    }
+
+    // =================================================
+    // CHECK ENROLLMENT
+    // =================================================
+
+    const [enrollmentRows] = await db.execute(
+      `
+      SELECT
+          e.enrollment_id,
+          e.student_id,
+
+          s.student_number,
+          s.first_name,
+          s.middle_name,
+          s.last_name,
+
+          c.course_code,
+
+          e.academic_year_id,
+          ay.academic_year,
+
+          e.semester_id,
+          sem.semester_name,
+
+          e.enrollment_status
+
+      FROM enrollments e
+
+      INNER JOIN students s
+          ON s.student_id = e.student_id
+
+      LEFT JOIN courses c
+          ON c.course_id = s.course_id
+
+      INNER JOIN academic_years ay
+          ON ay.academic_year_id = e.academic_year_id
+
+      INNER JOIN semesters sem
+          ON sem.semester_id = e.semester_id
+
+      WHERE e.enrollment_id = ?
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // ENROLLMENT NOT FOUND
+    // =================================================
+
+    if (enrollmentRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // GET CORRECTION HISTORY
+    // =================================================
+
+    const [changes] = await db.execute(
+      `
+      SELECT
+
+          esc.change_id,
+
+          esc.enrollment_id,
+
+          esc.enrollment_subject_id,
+
+          esc.subject_id,
+
+          -- Subject
+          sub.subject_code,
+          sub.subject_name,
+          sub.units,
+
+          -- Change
+          esc.change_type,
+
+          -- OLD OFFERING
+          esc.old_offering_id,
+          old_so.section_id AS old_section_id,
+          old_so.section_subject_id AS old_section_subject_id,
+
+          old_sec.section_name AS old_section_name,
+
+          -- NEW OFFERING
+          esc.new_offering_id,
+          new_so.section_id AS new_section_id,
+          new_so.section_subject_id AS new_section_subject_id,
+
+          new_sec.section_name AS new_section_name,
+
+          -- Reason
+          esc.reason,
+
+          -- Registrar
+          esc.changed_by,
+
+          u.username AS changed_by_username,
+
+          -- Date
+          esc.changed_at
+
+      FROM enrollment_subject_changes esc
+
+      INNER JOIN subjects sub
+          ON sub.subject_id = esc.subject_id
+
+      -- OLD OFFERING
+      LEFT JOIN subject_offerings old_so
+          ON old_so.offering_id = esc.old_offering_id
+
+      LEFT JOIN sections old_sec
+          ON old_sec.section_id = old_so.section_id
+
+      -- NEW OFFERING
+      LEFT JOIN subject_offerings new_so
+          ON new_so.offering_id = esc.new_offering_id
+
+      LEFT JOIN sections new_sec
+          ON new_sec.section_id = new_so.section_id
+
+      -- USER / REGISTRAR
+      LEFT JOIN users u
+          ON u.user_id = esc.changed_by
+
+      WHERE esc.enrollment_id = ?
+
+      ORDER BY
+          esc.changed_at DESC,
+          esc.change_id DESC
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      enrollment: {
+        enrollment_id: enrollment.enrollment_id,
+
+        student_id: enrollment.student_id,
+
+        student_number: enrollment.student_number,
+
+        student_name: [
+          enrollment.first_name,
+          enrollment.middle_name,
+          enrollment.last_name,
+        ]
+          .filter(Boolean)
+          .join(" "),
+
+        course_code: enrollment.course_code,
+
+        academic_year_id: enrollment.academic_year_id,
+        academic_year: enrollment.academic_year,
+
+        semester_id: enrollment.semester_id,
+        semester_name: enrollment.semester_name,
+
+        enrollment_status: enrollment.enrollment_status,
+      },
+
+      count: changes.length,
+
+      changes,
+    });
+  } catch (error) {
+    console.error("GET ENROLLMENT CORRECTION HISTORY ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch enrollment correction history.",
+    });
+  }
+});
+
+// =====================================================
+// GET ENROLLMENT CORRECTION HISTORY
+//
+// GET /api/registrar/enrollments/:id/correction-history
+//
+// Purpose:
+// - View all registrar corrections made to an enrollment
+// - Show ADD / REMOVE / CHANGE history
+// - Show old and new section information
+// - Show reason
+// - Show registrar who made the change
+// - Show correction date
+// =====================================================
+
+router.get("/:id/correction-history", async (req, res) => {
+  try {
+    // =================================================
+    // GET ENROLLMENT ID
+    // =================================================
+
+    const { id } = req.params;
+
+    const enrollmentId = Number(id);
+
+    // =================================================
+    // VALIDATE ENROLLMENT ID
+    // =================================================
+
+    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid enrollment ID.",
+      });
+    }
+
+    // =================================================
+    // CHECK ENROLLMENT
+    // =================================================
+
+    const [enrollmentRows] = await db.execute(
+      `
+      SELECT
+          e.enrollment_id,
+          e.student_id,
+
+          s.student_number,
+          s.first_name,
+          s.middle_name,
+          s.last_name,
+
+          e.academic_year_id,
+          e.semester_id,
+
+          e.enrollment_status
+
+      FROM enrollments e
+
+      INNER JOIN students s
+          ON s.student_id = e.student_id
+
+      WHERE e.enrollment_id = ?
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // ENROLLMENT NOT FOUND
+    // =================================================
+
+    if (enrollmentRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // GET CORRECTION HISTORY
+    // =================================================
+
+    const [historyRows] = await db.execute(
+      `
+      SELECT
+
+          esc.change_id,
+          esc.enrollment_id,
+          esc.enrollment_subject_id,
+          esc.subject_id,
+
+          -- Subject
+          sub.subject_code,
+          sub.subject_name,
+          sub.units,
+
+          -- Change
+          esc.change_type,
+
+          -- OLD OFFERING
+          esc.old_offering_id,
+
+          old_so.section_id
+              AS old_section_id,
+
+          old_so.section_subject_id
+              AS old_section_subject_id,
+
+          old_sec.section_name
+              AS old_section_name,
+
+          -- NEW OFFERING
+          esc.new_offering_id,
+
+          new_so.section_id
+              AS new_section_id,
+
+          new_so.section_subject_id
+              AS new_section_subject_id,
+
+          new_sec.section_name
+              AS new_section_name,
+
+          -- Reason
+          esc.reason,
+
+          -- Registrar
+          esc.changed_by,
+
+          u.username
+              AS changed_by_username,
+
+          -- Date
+          esc.created_at
+
+      FROM enrollment_subject_changes esc
+
+      INNER JOIN subjects sub
+          ON sub.subject_id = esc.subject_id
+
+      -- =============================================
+      -- OLD OFFERING
+      -- =============================================
+
+      LEFT JOIN subject_offerings old_so
+          ON old_so.offering_id =
+             esc.old_offering_id
+
+      LEFT JOIN sections old_sec
+          ON old_sec.section_id =
+             old_so.section_id
+
+      -- =============================================
+      -- NEW OFFERING
+      -- =============================================
+
+      LEFT JOIN subject_offerings new_so
+          ON new_so.offering_id =
+             esc.new_offering_id
+
+      LEFT JOIN sections new_sec
+          ON new_sec.section_id =
+             new_so.section_id
+
+      -- =============================================
+      -- USER / REGISTRAR
+      -- =============================================
+
+      LEFT JOIN users u
+          ON u.user_id =
+             esc.changed_by
+
+      WHERE esc.enrollment_id = ?
+
+      ORDER BY
+          esc.created_at DESC,
+          esc.change_id DESC
+      `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      enrollment: {
+        enrollment_id: enrollment.enrollment_id,
+
+        student_id: enrollment.student_id,
+
+        student_number: enrollment.student_number,
+
+        student_name: [
+          enrollment.first_name,
+          enrollment.middle_name,
+          enrollment.last_name,
+        ]
+          .filter(Boolean)
+          .join(" "),
+
+        academic_year_id: enrollment.academic_year_id,
+
+        semester_id: enrollment.semester_id,
+
+        enrollment_status: enrollment.enrollment_status,
+      },
+
+      count: historyRows.length,
+
+      history: historyRows.map((row) => ({
+        change_id: row.change_id,
+
+        enrollment_id: row.enrollment_id,
+
+        enrollment_subject_id: row.enrollment_subject_id,
+
+        subject_id: row.subject_id,
+
+        subject_code: row.subject_code,
+
+        subject_name: row.subject_name,
+
+        units: row.units,
+
+        change_type: row.change_type,
+
+        old: {
+          offering_id: row.old_offering_id,
+
+          section_id: row.old_section_id,
+
+          section_subject_id: row.old_section_subject_id,
+
+          section_name: row.old_section_name,
+        },
+
+        new: {
+          offering_id: row.new_offering_id,
+
+          section_id: row.new_section_id,
+
+          section_subject_id: row.new_section_subject_id,
+
+          section_name: row.new_section_name,
+        },
+
+        reason: row.reason,
+
+        changed_by: row.changed_by,
+
+        changed_by_username: row.changed_by_username,
+
+        created_at: row.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error("GET ENROLLMENT CORRECTION HISTORY ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load enrollment correction history.",
+    });
+  }
+});
+
+// =====================================================
 // CHANGE SUBJECT OFFERING / SECTION
 //
 // PUT /api/registrar/enrollments/:id/subjects/:enrollmentSubjectId
@@ -3153,22 +6428,37 @@ router.post("/:id/reject", async (req, res) => {
     }
   }
 });
+
 // =====================================================
-// ADD SUBJECT TO APPROVED ENROLLMENT
+// SUBMIT STUDENT ENROLLMENT
 //
-// POST /api/registrar/enrollments/:id/subjects
+// POST /api/student/enrollments/:id/submit
+//
+// Body:
+//
+// {
+//   "user_id": 6,
+//   "retakes": []
+// }
+//
+// IMPORTANT:
+// - Student does NOT select sections.
+// - Registrar handles section/offering assignment.
+// - Enrollment period must be Open.
+// - Enrollment must currently be Draft.
+// - Successful submission becomes Pending.
+// - Prerequisites are validated before retakes.
+// - Failed/Incomplete subjects are handled through retakes.
 // =====================================================
 
-router.post("/:id/subjects", async (req, res) => {
+router.post("/:id/submit", async (req, res) => {
   let connection;
 
   try {
-    // =================================================
-    // GET ENROLLMENT ID
-    // =================================================
+    const enrollmentId = Number(req.params.id);
+    const userId = Number(req.body.user_id);
 
-    const { id } = req.params;
-    const enrollmentId = Number(id);
+    const retakes = Array.isArray(req.body.retakes) ? req.body.retakes : [];
 
     // =================================================
     // VALIDATE ENROLLMENT ID
@@ -3182,45 +6472,13 @@ router.post("/:id/subjects", async (req, res) => {
     }
 
     // =================================================
-    // GET REQUEST DATA
+    // VALIDATE USER ID
     // =================================================
 
-    const { offering_id, section_subject_id, section_id } = req.body;
-
-    const offeringId = Number(offering_id);
-    const sectionSubjectId = Number(section_subject_id);
-    const sectionId = Number(section_id);
-
-    // =================================================
-    // VALIDATE OFFERING
-    // =================================================
-
-    if (!Number.isInteger(offeringId) || offeringId <= 0) {
+    if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Invalid offering ID.",
-      });
-    }
-
-    // =================================================
-    // VALIDATE SECTION SUBJECT
-    // =================================================
-
-    if (!Number.isInteger(sectionSubjectId) || sectionSubjectId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid section subject ID.",
-      });
-    }
-
-    // =================================================
-    // VALIDATE SECTION
-    // =================================================
-
-    if (!Number.isInteger(sectionId) || sectionId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid section ID.",
+        message: "A valid user_id is required.",
       });
     }
 
@@ -3230,14 +6488,83 @@ router.post("/:id/subjects", async (req, res) => {
 
     connection = await db.getConnection();
 
-    // =================================================
-    // START TRANSACTION
-    // =================================================
-
     await connection.beginTransaction();
 
     // =================================================
+    // VERIFY USER IS A STUDENT
+    //
+    // We use user_id.
+    // No token is used.
+    // =================================================
+
+    const [studentRows] = await connection.execute(
+      `
+      SELECT
+          u.user_id,
+          u.username,
+          u.role_id,
+          r.role_name,
+
+          s.student_id,
+          s.student_number
+
+      FROM users u
+
+      INNER JOIN roles r
+          ON r.role_id = u.role_id
+
+      INNER JOIN students s
+          ON s.user_id = u.user_id
+
+      WHERE u.user_id = ?
+
+      LIMIT 1
+      `,
+      [userId],
+    );
+
+    // =================================================
+    // USER NOT FOUND
+    // =================================================
+
+    if (studentRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Student user not found.",
+        user_id: userId,
+      });
+    }
+
+    const student = studentRows[0];
+
+    // =================================================
+    // VERIFY STUDENT ROLE
+    // =================================================
+
+    if (
+      !student.role_name ||
+      student.role_name.trim().toLowerCase() !== "student"
+    ) {
+      await connection.rollback();
+
+      return res.status(403).json({
+        success: false,
+        message: "Only a Student can submit an enrollment.",
+        user: {
+          user_id: student.user_id,
+          username: student.username,
+          role_id: student.role_id,
+          role_name: student.role_name,
+        },
+      });
+    }
+
+    // =================================================
     // GET ENROLLMENT
+    //
+    // Student can only access their own enrollment.
     // =================================================
 
     const [enrollmentRows] = await connection.execute(
@@ -3245,21 +6572,41 @@ router.post("/:id/subjects", async (req, res) => {
       SELECT
           e.enrollment_id,
           e.student_id,
+
           e.academic_year_id,
+          ay.academic_year,
+
           e.semester_id,
-          e.enrollment_status
+          sem.semester_name,
+
+          e.enrollment_status,
+          e.remarks,
+
+          e.approved_by,
+          e.approved_at,
+
+          e.created_at
 
       FROM enrollments e
 
+      INNER JOIN academic_years ay
+          ON ay.academic_year_id = e.academic_year_id
+
+      INNER JOIN semesters sem
+          ON sem.semester_id = e.semester_id
+
       WHERE e.enrollment_id = ?
+        AND e.student_id = ?
 
       LIMIT 1
+
+      FOR UPDATE
       `,
-      [enrollmentId],
+      [enrollmentId, student.student_id],
     );
 
     // =================================================
-    // CHECK ENROLLMENT
+    // ENROLLMENT NOT FOUND
     // =================================================
 
     if (enrollmentRows.length === 0) {
@@ -3268,187 +6615,270 @@ router.post("/:id/subjects", async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Enrollment not found.",
+        enrollment_id: enrollmentId,
       });
     }
-
     const enrollment = enrollmentRows[0];
 
-    // =================================================
-    // ONLY APPROVED ENROLLMENTS CAN BE CORRECTED
-    // =================================================
-
-    if (enrollment.enrollment_status !== "Approved") {
-      await connection.rollback();
-
-      return res.status(400).json({
-        success: false,
-        message: "Only approved enrollments can have subjects added.",
-      });
-    }
+    console.log("========== SUBMIT DEBUG ==========");
+    console.log("Enrollment ID:", enrollmentId);
+    console.log("User ID:", userId);
+    console.log("Student ID:", student.student_id);
+    console.log("Enrollment Status:", enrollment.enrollment_status);
+    console.log("Status Type:", typeof enrollment.enrollment_status);
+    console.log("==================================");
 
     // =================================================
-    // GET OFFERING
+    // ONLY DRAFT ENROLLMENTS CAN BE SUBMITTED
     // =================================================
 
-    const [offeringRows] = await connection.execute(
-      `
-      SELECT
-          so.offering_id,
-          so.subject_id,
-          so.section_id,
-          so.section_subject_id,
-          so.academic_year_id,
-          so.semester_id,
-          so.max_students,
-
-          ss.status AS section_subject_status
-
-      FROM subject_offerings so
-
-      INNER JOIN section_subjects ss
-          ON ss.section_subject_id = so.section_subject_id
-
-      WHERE so.offering_id = ?
-        AND so.section_subject_id = ?
-        AND so.section_id = ?
-
-      LIMIT 1
-      `,
-      [offeringId, sectionSubjectId, sectionId],
-    );
-
-    // =================================================
-    // CHECK OFFERING
-    // =================================================
-
-    if (offeringRows.length === 0) {
-      await connection.rollback();
-
-      return res.status(400).json({
-        success: false,
-        message: "Invalid offering, section subject, or section.",
-      });
-    }
-
-    const offering = offeringRows[0];
-
-    // =================================================
-    // CHECK OFFERING PERIOD
-    // =================================================
-
-    if (
-      Number(offering.academic_year_id) !==
-        Number(enrollment.academic_year_id) ||
-      Number(offering.semester_id) !== Number(enrollment.semester_id)
-    ) {
-      await connection.rollback();
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "Offering does not belong to the enrollment's academic period.",
-      });
-    }
-
-    // =================================================
-    // CHECK OFFERING STATUS
-    // =================================================
-
-    if (offering.section_subject_status !== "Open") {
-      await connection.rollback();
-
-      return res.status(400).json({
-        success: false,
-        message: "This subject offering is not open.",
-      });
-    }
-
-    // =================================================
-    // CHECK DUPLICATE SUBJECT
-    // =================================================
-
-    const [existingRows] = await connection.execute(
-      `
-      SELECT
-          enrollment_subject_id
-
-      FROM enrollment_subjects
-
-      WHERE enrollment_id = ?
-        AND subject_id = ?
-
-      LIMIT 1
-      `,
-      [enrollmentId, offering.subject_id],
-    );
-
-    if (existingRows.length > 0) {
+    if (enrollment.enrollment_status !== "Draft") {
       await connection.rollback();
 
       return res.status(409).json({
         success: false,
-        message: "Student is already enrolled in this subject.",
+        message: `This enrollment cannot be submitted because its current status is "${enrollment.enrollment_status}".`,
+        enrollment: {
+          enrollment_id: Number(enrollment.enrollment_id),
+          status: enrollment.enrollment_status,
+        },
+      });
+    }
+    // =================================================
+    // VERIFY ENROLLMENT PERIOD
+    //
+    // The student's academic year + semester must
+    // currently have an Open enrollment period.
+    // =================================================
+
+    const [periodRows] = await connection.execute(
+      `
+      SELECT
+          ep.enrollment_period_id,
+
+          ep.academic_year_id,
+          ay.academic_year,
+
+          ep.semester_id,
+          sem.semester_name,
+
+          ep.status,
+
+          ep.opened_by,
+          ep.opened_at,
+
+          ep.remarks
+
+      FROM enrollment_periods ep
+
+      INNER JOIN academic_years ay
+          ON ay.academic_year_id = ep.academic_year_id
+
+      INNER JOIN semesters sem
+          ON sem.semester_id = ep.semester_id
+
+      WHERE ep.academic_year_id = ?
+        AND ep.semester_id = ?
+
+      LIMIT 1
+
+      FOR UPDATE
+      `,
+      [enrollment.academic_year_id, enrollment.semester_id],
+    );
+
+    // =================================================
+    // PERIOD DOES NOT EXIST
+    // =================================================
+
+    if (periodRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Enrollment period is not currently open.",
+      });
+    }
+
+    const enrollmentPeriod = periodRows[0];
+
+    // =================================================
+    // PERIOD MUST BE OPEN
+    // =================================================
+
+    if (enrollmentPeriod.status !== "Open") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        message: "Enrollment period is not currently open.",
+
+        enrollment_period: {
+          enrollment_period_id: Number(enrollmentPeriod.enrollment_period_id),
+
+          academic_year_id: Number(enrollmentPeriod.academic_year_id),
+
+          academic_year: enrollmentPeriod.academic_year,
+
+          semester_id: Number(enrollmentPeriod.semester_id),
+
+          semester_name: enrollmentPeriod.semester_name,
+
+          status: enrollmentPeriod.status,
+        },
       });
     }
 
     // =================================================
-    // CHECK CAPACITY
+    // GET ENROLLMENT SUBJECTS
     // =================================================
 
-    const [countRows] = await connection.execute(
+    const [subjectRows] = await connection.execute(
       `
       SELECT
-          COUNT(*) AS enrolled_count
+          es.enrollment_subject_id,
+
+          es.subject_id,
+
+          es.offering_id,
+          es.section_subject_id,
+
+          es.status,
+
+          sub.subject_code,
+          sub.subject_name,
+          sub.units
 
       FROM enrollment_subjects es
 
-      INNER JOIN enrollments e
-          ON e.enrollment_id = es.enrollment_id
+      INNER JOIN subjects sub
+          ON sub.subject_id = es.subject_id
 
-      WHERE es.offering_id = ?
-        AND es.status = 'Enrolled'
-        AND e.enrollment_status = 'Approved'
+      WHERE es.enrollment_id = ?
+
+      ORDER BY es.enrollment_subject_id ASC
       `,
-      [offeringId],
+      [enrollmentId],
     );
 
-    const enrolledCount = Number(countRows[0].enrolled_count);
+    // =================================================
+    // ENROLLMENT MUST HAVE SUBJECTS
+    // =================================================
 
-    if (
-      offering.max_students !== null &&
-      enrolledCount >= Number(offering.max_students)
-    ) {
+    if (subjectRows.length === 0) {
       await connection.rollback();
 
       return res.status(400).json({
         success: false,
-        message: "This subject offering is already full.",
+        message: "Cannot submit enrollment without subjects.",
       });
     }
 
     // =================================================
-    // INSERT SUBJECT
+    // ACTIVE SUBJECTS
+    //
+    // Dropped subjects remain in the database because
+    // they are part of enrollment/correction history.
+    //
+    // They should not count as active enrollment
+    // subjects.
     // =================================================
 
-    const [result] = await connection.execute(
+    const activeSubjects = subjectRows.filter(
+      (subject) => String(subject.status).trim().toLowerCase() !== "dropped",
+    );
+
+    // =================================================
+    // MUST HAVE AT LEAST ONE ACTIVE SUBJECT
+    // =================================================
+
+    if (activeSubjects.length === 0) {
+      await connection.rollback();
+
+      return res.status(400).json({
+        success: false,
+        message: "Cannot submit enrollment because it has no active subjects.",
+      });
+    }
+
+    // =================================================
+    // PREREQUISITE VALIDATION
+    //
+    // IMPORTANT:
+    //
+    // We intentionally do not invent prerequisite
+    // table/column names.
+    //
+    // This section should use your actual prerequisite
+    // schema once we confirm it.
+    //
+    // Prerequisites must be checked BEFORE retakes.
+    // =================================================
+
+    /*
+      TODO:
+
+      Validate prerequisites using the actual
+      prerequisite table in your database.
+
+      DO NOT add guessed SQL here.
+    */
+
+    // =================================================
+    // RETAKE VALIDATION
+    //
+    // retakes example:
+    //
+    // {
+    //   "retakes": [5, 8]
+    // }
+    //
+    // These will later be validated against the
+    // student's failed/incomplete subjects.
+    // =================================================
+
+    /*
+      TODO:
+
+      Validate retakes using the actual grades/
+      academic-record schema.
+
+      Failed = 5
+      Incomplete = 4
+
+      Student must explicitly select subjects
+      that require retaking.
+    */
+
+    // =================================================
+    // UPDATE ENROLLMENT
+    //
+    // IMPORTANT:
+    //
+    // Your actual database column is:
+    //
+    // enrollment_status
+    //
+    // NOT:
+    //
+    // status
+    // =================================================
+
+    const submittedRemarks = enrollment.remarks || "Submitted by student";
+
+    await connection.execute(
       `
-      INSERT INTO enrollment_subjects (
-          enrollment_id,
-          subject_id,
-          offering_id,
-          status,
-          section_id,
-          section_subject_id
-      )
-      VALUES (?, ?, ?, 'Enrolled', ?, ?)
+      UPDATE enrollments
+
+      SET
+          enrollment_status = 'Pending',
+          remarks = ?
+
+      WHERE enrollment_id = ?
+        AND student_id = ?
       `,
-      [
-        enrollmentId,
-        offering.subject_id,
-        offeringId,
-        sectionId,
-        sectionSubjectId,
-      ],
+      [submittedRemarks, enrollmentId, student.student_id],
     );
 
     // =================================================
@@ -3461,36 +6891,68 @@ router.post("/:id/subjects", async (req, res) => {
     // SUCCESS
     // =================================================
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: "Subject added to approved enrollment successfully.",
-      enrollment_subject_id: result.insertId,
-      enrollment_id: enrollmentId,
-      subject_id: offering.subject_id,
-      offering_id: offeringId,
-      section_id: sectionId,
-      section_subject_id: sectionSubjectId,
+
+      message: "Enrollment submitted successfully.",
+
+      enrollment: {
+        enrollment_id: Number(enrollment.enrollment_id),
+
+        student_id: Number(student.student_id),
+
+        student_number: student.student_number,
+
+        academic_year_id: Number(enrollment.academic_year_id),
+
+        academic_year: enrollment.academic_year,
+
+        semester_id: Number(enrollment.semester_id),
+
+        semester_name: enrollment.semester_name,
+
+        enrollment_status: "Pending",
+
+        remarks: submittedRemarks,
+      },
+
+      enrollment_period: {
+        enrollment_period_id: Number(enrollmentPeriod.enrollment_period_id),
+
+        academic_year_id: Number(enrollmentPeriod.academic_year_id),
+
+        academic_year: enrollmentPeriod.academic_year,
+
+        semester_id: Number(enrollmentPeriod.semester_id),
+
+        semester_name: enrollmentPeriod.semester_name,
+
+        status: enrollmentPeriod.status,
+      },
+
+      subjects: {
+        total: activeSubjects.length,
+      },
+
+      retakes,
     });
   } catch (error) {
-    // =================================================
-    // ROLLBACK
-    // =================================================
-
     if (connection) {
-      await connection.rollback();
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("SUBMIT ENROLLMENT ROLLBACK ERROR:", rollbackError);
+      }
     }
 
-    console.error("ADD SUBJECT TO ENROLLMENT ERROR:", error);
+    console.error("SUBMIT STUDENT ENROLLMENT ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to add subject to enrollment.",
+      message: "Failed to submit enrollment.",
+      error: error.message,
     });
   } finally {
-    // =================================================
-    // RELEASE CONNECTION
-    // =================================================
-
     if (connection) {
       connection.release();
     }

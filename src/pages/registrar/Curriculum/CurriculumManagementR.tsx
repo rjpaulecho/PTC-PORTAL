@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
 import { authService } from "../../../services/auth.service";
 import { useNavigate } from "react-router-dom";
+import AddCurriculumModal from "./AddCurriculumModal";
 import "../../../styles/CurriculumManagementR.css";
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/curriculums";
@@ -26,6 +27,7 @@ interface Curriculum {
 
 interface CurriculumResponse {
   success: boolean;
+
   data: Curriculum[];
 
   pagination: {
@@ -59,6 +61,16 @@ export default function CurriculumManagementR() {
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
+
+  // =====================================================
+  // ADD CURRICULUM MODAL
+  // =====================================================
+
+  const [showAddCurriculum, setShowAddCurriculum] = useState(false);
+
+  // Used to force the curriculum list to reload
+  // after creating a curriculum.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // =====================================================
   // FILTERS
@@ -114,17 +126,33 @@ export default function CurriculumManagementR() {
 
         params.set("limit", "10");
 
+        // -------------------------------------------------
+        // SEARCH
+        // -------------------------------------------------
+
         if (search.trim()) {
           params.set("search", search.trim());
         }
+
+        // -------------------------------------------------
+        // COURSE
+        // -------------------------------------------------
 
         if (course !== "All") {
           params.set("course", course);
         }
 
+        // -------------------------------------------------
+        // EFFECTIVE YEAR
+        // -------------------------------------------------
+
         if (effectiveYear !== "All") {
           params.set("effective_year", effectiveYear);
         }
+
+        // -------------------------------------------------
+        // STATUS
+        // -------------------------------------------------
 
         if (activeStatus !== "All") {
           params.set("is_active", activeStatus);
@@ -136,12 +164,17 @@ export default function CurriculumManagementR() {
 
         const response = await fetch(requestUrl, {
           method: "GET",
+
           signal: controller.signal,
 
           headers: {
             Accept: "application/json",
           },
         });
+
+        // =================================================
+        // CHECK CONTENT TYPE
+        // =================================================
 
         const contentType = response.headers.get("content-type") || "";
 
@@ -156,11 +189,19 @@ export default function CurriculumManagementR() {
           );
         }
 
+        // =================================================
+        // PARSE RESPONSE
+        // =================================================
+
         const data: CurriculumResponse = await response.json();
 
         if (!response.ok || !data.success) {
           throw new Error(data.message || "Failed to load curricula.");
         }
+
+        // =================================================
+        // SET DATA
+        // =================================================
 
         setCurriculums(Array.isArray(data.data) ? data.data : []);
 
@@ -168,6 +209,7 @@ export default function CurriculumManagementR() {
 
         setTotalCurriculums(data.pagination?.total || 0);
       } catch (err) {
+        // Ignore aborted requests
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
@@ -191,7 +233,15 @@ export default function CurriculumManagementR() {
     return () => {
       controller.abort();
     };
-  }, [userRole, currentPage, search, course, effectiveYear, activeStatus]);
+  }, [
+    userRole,
+    currentPage,
+    search,
+    course,
+    effectiveYear,
+    activeStatus,
+    refreshKey,
+  ]);
 
   // =====================================================
   // FILTER OPTIONS
@@ -219,13 +269,22 @@ export default function CurriculumManagementR() {
     setCurrentPage(1);
   };
 
+  // =====================================================
+  // FILTER CHANGE
+  // =====================================================
+
   const handleFilterChange = (
     setter: React.Dispatch<React.SetStateAction<string>>,
     value: string,
   ) => {
     setter(value);
+
     setCurrentPage(1);
   };
+
+  // =====================================================
+  // PREVIOUS PAGE
+  // =====================================================
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
@@ -233,11 +292,52 @@ export default function CurriculumManagementR() {
     }
   };
 
+  // =====================================================
+  // NEXT PAGE
+  // =====================================================
+
   const handleNextPage = () => {
     if (currentPage < totalPages) {
       setCurrentPage((prev) => prev + 1);
     }
   };
+
+  // =====================================================
+  // OPEN ADD CURRICULUM
+  // =====================================================
+
+  const handleOpenAddCurriculum = () => {
+    setShowAddCurriculum(true);
+  };
+
+  // =====================================================
+  // CLOSE ADD CURRICULUM
+  // =====================================================
+
+  const handleCloseAddCurriculum = () => {
+    setShowAddCurriculum(false);
+  };
+
+  // =====================================================
+  // CURRICULUM CREATED
+  // =====================================================
+
+  const handleCurriculumCreated = () => {
+    console.log("Curriculum created successfully.");
+
+    // Close modal
+    setShowAddCurriculum(false);
+
+    // Return to first page
+    setCurrentPage(1);
+
+    // Refresh curriculum list
+    setRefreshKey((prev) => prev + 1);
+  };
+
+  // =====================================================
+  // STATUS CLASS
+  // =====================================================
 
   const getStatusClass = (isActive: number) => {
     return isActive === 1
@@ -270,6 +370,16 @@ export default function CurriculumManagementR() {
 
             <p>Manage course curricula and their subject mappings.</p>
           </div>
+
+          {/* ADD CURRICULUM */}
+
+          <button
+            type="button"
+            className="add-curriculum-btn"
+            onClick={handleOpenAddCurriculum}
+          >
+            + Add Curriculum
+          </button>
         </div>
 
         {/* =================================================
@@ -277,17 +387,23 @@ export default function CurriculumManagementR() {
         ================================================= */}
 
         <div className="registrar-curriculum-summary">
+          {/* TOTAL */}
+
           <div className="registrar-curriculum-card">
             <span>Total Curricula</span>
 
             <h2>{totalCurriculums}</h2>
           </div>
 
+          {/* ACTIVE */}
+
           <div className="registrar-curriculum-card">
             <span>Active</span>
 
             <h2>{curriculums.filter((item) => item.is_active === 1).length}</h2>
           </div>
+
+          {/* INACTIVE */}
 
           <div className="registrar-curriculum-card">
             <span>Inactive</span>
@@ -301,6 +417,8 @@ export default function CurriculumManagementR() {
         ================================================= */}
 
         <div className="registrar-curriculum-toolbar">
+          {/* SEARCH */}
+
           <div className="registrar-curriculum-search">
             <input
               type="text"
@@ -309,6 +427,8 @@ export default function CurriculumManagementR() {
               onChange={handleSearch}
             />
           </div>
+
+          {/* FILTERS */}
 
           <div className="registrar-curriculum-filters">
             {/* COURSE */}
@@ -388,7 +508,9 @@ export default function CurriculumManagementR() {
               </thead>
 
               <tbody>
-                {/* LOADING */}
+                {/* =================================================
+                    LOADING
+                ================================================= */}
 
                 {loading && (
                   <tr>
@@ -398,7 +520,9 @@ export default function CurriculumManagementR() {
                   </tr>
                 )}
 
-                {/* ERROR */}
+                {/* =================================================
+                    ERROR
+                ================================================= */}
 
                 {!loading && error && (
                   <tr>
@@ -408,7 +532,9 @@ export default function CurriculumManagementR() {
                   </tr>
                 )}
 
-                {/* EMPTY */}
+                {/* =================================================
+                    EMPTY
+                ================================================= */}
 
                 {!loading && !error && curriculums.length === 0 && (
                   <tr>
@@ -418,7 +544,9 @@ export default function CurriculumManagementR() {
                   </tr>
                 )}
 
-                {/* DATA */}
+                {/* =================================================
+                    DATA
+                ================================================= */}
 
                 {!loading &&
                   !error &&
@@ -448,7 +576,7 @@ export default function CurriculumManagementR() {
                         </div>
                       </td>
 
-                      {/* YEAR */}
+                      {/* EFFECTIVE YEAR */}
 
                       <td>{curriculum.effective_year}</td>
 
@@ -456,7 +584,7 @@ export default function CurriculumManagementR() {
 
                       <td>{curriculum.total_units}</td>
 
-                      {/* SUBJECTS */}
+                      {/* SUBJECT COUNT */}
 
                       <td>{curriculum.subject_count}</td>
 
@@ -468,7 +596,7 @@ export default function CurriculumManagementR() {
                         </span>
                       </td>
 
-                      {/* ACTION */}
+                      {/* ACTIONS */}
 
                       <td>
                         <div className="curriculum-actions">
@@ -497,6 +625,8 @@ export default function CurriculumManagementR() {
         ================================================= */}
 
         <div className="registrar-curriculum-pagination">
+          {/* PREVIOUS */}
+
           <button
             type="button"
             className="pagination-btn"
@@ -505,6 +635,8 @@ export default function CurriculumManagementR() {
           >
             Previous
           </button>
+
+          {/* PAGE NUMBERS */}
 
           <div className="page-numbers">
             {Array.from(
@@ -528,6 +660,8 @@ export default function CurriculumManagementR() {
             ))}
           </div>
 
+          {/* NEXT */}
+
           <button
             type="button"
             className="pagination-btn"
@@ -537,6 +671,17 @@ export default function CurriculumManagementR() {
             Next
           </button>
         </div>
+
+        {/* =================================================
+            ADD CURRICULUM MODAL
+        ================================================= */}
+
+        {showAddCurriculum && (
+          <AddCurriculumModal
+            onClose={handleCloseAddCurriculum}
+            onSuccess={handleCurriculumCreated}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

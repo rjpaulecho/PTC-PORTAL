@@ -29,7 +29,7 @@ import StudentRecord from "../pages/student/AcademicRecord/StudentRecord";
 import EnrollmentCourses from "../pages/student/Enrollment/AvailableCourses";
 import AddDropSubjects from "../pages/student/Enrollment/AddDrop";
 import SubmitEnrollment from "../pages/student/Enrollment/SubmitEnrollment";
-import EnrollmentStatus from "../pages/student/Enrollment/EnrollmentStatus";
+import Enrollmentmain from "../pages/student/Enrollment/Enrollmentmain";
 
 // Student pages — Financial
 import TuitionFees from "../pages/student/Financial/Tuitionfees";
@@ -151,6 +151,9 @@ import EnrollmentDetailsR from "../pages/registrar/Enrollment/EnrollmentDetailsR
 import CurriculumManagementR from "../pages/registrar/Curriculum/CurriculumManagementR";
 import CurriculumDetailR from "../pages/registrar/Curriculum/CurriculumDetailsR";
 import SubjectmanagementR from "../pages/registrar/Subjects/SubjectManagementR";
+import CoursemanagementR from "../pages/registrar/Courses/CourseManagementR";
+import DepartmentManagementR from "../pages/registrar/Department/DepartmentManagementR";
+import EnrollmentPeriodMR from "../pages/registrar/Enrollment/EnrollmentPeriodMR";
 
 // ─── Role guard ───────────────────────────────────────────────
 function ProtectedRoute({
@@ -302,8 +305,8 @@ export default function AppRoutes() {
         element={<StudentRoute element={<SubmitEnrollment />} />}
       />
       <Route
-        path="/student/enrollment/status"
-        element={<StudentRoute element={<EnrollmentStatus />} />}
+        path="/student/enrollment/main"
+        element={<StudentRoute element={<Enrollmentmain />} />}
       />
 
       {/* ── Student: Financial ── */}
@@ -629,6 +632,10 @@ export default function AppRoutes() {
         path="/registrar/enrollment/subject/management"
         element={<RegistrarRoute element={<EnrollmentDetailsR />} />}
       />
+      <Route
+        path="/registrar/enrollment/periodM"
+        element={<RegistrarRoute element={<EnrollmentPeriodMR />} />}
+      />
 
       {/* ── Registrar Curriculum ── */}
       <Route
@@ -639,11 +646,23 @@ export default function AppRoutes() {
         path="/registrar/curriculum/:id"
         element={<RegistrarRoute element={<CurriculumDetailR />} />}
       />
-      {/* ── Registrar Announcements ── */}
+      {/* ── Registrar Subjects ── */}
       <Route
         path="/registrar/subjects/management"
         element={<RegistrarRoute element={<SubjectmanagementR />} />}
       />
+
+      {/* ── Registrar Courses ── */}
+      <Route
+        path="/registrar/course/management"
+        element={<RegistrarRoute element={<CoursemanagementR />} />}
+      />
+      {/* ── Registrar Department ── */}
+      <Route
+        path="/registrar/department/management"
+        element={<RegistrarRoute element={<DepartmentManagementR />} />}
+      />
+
       {/* ── Registrar Announcements ── */}
       <Route
         path="/registrar/announcement/listR"

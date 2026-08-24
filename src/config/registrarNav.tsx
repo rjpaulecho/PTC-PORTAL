@@ -28,6 +28,11 @@ export const registrarNavGroups = [
         path: "/registrar/enrollment/management",
         icon: "👨‍🎓",
       },
+      {
+        label: "Enrollment Period",
+        path: "/registrar/enrollment/periodM",
+        icon: "👨‍🎓",
+      },
     ],
   },
   {
@@ -36,8 +41,18 @@ export const registrarNavGroups = [
     icon: "👨‍🎓",
     children: [
       {
+        label: "Courses",
+        path: "/registrar/course/management",
+        icon: "👨‍🎓",
+      },
+      {
         label: "Curriculum",
         path: "/registrar/curriculum/management",
+        icon: "👨‍🎓",
+      },
+      {
+        label: "Departments",
+        path: "/registrar/department/management",
         icon: "👨‍🎓",
       },
       {

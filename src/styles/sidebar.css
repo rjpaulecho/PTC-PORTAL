@@ -1,7 +1,7 @@
 /* Sidebar Styles */
 .sidebar {
   width: 280px;
-  background: linear-gradient(180deg, #ffffff 0%, #f9faf5 100%);
+  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
   color: #333;
   display: flex;
   flex-direction: column;
@@ -16,7 +16,7 @@
 .sidebar-header {
   padding: 12px;
   border-bottom: 1px solid #e5e7eb;
-  background: white;
+  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -75,7 +75,7 @@
 }
 
 .solo-link.active {
-  background: var(--primary-green, rgb(10, 238, 10));
+  background: var(--primary-green, rgb(20, 97, 20));
   color: white;
   font-weight: 600;
 }
@@ -134,8 +134,8 @@
 /* A folder that's currently open — this same row is the back button:
    clicking it again pops back up one level. */
 .group-btn.open {
-  color: var(--primary-green, rgb(10, 238, 10));
-  background: rgba(10, 238, 10, 0.08);
+  color: var(--primary-green, rgb(242, 248, 242));
+  background: rgba(8, 70, 13, 0.973);
 }
 
 .group-btn .icon {
@@ -220,12 +220,12 @@
 }
 
 .nav-item:hover {
-  background: rgba(10, 238, 10, 0.08);
+  background: rgba(210, 233, 7, 0.08);
   color: #1a1a1a;
 }
 
 .nav-item.active {
-  color: var(--primary-green, rgb(10, 238, 10));
+  color: var(--primary-green, rgb(226, 241, 4));
   font-weight: 500;
   background: rgba(10, 238, 10, 0.12);
   border-left: 3px solid var(--primary-green, rgb(10, 238, 10));

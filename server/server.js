@@ -15,7 +15,7 @@ import announcementRoutes from "./routes/announcement/adminAnnouncement.routes.j
 import usersAnnouncementRoutes from "./routes/announcement/usersAnnouncement.routes.js";
 
 import registrarRoutes from "./routes/registrar/index.js";
-import studentEnrollmentRoutes from "./routes/student/enrollments.js";
+import studentRoutes from "./routes/student/index.js";
 
 const app = express();
 
@@ -50,7 +50,7 @@ app.use("/api/announcements", usersAnnouncementRoutes);
 // Registrar Routing
 app.use("/api/registrar", registrarRoutes);
 // Student Routing
-app.use("/api/student/enrollments", studentEnrollmentRoutes);
+app.use("/api/student", studentRoutes);
 
 // =======================
 // Root Route

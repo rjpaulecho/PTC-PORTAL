@@ -3,10 +3,11 @@
 =========================== */
 
 .admin-user-list {
-  background: #ffffff;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  background: linear-gradient(180deg, #66c44f 0%, #f4f5f1 100%);
+  padding: 28px;
+  border-radius: 14px;
+  border: 1px solid #eef0f2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 /* ===========================
@@ -18,39 +19,78 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .admin-user-list__header h1 {
   margin: 0;
-  color: #1f2937;
-  font-size: 28px;
+  color: #111827;
+  font-size: 24px;
   font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.admin-user-list__create-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.admin-user-list__create-btn:hover {
+  background: #1d4ed8;
+}
+
+.admin-user-list__create-btn:active {
+  transform: scale(0.97);
 }
 
 /* ===========================
    Search
 =========================== */
 
+.admin-user-list__search-wrap {
+  position: relative;
+  margin-bottom: 22px;
+}
+
 .admin-user-list__search {
   width: 100%;
-  padding: 12px 15px;
-  margin-bottom: 20px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 15px;
+  padding: 11px 14px 11px 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  font-size: 14px;
   outline: none;
-  transition: 0.2s;
+  background: #f9fafb url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%239ca3af' viewBox='0 0 16 16'><path d='M11.742 10.344a6.5 6.5 0 1 0-1.398 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/></svg>") no-repeat 13px center;
+  background-size: 15px 15px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
   box-sizing: border-box;
 }
 
 .admin-user-list__search:focus {
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 /* ===========================
    Table
 =========================== */
+
+.admin-user-list__table-wrap {
+  border: 1px solid #eef0f2;
+  border-radius: 10px;
+  overflow: hidden;
+}
 
 .admin-user-list__table {
   width: 100%;
@@ -59,26 +99,66 @@
 }
 
 .admin-user-list__table thead {
-  background: #2563eb;
-  color: #fff;
+  background: #f9fafb;
 }
 
 .admin-user-list__table th {
-  padding: 14px;
+  padding: 13px 16px;
   text-align: left;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #eef0f2;
+  white-space: nowrap;
 }
 
 .admin-user-list__table td {
-  padding: 14px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 13px 16px;
+  border-bottom: 1px solid #f1f3f5;
   vertical-align: middle;
   font-size: 14px;
+  color: #1f2937;
+}
+
+.admin-user-list__table tbody tr {
+  transition: background-color 0.15s ease;
 }
 
 .admin-user-list__table tbody tr:hover {
-  background: #f8fafc;
+  background: #f9fafb;
+}
+
+.admin-user-list__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===========================
+   Role Badge
+=========================== */
+
+.role-badge {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-admin {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.role-registrar {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.role-student {
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 /* ===========================
@@ -87,10 +167,12 @@
 
 .status-active,
 .status-inactive {
-  display: inline-block;
-  padding: 5px 12px;
-  border-radius: 30px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -99,9 +181,25 @@
   color: #15803d;
 }
 
+.status-active::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+}
+
 .status-inactive {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.status-inactive::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #dc2626;
 }
 
 /* ===========================
@@ -109,41 +207,64 @@
 =========================== */
 
 .btn {
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 7px 13px;
+  font-size: 12.5px;
   cursor: pointer;
-  transition: 0.2s;
+  transition: background-color 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
   font-weight: 600;
 }
 
-.btn:hover {
-  opacity: 0.92;
+.btn:active {
+  transform: scale(0.96);
 }
 
+/* Softer, "outline" style buttons instead of solid blocks of color —
+   easier on the eyes when several sit side by side in a row. */
+
 .btn-primary {
-  background: #2563eb;
-  color: #fff;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #dbeafe;
+}
+
+.btn-primary:hover {
+  background: #dbeafe;
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: #fff;
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
 }
 
 .btn-warning {
-  background: #f59e0b;
-  color: #fff;
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.btn-warning:hover {
+  background: #fef3c7;
 }
 
 .btn-danger {
-  background: #dc2626;
-  color: #fff;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.btn-danger:hover {
+  background: #fee2e2;
 }
 
 .btn + .btn {
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
 /* ===========================
@@ -160,8 +281,10 @@
 
 .admin-user-list__table td[colspan] {
   padding: 40px;
-  color: #6b7280;
-  font-style: italic;
+  color: #9ca3af;
+  font-style: normal;
+  text-align: center;
+  font-size: 14px;
 }
 
 /* ===========================
@@ -179,13 +302,18 @@
 }
 
 @media (max-width: 768px) {
+  .admin-user-list {
+    padding: 18px;
+  }
+
   .admin-user-list__header {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
   }
 
-  .admin-user-list__header button {
+  .admin-user-list__create-btn {
     width: 100%;
+    justify-content: center;
   }
 }
