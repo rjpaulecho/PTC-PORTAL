@@ -7,9 +7,7 @@ import {
 } from "react";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
-
 import { authService } from "../../../services/auth.service";
-
 import { useNavigate } from "react-router-dom";
 
 import "../../../styles/addeditdrop.css";
@@ -21,11 +19,9 @@ import "../../../styles/addeditdrop.css";
 const API_BASE_URL = "http://localhost:3000/api/students";
 
 // =====================================================
-// OPTIONS
+// STATIC OPTIONS
 // =====================================================
 
-// Matches courses currently seeded in the courses table.
-// Later we can replace this with an authenticated API.
 const COURSES = ["BSIT", "BSCS", "BSA"] as const;
 
 const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year"] as const;
@@ -51,11 +47,36 @@ const GENDERS = ["Male", "Female"] as const;
 // TYPES
 // =====================================================
 
-interface CreateStudentResponse {
+type CurriculumOption = {
+  curriculum_id: number;
+  curriculum_name: string;
+  effective_year: number | null;
+  total_units: number | null;
+  is_active: boolean;
+};
+
+type CurriculumResponse = {
+  success: boolean;
+
+  course?: {
+    course_id: number;
+    course_code: string;
+    course_name: string;
+    total_years: number;
+  };
+
+  count?: number;
+
+  curricula?: CurriculumOption[];
+
+  message?: string;
+  error?: string;
+};
+
+type CreateStudentResponse = {
   success?: boolean;
 
   message?: string;
-
   error?: string;
 
   studentId?: number;
@@ -63,10 +84,49 @@ interface CreateStudentResponse {
   studentNumber?: string;
 
   temporaryPassword?: string;
-}
+
+  student?: {
+    student_id: number;
+    student_number: string;
+
+    name: string;
+    email: string;
+
+    course: {
+      course_id: number;
+      course_code: string;
+      course_name: string;
+    };
+
+    curriculum: {
+      student_curriculum_id: number;
+      curriculum_id: number;
+      curriculum_name: string;
+      effective_year: number | null;
+      status: string;
+    };
+
+    academic_year: {
+      academic_year_id: number;
+      academic_year: string;
+    };
+
+    semester: {
+      semester_id: number;
+      semester_name: string;
+    };
+
+    year_level: number;
+
+    section: {
+      section_id: number;
+      section_name: string;
+    };
+  };
+};
 
 // =====================================================
-// HELPERS
+// YEAR LEVEL HELPER
 // =====================================================
 
 const yearLevelToDigit = (yearLevel: string): string => {
@@ -75,11 +135,10 @@ const yearLevelToDigit = (yearLevel: string): string => {
   return match ? match[1] : "";
 };
 
-// Generates:
-// BSIT-1A
-// BSIT-1B
-// ...
-// BSIT-1Z
+// =====================================================
+// SECTION OPTIONS
+// =====================================================
+
 const generateSectionOptions = (
   course: string,
   yearLevel: string,
@@ -102,11 +161,17 @@ const generateSectionOptions = (
   );
 };
 
+// =====================================================
+// FORM STATE
+// =====================================================
+
 const emptyForm = {
   firstName: "",
   middleName: "",
   lastName: "",
+
   email: "",
+
   gender: "",
   birthDate: "",
   contactNumber: "",
@@ -121,8 +186,12 @@ const emptyForm = {
 
   // ACADEMIC
   course: "",
+  curriculumId: "",
+
   yearLevel: "1st Year",
+
   section: "",
+
   semesterId: "1",
 };
 
@@ -133,9 +202,9 @@ const emptyForm = {
 export default function CreateStudent() {
   const navigate = useNavigate();
 
-  // =====================================================
+  // ===================================================
   // AUTHENTICATION
-  // =====================================================
+  // ===================================================
 
   const user = authService.getSession();
 
@@ -145,9 +214,9 @@ export default function CreateStudent() {
 
   const authenticated = Boolean(user && token);
 
-  // =====================================================
-  // STATE
-  // =====================================================
+  // ===================================================
+  // FORM STATE
+  // ===================================================
 
   const [formState, setFormState] = useState(emptyForm);
 
@@ -160,20 +229,35 @@ export default function CreateStudent() {
     temporaryPassword: string;
   } | null>(null);
 
-  // =====================================================
+  // ===================================================
+  // CURRICULA
+  // ===================================================
+
+  const [curricula, setCurricula] = useState<CurriculumOption[]>([]);
+
+  const [isLoadingCurricula, setIsLoadingCurricula] = useState(false);
+
+  const [curriculumError, setCurriculumError] = useState<string | null>(null);
+
+  // ===================================================
   // SECTION OPTIONS
-  // =====================================================
+  // ===================================================
 
   const sectionOptions = useMemo(
     () => generateSectionOptions(formState.course, formState.yearLevel),
+
     [formState.course, formState.yearLevel],
   );
 
-  // =====================================================
+  // ===================================================
   // AUTHORIZATION
-  // =====================================================
+  // ===================================================
 
   useEffect(() => {
+    // ===============================================
+    // NO SESSION OR NO JWT
+    // ===============================================
+
     if (!authenticated) {
       authService.logout();
 
@@ -184,9 +268,13 @@ export default function CreateStudent() {
       return;
     }
 
+    // ===============================================
+    // LOGGED IN BUT NOT ADMIN
+    // ===============================================
+
     if (userRole !== "Admin") {
-      if (userRole) {
-        navigate(authService.getDashboardRoute(userRole), {
+      if (user) {
+        navigate(authService.getDashboardRoute(user.role), {
           replace: true,
         });
       } else {
@@ -195,11 +283,193 @@ export default function CreateStudent() {
         });
       }
     }
-  }, [authenticated, userRole, navigate]);
+  }, [authenticated, userRole, user, navigate]);
 
-  // =====================================================
+  // ===================================================
+  // HANDLE AUTHENTICATION RESPONSE
+  // ===================================================
+
+  const handleAuthenticationResponse = (
+    response: Response,
+    data: {
+      message?: string;
+      error?: string;
+    },
+  ): boolean => {
+    // ===============================================
+    // 401
+    // Missing / expired / invalid JWT
+    // ===============================================
+
+    if (response.status === 401) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return false;
+    }
+
+    // ===============================================
+    // 403
+    // Authenticated but wrong role
+    // ===============================================
+
+    if (response.status === 403) {
+      throw new Error(
+        data.message || data.error || "Admin access is required.",
+      );
+    }
+
+    return true;
+  };
+
+  // ===================================================
+  // LOAD CURRICULA WHEN COURSE CHANGES
+  // ===================================================
+
+  useEffect(() => {
+    // Don't call protected API
+    // if user isn't authenticated Admin.
+
+    if (!authenticated || userRole !== "Admin") {
+      return;
+    }
+
+    // Clear previous course curricula.
+
+    setCurricula([]);
+
+    setCurriculumError(null);
+
+    if (!formState.course) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadCurricula = async () => {
+      try {
+        setIsLoadingCurricula(true);
+
+        const url = `${API_BASE_URL}/curricula?course=${encodeURIComponent(
+          formState.course,
+        )}`;
+
+        // ===========================================
+        // AUTHENTICATED REQUEST
+        //
+        // authFetch automatically adds:
+        //
+        // Authorization: Bearer <JWT>
+        // ===========================================
+
+        const response = await authService.authFetch(url, {
+          method: "GET",
+
+          signal: controller.signal,
+
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        // ===========================================
+        // RESPONSE TYPE
+        // ===========================================
+
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        const data: CurriculumResponse = await response.json();
+
+        // ===========================================
+        // AUTH RESPONSE
+        // ===========================================
+
+        if (!handleAuthenticationResponse(response, data)) {
+          return;
+        }
+
+        // ===========================================
+        // API ERROR
+        // ===========================================
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message || data.error || "Failed to load curricula.",
+          );
+        }
+
+        // ===========================================
+        // CURRICULA
+        // ===========================================
+
+        const loadedCurricula = Array.isArray(data.curricula)
+          ? data.curricula
+          : [];
+
+        setCurricula(loadedCurricula);
+
+        // ===========================================
+        // AUTO SELECT IF ONLY ONE
+        // ===========================================
+
+        if (loadedCurricula.length === 1) {
+          setFormState((current) => ({
+            ...current,
+
+            curriculumId: String(loadedCurricula[0].curriculum_id),
+          }));
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        console.error("LOAD CURRICULA ERROR:", error);
+
+        setCurricula([]);
+
+        setCurriculumError(
+          error instanceof Error ? error.message : "Failed to load curricula.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingCurricula(false);
+        }
+      }
+    };
+
+    loadCurricula();
+
+    return () => {
+      controller.abort();
+    };
+  }, [formState.course, authenticated, userRole]);
+
+  // ===================================================
+  // BLOCK UI FOR UNAUTHORIZED USER
+  // ===================================================
+
+  if (!authenticated || userRole !== "Admin") {
+    return null;
+  }
+
+  // ===================================================
   // INPUT CHANGE
-  // =====================================================
+  // ===================================================
 
   const handleInputChange = (
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -209,14 +479,27 @@ export default function CreateStudent() {
     setFormState((current) => {
       const updated = {
         ...current,
+
         [name]: value,
       };
 
-      // =================================================
-      // REVALIDATE SECTION
-      // =================================================
+      // =============================================
+      // COURSE CHANGED
+      // =============================================
 
-      if (name === "course" || name === "yearLevel") {
+      if (name === "course") {
+        // Curriculum belongs to course.
+        updated.curriculumId = "";
+
+        // Section belongs to course.
+        updated.section = "";
+      }
+
+      // =============================================
+      // YEAR LEVEL CHANGED
+      // =============================================
+
+      if (name === "yearLevel") {
         const validSections = generateSectionOptions(
           updated.course,
           updated.yearLevel,
@@ -231,38 +514,50 @@ export default function CreateStudent() {
     });
   };
 
-  // =====================================================
+  // ===================================================
   // SUBMIT
-  // =====================================================
+  // ===================================================
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setErrorMessage(null);
+    // ===============================================
+    // AUTH CHECK AGAIN BEFORE WRITE
+    // ===============================================
 
-    // =================================================
-    // AUTH CHECK
-    // =================================================
+    const currentToken = authService.getToken();
 
-    if (!authenticated || userRole !== "Admin") {
-      setErrorMessage(
-        "Your session has expired or you are not authorized to create students.",
-      );
+    const currentUser = authService.getSession();
+
+    if (!currentToken || !currentUser) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
 
       return;
     }
 
-    // =================================================
+    if (currentUser.role !== "Admin") {
+      setErrorMessage("Admin access is required.");
+
+      return;
+    }
+
+    // ===============================================
     // REQUIRED FIELDS
-    // =================================================
+    // ===============================================
 
     if (
       !formState.firstName.trim() ||
       !formState.lastName.trim() ||
       !formState.email.trim() ||
       !formState.course.trim() ||
+      !formState.curriculumId ||
       !formState.yearLevel.trim() ||
       !formState.section.trim() ||
+      !formState.semesterId ||
       !formState.houseNo.trim() ||
       !formState.street.trim() ||
       !formState.barangay.trim() ||
@@ -274,115 +569,84 @@ export default function CreateStudent() {
       return;
     }
 
-    // =================================================
-    // EMAIL VALIDATION
-    // =================================================
+    // ===============================================
+    // CURRICULUM LOAD ERROR
+    // ===============================================
 
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailPattern.test(formState.email.trim())) {
-      setErrorMessage("Please enter a valid email address.");
-
-      return;
-    }
-
-    // =================================================
-    // YEAR LEVEL
-    // =================================================
-
-    const yearLevelNumber = Number(yearLevelToDigit(formState.yearLevel));
-
-    if (!Number.isInteger(yearLevelNumber) || yearLevelNumber <= 0) {
-      setErrorMessage("Invalid year level.");
+    if (curriculumError) {
+      setErrorMessage(
+        "Please resolve the curriculum selection before creating the student.",
+      );
 
       return;
     }
 
-    // =================================================
-    // SECTION VALIDATION
-    // =================================================
+    // ===============================================
+    // VALIDATE CURRICULUM FROM CURRENT OPTIONS
+    // ===============================================
 
-    if (!sectionOptions.includes(formState.section)) {
-      setErrorMessage("Please select a valid section.");
+    const selectedCurriculum = curricula.find(
+      (curriculum) =>
+        Number(curriculum.curriculum_id) === Number(formState.curriculumId),
+    );
+
+    if (!selectedCurriculum) {
+      setErrorMessage(
+        "Please select a valid curriculum for the selected course.",
+      );
 
       return;
     }
+
+    // ===============================================
+    // START REQUEST
+    // ===============================================
+
+    setIsSaving(true);
+
+    setErrorMessage(null);
 
     try {
-      setIsSaving(true);
-
-      // =================================================
+      // =============================================
       // PAYLOAD
-      //
-      // No Admin user_id or role_id is sent.
-      //
-      // Authentication / actor identity comes from JWT
-      // and req.user on the backend.
-      // =================================================
+      // =============================================
 
       const payload = {
-        firstName: formState.firstName.trim(),
+        ...formState,
 
-        middleName: formState.middleName.trim(),
-
-        lastName: formState.lastName.trim(),
-
-        email: formState.email.trim(),
-
-        gender: formState.gender || null,
-
-        birthDate: formState.birthDate || null,
-
-        contactNumber: formState.contactNumber.trim(),
-
-        // ADDRESS
-
-        houseNo: formState.houseNo.trim(),
-
-        street: formState.street.trim(),
-
-        barangay: formState.barangay.trim(),
-
-        city: formState.city.trim(),
-
-        province: formState.province.trim(),
-
-        zipCode: formState.zipCode.trim(),
-
-        // ACADEMIC
-
-        course: formState.course,
-
-        yearLevel: formState.yearLevel,
-
-        section: formState.section,
+        // Send numeric IDs cleanly.
+        curriculumId: Number(formState.curriculumId),
 
         semesterId: Number(formState.semesterId),
       };
 
-      console.log("CREATE ADMIN STUDENT:", payload);
-
-      // =================================================
-      // JWT AUTHENTICATED POST
-      // =================================================
+      // =============================================
+      // AUTHENTICATED POST
+      //
+      // Automatically sends:
+      //
+      // Authorization: Bearer <JWT>
+      // =============================================
 
       const response = await authService.authFetch(API_BASE_URL, {
         method: "POST",
 
+        headers: {
+          Accept: "application/json",
+
+          "Content-Type": "application/json",
+        },
+
         body: JSON.stringify(payload),
       });
 
-      // =================================================
-      // SAFE RESPONSE
-      // =================================================
+      // =============================================
+      // CHECK RESPONSE TYPE
+      // =============================================
 
       const contentType = response.headers.get("content-type") || "";
 
-      let data: CreateStudentResponse | null = null;
-
-      if (contentType.includes("application/json")) {
-        data = await response.json();
-      } else {
+      if (!contentType.includes("application/json")) {
         const text = await response.text();
 
         throw new Error(
@@ -393,79 +657,51 @@ export default function CreateStudent() {
         );
       }
 
-      // =================================================
-      // 401
-      // =================================================
+      const data: CreateStudentResponse = await response.json();
 
-      if (response.status === 401) {
-        authService.logout();
+      // =============================================
+      // AUTH RESPONSE
+      // =============================================
 
-        navigate("/login", {
-          replace: true,
-        });
-
+      if (!handleAuthenticationResponse(response, data)) {
         return;
       }
 
-      // =================================================
-      // 403
-      // =================================================
-
-      if (response.status === 403) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
-            "You are not authorized to create students.",
-        );
-      }
-
-      // =================================================
-      // HTTP ERROR
-      // =================================================
+      // =============================================
+      // API ERROR
+      // =============================================
 
       if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to add student.");
+      }
+
+      // =============================================
+      // VERIFY RESPONSE
+      // =============================================
+
+      if (!data.studentNumber || !data.temporaryPassword) {
         throw new Error(
-          data?.message ||
-            data?.error ||
-            `Failed to add student (${response.status}).`,
+          "Student was created but the server did not return the expected account credentials.",
         );
       }
 
-      // =================================================
-      // VALIDATE RESPONSE
-      // =================================================
-
-      const studentNumber = String(data?.studentNumber ?? "").trim();
-
-      const temporaryPassword = String(data?.temporaryPassword ?? "").trim();
-
-      if (!studentNumber) {
-        throw new Error(
-          "Student was created, but the server did not return the student number.",
-        );
-      }
-
-      // =================================================
+      // =============================================
       // SUCCESS
-      // =================================================
+      // =============================================
 
       setCreatedStudent({
-        studentNumber,
+        studentNumber: data.studentNumber,
 
-        temporaryPassword: temporaryPassword || studentNumber,
+        temporaryPassword: data.temporaryPassword,
       });
 
       setFormState(emptyForm);
+
+      setCurricula([]);
+
+      setCurriculumError(null);
     } catch (error) {
-      console.error("CREATE ADMIN STUDENT ERROR:", error);
-
-      if (error instanceof TypeError) {
-        setErrorMessage(
-          "Unable to connect to the student server. Make sure the backend is running on port 3000.",
-        );
-
-        return;
-      }
+      console.error("CREATE STUDENT ERROR:", error);
 
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to add student.",
@@ -475,26 +711,18 @@ export default function CreateStudent() {
     }
   };
 
-  // =====================================================
-  // AUTH GUARD
-  // =====================================================
-
-  if (!authenticated || !user || userRole !== "Admin") {
-    return null;
-  }
-
-  // =====================================================
-  // RENDER
-  // =====================================================
+  // ===================================================
+  // UI
+  // ===================================================
 
   return (
     <DashboardLayout>
       <div className="admin-createstudents-students">
-        <h1>Add Student</h1>
+        <h1>Create Student</h1>
 
         {/* =================================================
             ERROR
-        ================================================= */}
+        ================================================== */}
 
         {errorMessage && (
           <p className="admin-manage-students__error">{errorMessage}</p>
@@ -502,7 +730,7 @@ export default function CreateStudent() {
 
         {/* =================================================
             SUCCESS
-        ================================================= */}
+        ================================================== */}
 
         {createdStudent && (
           <div className="admin-success-box">
@@ -526,17 +754,12 @@ export default function CreateStudent() {
                 type="button"
                 className="btn"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(
-                      `Username: ${createdStudent.studentNumber}\nPassword: ${createdStudent.temporaryPassword}`,
-                    );
+                  await navigator.clipboard.writeText(
+                    `Username: ${createdStudent.studentNumber}
+Password: ${createdStudent.temporaryPassword}`,
+                  );
 
-                    window.alert("Credentials copied.");
-                  } catch (error) {
-                    console.error("COPY CREDENTIALS ERROR:", error);
-
-                    window.alert("Unable to copy credentials.");
-                  }
+                  alert("Credentials copied.");
                 }}
               >
                 Copy Credentials
@@ -555,268 +778,343 @@ export default function CreateStudent() {
 
         {/* =================================================
             FORM
-        ================================================= */}
+        ================================================== */}
 
-        {!createdStudent && (
-          <form onSubmit={handleSubmit} className="admin-student-form">
-            {/* PERSONAL */}
+        <form onSubmit={handleSubmit} className="admin-student-form">
+          {/* =================================================
+              FIRST NAME
+          ================================================== */}
 
-            <label>
-              First Name
-              <input
-                type="text"
-                name="firstName"
-                value={formState.firstName}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          <label>
+            First Name
+            <input
+              type="text"
+              name="firstName"
+              value={formState.firstName}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-            <label>
-              Middle Name
-              <input
-                type="text"
-                name="middleName"
-                value={formState.middleName}
-                onChange={handleInputChange}
-                disabled={isSaving}
-              />
-            </label>
+          {/* =================================================
+              MIDDLE NAME
+          ================================================== */}
 
-            <label>
-              Last Name
-              <input
-                type="text"
-                name="lastName"
-                value={formState.lastName}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          <label>
+            Middle Name
+            <input
+              type="text"
+              name="middleName"
+              value={formState.middleName}
+              onChange={handleInputChange}
+            />
+          </label>
 
-            <label>
-              Gender
-              <select
-                name="gender"
-                value={formState.gender}
-                onChange={handleInputChange}
-                disabled={isSaving}
-              >
-                <option value="">Select gender</option>
+          {/* =================================================
+              LAST NAME
+          ================================================== */}
 
-                {GENDERS.map((gender) => (
-                  <option key={gender} value={gender}>
-                    {gender}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <label>
+            Last Name
+            <input
+              type="text"
+              name="lastName"
+              value={formState.lastName}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-            <label>
-              Birth Date
-              <input
-                type="date"
-                name="birthDate"
-                value={formState.birthDate}
-                onChange={handleInputChange}
-                disabled={isSaving}
-              />
-            </label>
+          {/* =================================================
+              GENDER
+          ================================================== */}
 
-            <label>
-              Contact Number
-              <input
-                type="tel"
-                name="contactNumber"
-                value={formState.contactNumber}
-                onChange={handleInputChange}
-                placeholder="e.g. 09171234567"
-                disabled={isSaving}
-              />
-            </label>
+          <label>
+            Gender
+            <select
+              name="gender"
+              value={formState.gender}
+              onChange={handleInputChange}
+            >
+              <option value="">Select gender</option>
 
-            {/* ADDRESS */}
+              {GENDERS.map((gender) => (
+                <option key={gender} value={gender}>
+                  {gender}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label>
-              House No.
-              <input
-                type="text"
-                name="houseNo"
-                value={formState.houseNo}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          {/* =================================================
+              BIRTH DATE
+          ================================================== */}
 
-            <label>
-              Street
-              <input
-                type="text"
-                name="street"
-                value={formState.street}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          <label>
+            Birth Date
+            <input
+              type="date"
+              name="birthDate"
+              value={formState.birthDate}
+              onChange={handleInputChange}
+            />
+          </label>
 
-            <label>
-              Barangay
-              <input
-                type="text"
-                name="barangay"
-                value={formState.barangay}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          {/* =================================================
+              CONTACT
+          ================================================== */}
 
-            <label>
-              City
-              <input
-                type="text"
-                name="city"
-                value={formState.city}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          <label>
+            Contact Number
+            <input
+              type="tel"
+              name="contactNumber"
+              value={formState.contactNumber}
+              onChange={handleInputChange}
+              placeholder="e.g. 09171234567"
+            />
+          </label>
 
-            <label>
-              Province
-              <input
-                type="text"
-                name="province"
-                value={formState.province}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          {/* =================================================
+              ADDRESS
+          ================================================== */}
 
-            <label>
-              ZIP Code
-              <input
-                type="text"
-                name="zipCode"
-                value={formState.zipCode}
-                onChange={handleInputChange}
-                disabled={isSaving}
-              />
-            </label>
+          <label>
+            House No.
+            <input
+              type="text"
+              name="houseNo"
+              value={formState.houseNo}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-            <label>
-              Email
-              <input
-                type="email"
-                name="email"
-                value={formState.email}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              />
-            </label>
+          <label>
+            Street
+            <input
+              type="text"
+              name="street"
+              value={formState.street}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-            {/* ACADEMIC */}
+          <label>
+            Barangay
+            <input
+              type="text"
+              name="barangay"
+              value={formState.barangay}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-            <label>
-              Semester
-              <select
-                name="semesterId"
-                value={formState.semesterId}
-                onChange={handleInputChange}
-                disabled={isSaving}
-              >
-                {SEMESTERS.map((semester) => (
-                  <option key={semester.id} value={semester.id}>
-                    {semester.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <label>
+            City
+            <input
+              type="text"
+              name="city"
+              value={formState.city}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-            <label>
-              Course
-              <select
-                name="course"
-                value={formState.course}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              >
-                <option value="">Select course</option>
+          <label>
+            Province
+            <input
+              type="text"
+              name="province"
+              value={formState.province}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-                {COURSES.map((course) => (
-                  <option key={course} value={course}>
-                    {course}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <label>
+            ZIP Code
+            <input
+              type="text"
+              name="zipCode"
+              value={formState.zipCode}
+              onChange={handleInputChange}
+            />
+          </label>
 
-            <label>
-              Year Level
-              <select
-                name="yearLevel"
-                value={formState.yearLevel}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                required
-              >
-                {YEAR_LEVELS.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {/* =================================================
+              EMAIL
+          ================================================== */}
 
-            <label>
-              Section
-              <select
-                name="section"
-                value={formState.section}
-                onChange={handleInputChange}
-                required
-                disabled={isSaving || sectionOptions.length === 0}
-              >
-                <option value="">Select section</option>
+          <label>
+            Email
+            <input
+              type="email"
+              name="email"
+              value={formState.email}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
 
-                {sectionOptions.map((section) => (
-                  <option key={section} value={section}>
-                    {section}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {/* =================================================
+              SEMESTER
+          ================================================== */}
 
-            {/* ACTIONS */}
+          <label>
+            Semester
+            <select
+              name="semesterId"
+              value={formState.semesterId}
+              onChange={handleInputChange}
+              required
+            >
+              {SEMESTERS.map((semester) => (
+                <option key={semester.id} value={semester.id}>
+                  {semester.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <div className="admin-student-form__actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => navigate(-1)}
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
+          {/* =================================================
+              COURSE
+          ================================================== */}
 
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={isSaving || !authenticated || userRole !== "Admin"}
-              >
-                {isSaving ? "Saving..." : "Add Student"}
-              </button>
-            </div>
-          </form>
-        )}
+          <label>
+            Course
+            <select
+              name="course"
+              value={formState.course}
+              onChange={handleInputChange}
+              required
+            >
+              <option value="">Select course</option>
+
+              {COURSES.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* =================================================
+              CURRICULUM
+          ================================================== */}
+
+          <label>
+            Curriculum
+            <select
+              name="curriculumId"
+              value={formState.curriculumId}
+              onChange={handleInputChange}
+              required
+              disabled={!formState.course || isLoadingCurricula}
+            >
+              <option value="">
+                {isLoadingCurricula
+                  ? "Loading curricula..."
+                  : !formState.course
+                    ? "Select course first"
+                    : curricula.length === 0
+                      ? "No curriculum available"
+                      : "Select curriculum"}
+              </option>
+
+              {curricula.map((curriculum) => (
+                <option
+                  key={curriculum.curriculum_id}
+                  value={curriculum.curriculum_id}
+                >
+                  {curriculum.curriculum_name}
+
+                  {curriculum.effective_year
+                    ? ` (${curriculum.effective_year})`
+                    : ""}
+                </option>
+              ))}
+            </select>
+            {curriculumError && (
+              <small className="admin-manage-students__error">
+                {curriculumError}
+              </small>
+            )}
+          </label>
+
+          {/* =================================================
+              YEAR LEVEL
+          ================================================== */}
+
+          <label>
+            Year Level
+            <select
+              name="yearLevel"
+              value={formState.yearLevel}
+              onChange={handleInputChange}
+              required
+            >
+              {YEAR_LEVELS.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* =================================================
+              SECTION
+          ================================================== */}
+
+          <label>
+            Section
+            <select
+              name="section"
+              value={formState.section}
+              onChange={handleInputChange}
+              required
+              disabled={sectionOptions.length === 0}
+            >
+              <option value="">Select section</option>
+
+              {sectionOptions.map((section) => (
+                <option key={section} value={section}>
+                  {section}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* =================================================
+              ACTIONS
+          ================================================== */}
+
+          <div className="admin-student-form__actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => navigate(-1)}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={
+                isSaving ||
+                !!createdStudent ||
+                isLoadingCurricula ||
+                !formState.curriculumId
+              }
+            >
+              {isSaving ? "Saving..." : "Add Student"}
+            </button>
+          </div>
+        </form>
       </div>
     </DashboardLayout>
   );

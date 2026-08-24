@@ -7,9 +7,7 @@ import {
 } from "react";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
-
 import { authService } from "../../../services/auth.service";
-
 import { useNavigate, useParams } from "react-router-dom";
 
 import "../../../styles/addeditdrop.css";
@@ -24,8 +22,6 @@ const API_BASE_URL = "http://localhost:3000/api/students";
 // OPTIONS
 // =====================================================
 
-// Matches courses currently seeded in your courses table.
-// Later we can replace this with an authenticated API.
 const COURSES = ["BSIT", "BSCS", "BSA"] as const;
 
 const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year"] as const;
@@ -70,27 +66,50 @@ interface StudentResponse {
 
   contactNumber?: string;
 
+  // ADDRESS
   houseNo?: string;
-
   street?: string;
-
   barangay?: string;
-
   city?: string;
-
   province?: string;
-
   zipCode?: string;
 
+  // COURSE
+  courseId?: number;
   course?: string;
+  courseName?: string;
 
+  // CURRICULUM
+  studentCurriculumId?: number;
+
+  curriculumId?: number | string | null;
+
+  curriculumName?: string | null;
+
+  curriculumStatus?: string | null;
+
+  curriculumAssignedDate?: string | null;
+
+  curriculumEffectiveYear?: number | null;
+
+  curriculumTotalUnits?: number | null;
+
+  curriculumIsActive?: boolean | number | null;
+
+  // ACADEMIC
   yearLevel?: string;
+
+  sectionId?: number;
 
   section?: string;
 
   semesterId?: number | string;
 
   semester?: string;
+
+  academicYearId?: number;
+
+  academicYear?: string;
 
   success?: boolean;
 
@@ -103,10 +122,66 @@ interface StudentResponse {
   student?: StudentResponse;
 }
 
+interface CurriculumOption {
+  curriculum_id: number;
+
+  curriculum_name: string;
+
+  effective_year: number | null;
+
+  total_units: number | null;
+
+  is_active: boolean;
+}
+
+interface CurriculumResponse {
+  success: boolean;
+
+  course?: {
+    course_id: number;
+
+    course_code: string;
+
+    course_name: string;
+
+    total_years: number;
+  };
+
+  count?: number;
+
+  curricula?: CurriculumOption[];
+
+  message?: string;
+
+  error?: string;
+}
+
 interface UpdateStudentResponse {
   success?: boolean;
+
   message?: string;
+
   error?: string;
+
+  student?: {
+    student_id?: number;
+
+    student_number?: string;
+
+    curriculum?: {
+      student_curriculum_id?: number;
+
+      curriculum_id?: number;
+
+      curriculum_name?: string;
+
+      effective_year?: number | null;
+
+      status?: string;
+
+      changed?: boolean;
+    };
+  };
 }
 
 // =====================================================
@@ -119,14 +194,19 @@ const yearLevelToDigit = (yearLevel: string): string => {
   return match ? match[1] : "";
 };
 
-// Generates:
+// =====================================================
+// GENERATE SECTION OPTIONS
+//
+// Example:
+//
+// BSIT + 1st Year
 //
 // BSIT-1A
 // BSIT-1B
 // ...
 // BSIT-1Z
-//
-// for the selected course + year level.
+// =====================================================
+
 const generateSectionOptions = (
   course: string,
   yearLevel: string,
@@ -149,27 +229,47 @@ const generateSectionOptions = (
   );
 };
 
+// =====================================================
+// EMPTY FORM
+// =====================================================
+
 const emptyForm = {
   firstName: "",
+
   middleName: "",
+
   lastName: "",
+
   email: "",
+
   gender: "",
+
   birthDate: "",
+
   contactNumber: "",
 
   // ADDRESS
   houseNo: "",
+
   street: "",
+
   barangay: "",
+
   city: "",
+
   province: "",
+
   zipCode: "",
 
   // ACADEMIC
   course: "",
+
+  curriculumId: "",
+
   yearLevel: "1st Year",
+
   section: "",
+
   semesterId: "1",
 };
 
@@ -197,7 +297,7 @@ export default function EditStudent() {
   const authenticated = Boolean(user && token);
 
   // =====================================================
-  // STATE
+  // STUDENT STATE
   // =====================================================
 
   const [formState, setFormState] = useState(emptyForm);
@@ -209,11 +309,22 @@ export default function EditStudent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // =====================================================
+  // CURRICULUM STATE
+  // =====================================================
+
+  const [curricula, setCurricula] = useState<CurriculumOption[]>([]);
+
+  const [isLoadingCurricula, setIsLoadingCurricula] = useState(false);
+
+  const [curriculumError, setCurriculumError] = useState<string | null>(null);
+
+  // =====================================================
   // SECTION OPTIONS
   // =====================================================
 
   const sectionOptions = useMemo(
     () => generateSectionOptions(formState.course, formState.yearLevel),
+
     [formState.course, formState.yearLevel],
   );
 
@@ -222,6 +333,8 @@ export default function EditStudent() {
   // =====================================================
 
   useEffect(() => {
+    // No session / JWT.
+
     if (!authenticated) {
       authService.logout();
 
@@ -231,6 +344,8 @@ export default function EditStudent() {
 
       return;
     }
+
+    // Authenticated but not Admin.
 
     if (userRole !== "Admin") {
       if (userRole) {
@@ -244,6 +359,42 @@ export default function EditStudent() {
       }
     }
   }, [authenticated, userRole, navigate]);
+
+  // =====================================================
+  // AUTH RESPONSE HELPER
+  // =====================================================
+
+  const handleAuthenticationResponse = (
+    response: Response,
+
+    data: {
+      message?: string;
+
+      error?: string;
+    },
+  ): boolean => {
+    // JWT invalid / missing / expired.
+
+    if (response.status === 401) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return false;
+    }
+
+    // Authenticated but not Admin.
+
+    if (response.status === 403) {
+      throw new Error(
+        data.message || data.error || "Admin access is required.",
+      );
+    }
+
+    return true;
+  };
 
   // =====================================================
   // LOAD STUDENT
@@ -281,7 +432,7 @@ export default function EditStudent() {
         setErrorMessage(null);
 
         // =================================================
-        // JWT AUTHENTICATED GET
+        // AUTHENTICATED GET
         // =================================================
 
         const response = await authService.authFetch(
@@ -303,11 +454,7 @@ export default function EditStudent() {
 
         const contentType = response.headers.get("content-type") || "";
 
-        let data: StudentResponse | null = null;
-
-        if (contentType.includes("application/json")) {
-          data = await response.json();
-        } else {
+        if (!contentType.includes("application/json")) {
           const text = await response.text();
 
           throw new Error(
@@ -318,30 +465,14 @@ export default function EditStudent() {
           );
         }
 
+        const data: StudentResponse = await response.json();
+
         // =================================================
-        // 401
+        // AUTH
         // =================================================
 
-        if (response.status === 401) {
-          authService.logout();
-
-          navigate("/login", {
-            replace: true,
-          });
-
+        if (!handleAuthenticationResponse(response, data)) {
           return;
-        }
-
-        // =================================================
-        // 403
-        // =================================================
-
-        if (response.status === 403) {
-          throw new Error(
-            data?.message ||
-              data?.error ||
-              "You are not authorized to edit students.",
-          );
         }
 
         // =================================================
@@ -350,17 +481,29 @@ export default function EditStudent() {
 
         if (!response.ok) {
           throw new Error(
-            data?.message ||
-              data?.error ||
+            data.message ||
+              data.error ||
               `Failed to load student (${response.status}).`,
           );
         }
 
         // =================================================
         // NORMALIZE RESPONSE
+        //
+        // Supports:
+        //
+        // { ...student }
+        //
+        // OR
+        //
+        // { student: {...} }
+        //
+        // OR
+        //
+        // { data: {...} }
         // =================================================
 
-        const student = data?.student ?? data?.data ?? data;
+        const student = data.student ?? data.data ?? data;
 
         if (!student) {
           throw new Error("Student data was not returned by the server.");
@@ -405,6 +548,15 @@ export default function EditStudent() {
 
           course: student.course || "",
 
+          // =============================================
+          // CURRENT CURRICULUM FROM STEP 4
+          // =============================================
+
+          curriculumId:
+            student.curriculumId !== null && student.curriculumId !== undefined
+              ? String(student.curriculumId)
+              : "",
+
           yearLevel: student.yearLevel || "1st Year",
 
           section: student.section || "",
@@ -444,6 +596,162 @@ export default function EditStudent() {
   }, [id, authenticated, userRole, navigate]);
 
   // =====================================================
+  // LOAD CURRICULA WHEN COURSE CHANGES
+  // =====================================================
+
+  useEffect(() => {
+    if (!authenticated || userRole !== "Admin") {
+      return;
+    }
+
+    setCurriculumError(null);
+
+    // No course yet.
+    if (!formState.course) {
+      setCurricula([]);
+
+      return;
+    }
+
+    const selectedCourse = formState.course;
+
+    const controller = new AbortController();
+
+    const loadCurricula = async () => {
+      try {
+        setIsLoadingCurricula(true);
+
+        setCurriculumError(null);
+
+        const response = await authService.authFetch(
+          `${API_BASE_URL}/curricula?course=${encodeURIComponent(
+            selectedCourse,
+          )}`,
+          {
+            method: "GET",
+
+            signal: controller.signal,
+
+            headers: {
+              Accept: "application/json",
+            },
+          },
+        );
+
+        // =================================================
+        // SAFE RESPONSE
+        // =================================================
+
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        const data: CurriculumResponse = await response.json();
+
+        // =================================================
+        // AUTH RESPONSE
+        // =================================================
+
+        if (!handleAuthenticationResponse(response, data)) {
+          return;
+        }
+
+        // =================================================
+        // API ERROR
+        // =================================================
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message || data.error || "Failed to load curricula.",
+          );
+        }
+
+        // =================================================
+        // OPTIONS
+        // =================================================
+
+        const loadedCurricula = Array.isArray(data.curricula)
+          ? data.curricula
+          : [];
+
+        setCurricula(loadedCurricula);
+
+        // =================================================
+        // KEEP CURRENT CURRICULUM IF VALID
+        //
+        // This is important when initially opening
+        // Edit Student.
+        // =================================================
+
+        setFormState((current) => {
+          // User changed course while request was running.
+          if (current.course !== selectedCourse) {
+            return current;
+          }
+
+          const currentCurriculumStillValid = loadedCurricula.some(
+            (curriculum) =>
+              String(curriculum.curriculum_id) === String(current.curriculumId),
+          );
+
+          // Keep current assignment.
+          if (currentCurriculumStillValid) {
+            return current;
+          }
+
+          // If exactly one active curriculum exists,
+          // auto-select it.
+          if (loadedCurricula.length === 1) {
+            return {
+              ...current,
+
+              curriculumId: String(loadedCurricula[0].curriculum_id),
+            };
+          }
+
+          // Otherwise Admin must choose.
+          return {
+            ...current,
+
+            curriculumId: "",
+          };
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        console.error("LOAD EDIT STUDENT CURRICULA ERROR:", error);
+
+        setCurricula([]);
+
+        setCurriculumError(
+          error instanceof Error ? error.message : "Failed to load curricula.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingCurricula(false);
+        }
+      }
+    };
+
+    void loadCurricula();
+
+    return () => {
+      controller.abort();
+    };
+  }, [formState.course, authenticated, userRole]);
+
+  // =====================================================
   // INPUT CHANGE
   // =====================================================
 
@@ -455,17 +763,32 @@ export default function EditStudent() {
     setFormState((current) => {
       const updated = {
         ...current,
+
         [name]: value,
       };
 
       // =================================================
-      // REVALIDATE SECTION
+      // COURSE CHANGED
       //
-      // If course/year changes, old section may no longer
-      // belong to the selected course/year.
+      // Curriculum MUST be selected again because it
+      // belongs to the selected course.
+      //
+      // Section also belongs to the course.
       // =================================================
 
-      if (name === "course" || name === "yearLevel") {
+      if (name === "course") {
+        updated.curriculumId = "";
+
+        updated.section = "";
+      }
+
+      // =================================================
+      // YEAR LEVEL CHANGED
+      //
+      // Existing section may not match new year level.
+      // =================================================
+
+      if (name === "yearLevel") {
         const validSections = generateSectionOptions(
           updated.course,
           updated.yearLevel,
@@ -493,16 +816,28 @@ export default function EditStudent() {
     // AUTH CHECK
     // =================================================
 
-    if (!authenticated || userRole !== "Admin") {
-      setErrorMessage(
-        "Your session has expired or you are not authorized to edit students.",
-      );
+    const currentUser = authService.getSession();
+
+    const currentToken = authService.getToken();
+
+    if (!currentUser || !currentToken) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    if (currentUser.role !== "Admin") {
+      setErrorMessage("Admin access is required.");
 
       return;
     }
 
     // =================================================
-    // STUDENT ID
+    // STUDENT NUMBER
     // =================================================
 
     if (!id) {
@@ -528,10 +863,24 @@ export default function EditStudent() {
       !formState.lastName.trim() ||
       !formState.email.trim() ||
       !formState.course.trim() ||
+      !formState.curriculumId ||
       !formState.yearLevel.trim() ||
-      !formState.section.trim()
+      !formState.section.trim() ||
+      !formState.semesterId
     ) {
-      setErrorMessage("Please fill in all required fields.");
+      setErrorMessage(
+        "Please fill in all required academic and personal fields.",
+      );
+
+      return;
+    }
+
+    // =================================================
+    // CURRICULUM LOADING ERROR
+    // =================================================
+
+    if (curriculumError) {
+      setErrorMessage("Please resolve the curriculum selection before saving.");
 
       return;
     }
@@ -561,6 +910,23 @@ export default function EditStudent() {
     }
 
     // =================================================
+    // CURRICULUM VALIDATION
+    // =================================================
+
+    const selectedCurriculum = curricula.find(
+      (curriculum) =>
+        Number(curriculum.curriculum_id) === Number(formState.curriculumId),
+    );
+
+    if (!selectedCurriculum) {
+      setErrorMessage(
+        "Please select a valid curriculum for the selected course.",
+      );
+
+      return;
+    }
+
+    // =================================================
     // SECTION
     // =================================================
 
@@ -576,8 +942,9 @@ export default function EditStudent() {
       // =================================================
       // PAYLOAD
       //
-      // No Admin user_id or role_id is sent.
-      // Backend gets the actor from req.user.
+      // Actor/Admin user_id is NOT sent.
+      //
+      // Backend gets actor from req.user.
       // =================================================
 
       const payload = {
@@ -613,6 +980,8 @@ export default function EditStudent() {
 
         course: formState.course,
 
+        curriculumId: Number(formState.curriculumId),
+
         yearLevel: formState.yearLevel,
 
         section: formState.section,
@@ -623,13 +992,19 @@ export default function EditStudent() {
       console.log("UPDATE ADMIN STUDENT:", studentNumber, payload);
 
       // =================================================
-      // JWT AUTHENTICATED PUT
+      // AUTHENTICATED PUT
       // =================================================
 
       const response = await authService.authFetch(
         `${API_BASE_URL}/${encodeURIComponent(studentNumber)}`,
         {
           method: "PUT",
+
+          headers: {
+            Accept: "application/json",
+
+            "Content-Type": "application/json",
+          },
 
           body: JSON.stringify(payload),
         },
@@ -641,11 +1016,7 @@ export default function EditStudent() {
 
       const contentType = response.headers.get("content-type") || "";
 
-      let data: UpdateStudentResponse | null = null;
-
-      if (contentType.includes("application/json")) {
-        data = await response.json();
-      } else {
+      if (!contentType.includes("application/json")) {
         const text = await response.text();
 
         throw new Error(
@@ -656,40 +1027,24 @@ export default function EditStudent() {
         );
       }
 
+      const data: UpdateStudentResponse = await response.json();
+
       // =================================================
-      // 401
+      // AUTH
       // =================================================
 
-      if (response.status === 401) {
-        authService.logout();
-
-        navigate("/login", {
-          replace: true,
-        });
-
+      if (!handleAuthenticationResponse(response, data)) {
         return;
       }
 
       // =================================================
-      // 403
+      // ERROR
       // =================================================
 
-      if (response.status === 403) {
+      if (!response.ok || data.success === false) {
         throw new Error(
-          data?.message ||
-            data?.error ||
-            "You are not authorized to update students.",
-        );
-      }
-
-      // =================================================
-      // HTTP ERROR
-      // =================================================
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
+          data.message ||
+            data.error ||
             `Failed to update student (${response.status}).`,
         );
       }
@@ -698,7 +1053,7 @@ export default function EditStudent() {
       // SUCCESS
       // =================================================
 
-      window.alert(data?.message || "Student updated successfully.");
+      window.alert(data.message || "Student updated successfully.");
 
       navigate(`/admin/students/profile/${encodeURIComponent(studentNumber)}`);
     } catch (error) {
@@ -926,6 +1281,7 @@ export default function EditStudent() {
                 value={formState.semesterId}
                 onChange={handleInputChange}
                 disabled={isSaving}
+                required
               >
                 {SEMESTERS.map((semester) => (
                   <option key={semester.id} value={semester.id}>
@@ -934,6 +1290,10 @@ export default function EditStudent() {
                 ))}
               </select>
             </label>
+
+            {/* =================================================
+                COURSE
+            ================================================= */}
 
             <label>
               Course
@@ -954,6 +1314,53 @@ export default function EditStudent() {
               </select>
             </label>
 
+            {/* =================================================
+                CURRICULUM
+            ================================================= */}
+
+            <label>
+              Curriculum
+              <select
+                name="curriculumId"
+                value={formState.curriculumId}
+                onChange={handleInputChange}
+                required
+                disabled={isSaving || isLoadingCurricula || !formState.course}
+              >
+                <option value="">
+                  {isLoadingCurricula
+                    ? "Loading curricula..."
+                    : !formState.course
+                      ? "Select course first"
+                      : curricula.length === 0
+                        ? "No active curriculum available"
+                        : "Select curriculum"}
+                </option>
+
+                {curricula.map((curriculum) => (
+                  <option
+                    key={curriculum.curriculum_id}
+                    value={curriculum.curriculum_id}
+                  >
+                    {curriculum.curriculum_name}
+
+                    {curriculum.effective_year
+                      ? ` (${curriculum.effective_year})`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+              {curriculumError && (
+                <small className="admin-manage-students__error">
+                  {curriculumError}
+                </small>
+              )}
+            </label>
+
+            {/* =================================================
+                YEAR LEVEL
+            ================================================= */}
+
             <label>
               Year Level
               <select
@@ -970,6 +1377,10 @@ export default function EditStudent() {
                 ))}
               </select>
             </label>
+
+            {/* =================================================
+                SECTION
+            ================================================= */}
 
             <label>
               Section
@@ -1007,7 +1418,13 @@ export default function EditStudent() {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={isSaving || !authenticated || userRole !== "Admin"}
+                disabled={
+                  isSaving ||
+                  isLoadingCurricula ||
+                  !authenticated ||
+                  userRole !== "Admin" ||
+                  !formState.curriculumId
+                }
               >
                 {isSaving ? "Saving…" : "Save Changes"}
               </button>
