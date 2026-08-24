@@ -150,18 +150,13 @@ interface Subject {
 
   assigned_section: Section | null;
 
-  /*
-   * Kept because the backend may still return these fields.
-   *
-   * IMPORTANT:
-   * They are intentionally NOT used for student selection.
-   */
   has_available_sections?: boolean;
   available_sections?: Section[];
 }
 
 interface EnrollmentResponse {
   success: boolean;
+
   message?: string;
 
   student: Student;
@@ -183,12 +178,34 @@ interface EnrollmentResponse {
   subjects: Subject[];
 }
 
+interface ApiErrorResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
 // ============================================================
 // COMPONENT
 // ============================================================
 
 export default function Enrollmentmain() {
   const navigate = useNavigate();
+
+  // ============================================================
+  // AUTH
+  // ============================================================
+
+  const session = authService.getSession();
+
+  const token = authService.getToken();
+
+  const userRole = session?.role;
+
+  const authenticated = Boolean(session && token);
+
+  // ============================================================
+  // STATE
+  // ============================================================
 
   const [user, setUser] = useState<StudentSession | null>(null);
 
@@ -203,91 +220,259 @@ export default function Enrollmentmain() {
   const [successMessage, setSuccessMessage] = useState("");
 
   // ============================================================
-  // GET SESSION
+  // AUTHORIZATION
   // ============================================================
 
   useEffect(() => {
-    const session = authService.getSession();
+    if (!authenticated) {
+      authService.logout();
 
-    console.log("=================================");
-    console.log("STUDENT SESSION");
-    console.log(session);
-    console.log("=================================");
+      navigate("/login", {
+        replace: true,
+      });
 
-    if (!session || session.role !== "Student") {
-      navigate("/login", { replace: true });
       return;
     }
 
-    if (!session.user_id) {
-      setError("Student session does not contain a user ID.");
-      setLoading(false);
+    if (userRole !== "Student") {
+      if (userRole) {
+        navigate(authService.getDashboardRoute(userRole), {
+          replace: true,
+        });
+      } else {
+        navigate("/login", {
+          replace: true,
+        });
+      }
+
       return;
     }
 
-    setUser(session);
-  }, [navigate]);
+    setUser(session as StudentSession);
+  }, [authenticated, userRole, session, navigate]);
 
   // ============================================================
   // LOAD ENROLLMENT
+  //
+  // IMPORTANT:
+  //
+  // No user_id query parameter.
+  //
+  // Backend identifies the student from:
+  //
+  // req.user.user_id
   // ============================================================
 
   useEffect(() => {
-    if (!user?.user_id) {
+    if (!authenticated || userRole !== "Student") {
       return;
     }
 
-    void loadEnrollment(user.user_id);
-  }, [user]);
+    const controller = new AbortController();
+
+    const loadEnrollment = async () => {
+      try {
+        setLoading(true);
+
+        setError("");
+
+        const response = await authService.authFetch(
+          `${API_BASE_URL}/subjects`,
+          {
+            method: "GET",
+
+            signal: controller.signal,
+
+            headers: {
+              Accept: "application/json",
+            },
+          },
+        );
+
+        const contentType = response.headers.get("content-type") || "";
+
+        let responseData: EnrollmentResponse | ApiErrorResponse | null = null;
+
+        if (contentType.includes("application/json")) {
+          responseData = await response.json();
+        } else {
+          const text = await response.text();
+
+          throw new Error(
+            `Server returned a non-JSON response (${response.status}): ${text.slice(
+              0,
+              200,
+            )}`,
+          );
+        }
+
+        // ======================================================
+        // 401
+        // ======================================================
+
+        if (response.status === 401) {
+          authService.logout();
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        // ======================================================
+        // 403
+        // ======================================================
+
+        if (response.status === 403) {
+          throw new Error(
+            responseData?.message ||
+              responseData?.error ||
+              "You are not authorized to access student enrollment.",
+          );
+        }
+
+        // ======================================================
+        // HTTP ERROR
+        // ======================================================
+
+        if (!response.ok) {
+          throw new Error(
+            responseData?.message ||
+              responseData?.error ||
+              `Enrollment request failed (${response.status}).`,
+          );
+        }
+
+        // ======================================================
+        // VALIDATE RESPONSE
+        // ======================================================
+
+        if (!("student" in responseData)) {
+          throw new Error(
+            responseData?.message || "Invalid enrollment response.",
+          );
+        }
+
+        if (!responseData.success) {
+          throw new Error(responseData.message || "Failed to load enrollment.");
+        }
+
+        setData(responseData);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
+        console.error("LOAD STUDENT ENROLLMENT ERROR:", err);
+
+        if (err instanceof TypeError) {
+          setError(
+            "Unable to connect to the enrollment server. Make sure the backend is running on http://localhost:3000.",
+          );
+
+          return;
+        }
+
+        setError(
+          err instanceof Error ? err.message : "Unable to load enrollment.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadEnrollment();
+
+    return () => {
+      controller.abort();
+    };
+  }, [authenticated, userRole, navigate]);
 
   // ============================================================
-  // LOAD ENROLLMENT DATA
+  // RELOAD ENROLLMENT
   // ============================================================
 
-  const loadEnrollment = async (userId: number) => {
+  const reloadEnrollment = async () => {
+    if (!authenticated || userRole !== "Student") {
+      return;
+    }
+
     try {
       setLoading(true);
+
       setError("");
 
-      console.log("=================================");
-      console.log("LOADING STUDENT ENROLLMENT");
-      console.log("User ID:", userId);
-      console.log("Endpoint:", `${API_BASE_URL}/subjects?user_id=${userId}`);
-      console.log("=================================");
+      const response = await authService.authFetch(`${API_BASE_URL}/subjects`, {
+        method: "GET",
 
-      const response = await fetch(
-        `${API_BASE_URL}/subjects?user_id=${userId}`,
-      );
+        headers: {
+          Accept: "application/json",
+        },
+      });
 
-      const responseData = await response.json();
+      const contentType = response.headers.get("content-type") || "";
 
-      console.log("Enrollment API status:", response.status);
-      console.log("Enrollment API response:", responseData);
+      let responseData: EnrollmentResponse | ApiErrorResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        responseData = await response.json();
+      } else {
+        const text = await response.text();
+
+        throw new Error(
+          `Server returned a non-JSON response (${response.status}): ${text.slice(
+            0,
+            200,
+          )}`,
+        );
+      }
+
+      if (response.status === 401) {
+        authService.logout();
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      if (response.status === 403) {
+        throw new Error(
+          responseData?.message ||
+            responseData?.error ||
+            "You are not authorized to access student enrollment.",
+        );
+      }
 
       if (!response.ok) {
         throw new Error(
           responseData?.message ||
-            `Enrollment request failed (${response.status})`,
+            responseData?.error ||
+            `Enrollment request failed (${response.status}).`,
+        );
+      }
+
+      if (!("student" in responseData)) {
+        throw new Error(
+          responseData?.message || "Invalid enrollment response.",
         );
       }
 
       if (!responseData.success) {
-        throw new Error(responseData?.message || "Failed to load enrollment.");
+        throw new Error(responseData.message || "Failed to load enrollment.");
       }
 
       setData(responseData);
-    } catch (error) {
-      console.error("LOAD ENROLLMENT ERROR:", error);
+    } catch (err) {
+      console.error("RELOAD STUDENT ENROLLMENT ERROR:", err);
 
-      if (error instanceof TypeError) {
-        setError(
-          "Unable to connect to the enrollment server. Make sure the backend is running on http://localhost:3000.",
-        );
-      } else {
-        setError(
-          error instanceof Error ? error.message : "Unable to load enrollment.",
-        );
-      }
+      setError(
+        err instanceof Error ? err.message : "Unable to load enrollment.",
+      );
     } finally {
       setLoading(false);
     }
@@ -344,10 +529,21 @@ export default function Enrollmentmain() {
   // ============================================================
 
   const getYearLabel = (year: number) => {
-    if (year === 1) return "1st Year";
-    if (year === 2) return "2nd Year";
-    if (year === 3) return "3rd Year";
-    if (year === 4) return "4th Year";
+    if (year === 1) {
+      return "1st Year";
+    }
+
+    if (year === 2) {
+      return "2nd Year";
+    }
+
+    if (year === 3) {
+      return "3rd Year";
+    }
+
+    if (year === 4) {
+      return "4th Year";
+    }
 
     return `${year}th Year`;
   };
@@ -359,6 +555,14 @@ export default function Enrollmentmain() {
   const getStatusClass = (status: string | null | undefined) => {
     return status?.trim().toLowerCase().replace(/\s+/g, "-") || "unknown";
   };
+
+  // ============================================================
+  // AUTH GUARD
+  // ============================================================
+
+  if (!authenticated || !session || userRole !== "Student") {
+    return null;
+  }
 
   // ============================================================
   // LOADING
@@ -396,11 +600,7 @@ export default function Enrollmentmain() {
             <button
               type="button"
               className="enrollment-btn primary"
-              onClick={() => {
-                if (user?.user_id) {
-                  void loadEnrollment(user.user_id);
-                }
-              }}
+              onClick={() => void reloadEnrollment()}
             >
               Try Again
             </button>
@@ -428,11 +628,7 @@ export default function Enrollmentmain() {
             <button
               type="button"
               className="enrollment-btn primary"
-              onClick={() => {
-                if (user?.user_id) {
-                  void loadEnrollment(user.user_id);
-                }
-              }}
+              onClick={() => void reloadEnrollment()}
             >
               Try Again
             </button>
@@ -469,19 +665,6 @@ export default function Enrollmentmain() {
 
   // ============================================================
   // ENROLLMENT STATUS
-  //
-  // Draft
-  //   ↓
-  // Student submits
-  //   ↓
-  // Pending
-  //   ↓
-  // Registrar reviews
-  //   ↓
-  // Approved / Rejected
-  //
-  // IMPORTANT:
-  // The student cannot modify the enrollment.
   // ============================================================
 
   const enrollmentStatus =
@@ -500,25 +683,12 @@ export default function Enrollmentmain() {
   const enrollmentPeriodIsOpen =
     enrollment_period?.status?.trim().toLowerCase() === "open";
 
-  // ============================================================
-  // CAN SUBMIT
-  //
-  // Student may ONLY submit a Registrar-prepared Draft.
-  // ============================================================
-
   const canSubmitEnrollment =
     Boolean(enrollment?.enrollment_id) &&
     Boolean(enrollment_period) &&
     enrollmentPeriodIsOpen &&
     enrollmentIsDraft &&
     subjects.length > 0;
-
-  // ============================================================
-  // ASSIGNED SECTION COUNT
-  //
-  // Informational only.
-  // It is NOT a selection control.
-  // ============================================================
 
   const assignedSectionCount = subjects.filter(
     (subject) => subject.assigned_section !== null,
@@ -712,7 +882,7 @@ export default function Enrollmentmain() {
         </div>
 
         {/* ====================================================
-            DRAFT NOTICE
+            DRAFT
         ==================================================== */}
 
         {enrollmentIsDraft && enrollment_period && (
@@ -737,7 +907,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            PENDING NOTICE
+            PENDING
         ==================================================== */}
 
         {enrollmentIsSubmitted && (
@@ -761,7 +931,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            APPROVED NOTICE
+            APPROVED
         ==================================================== */}
 
         {enrollmentIsApproved && (
@@ -779,7 +949,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            REJECTED NOTICE
+            REJECTED
         ==================================================== */}
 
         {enrollmentIsRejected && (
@@ -799,7 +969,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            DROPPED NOTICE
+            DROPPED
         ==================================================== */}
 
         {enrollmentIsDropped && (
@@ -819,7 +989,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            CLOSED NOTICE
+            CLOSED
         ==================================================== */}
 
         {!enrollment_period && (
@@ -838,7 +1008,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            PERIOD EXISTS BUT NO ENROLLMENT
+            NO ENROLLMENT
         ==================================================== */}
 
         {enrollment_period && !enrollment && (
@@ -883,10 +1053,6 @@ export default function Enrollmentmain() {
             </div>
           </div>
 
-          {/* ==================================================
-              READ-ONLY NOTICE
-          ================================================== */}
-
           {subjects.length > 0 && (
             <div className="selected-section-message">
               <span>i</span>
@@ -900,10 +1066,6 @@ export default function Enrollmentmain() {
               </p>
             </div>
           )}
-
-          {/* ==================================================
-              NO SUBJECTS
-          ================================================== */}
 
           {subjects.length === 0 && (
             <div className="no-sections">
@@ -923,10 +1085,6 @@ export default function Enrollmentmain() {
               </div>
             </div>
           )}
-
-          {/* ==================================================
-              REGULAR SUBJECTS
-          ================================================== */}
 
           {regularSubjects.length > 0 && (
             <>
@@ -954,10 +1112,6 @@ export default function Enrollmentmain() {
               </div>
             </>
           )}
-
-          {/* ==================================================
-              RETAKE SUBJECTS
-          ================================================== */}
 
           {retakeSubjects.length > 0 && (
             <>
@@ -1014,7 +1168,7 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            SUBMIT ENROLLMENT
+            SUBMIT
         ==================================================== */}
 
         {canSubmitEnrollment && (
@@ -1044,7 +1198,7 @@ export default function Enrollmentmain() {
               <button
                 type="button"
                 className="enrollment-btn primary enrollment-submit-btn"
-                onClick={submitEnrollment}
+                onClick={() => void submitEnrollment()}
                 disabled={submitting}
               >
                 {submitting ? (
@@ -1059,10 +1213,6 @@ export default function Enrollmentmain() {
             </div>
           </div>
         )}
-
-        {/* ====================================================
-            ALREADY SUBMITTED
-        ==================================================== */}
 
         {enrollmentIsSubmitted && (
           <div className="enrollment-submit-card">
@@ -1086,10 +1236,6 @@ export default function Enrollmentmain() {
             </div>
           </div>
         )}
-
-        {/* ====================================================
-            APPROVED
-        ==================================================== */}
 
         {enrollmentIsApproved && (
           <div className="enrollment-submit-card">
@@ -1117,146 +1263,136 @@ export default function Enrollmentmain() {
 
   // ============================================================
   // SUBMIT ENROLLMENT
+  //
+  // IMPORTANT:
+  //
+  // No user_id body.
+  // Backend knows student from req.user.user_id.
   // ============================================================
 
   async function submitEnrollment() {
-    /*
-     * The frontend performs basic validation only.
-     *
-     * The backend remains authoritative and verifies:
-     *
-     * - user
-     * - student
-     * - enrollment
-     * - enrollment period
-     * - enrollment status
-     * - prepared enrollment subjects
-     * - Registrar-assigned sections
-     */
+    if (!authenticated || userRole !== "Student") {
+      setError(
+        "Your session has expired or you are not authorized to submit enrollment.",
+      );
 
-    if (!enrollment?.enrollment_id) {
-      setError("No enrollment record is available for submission.");
       return;
     }
 
-    if (!user?.user_id) {
-      setError("Student session does not contain a valid user ID.");
+    if (!enrollment?.enrollment_id) {
+      setError("No enrollment record is available for submission.");
+
       return;
     }
 
     if (!enrollment_period) {
       setError("Enrollment is currently closed.");
+
       return;
     }
 
     if (!enrollmentPeriodIsOpen) {
       setError("The enrollment period is no longer open.");
+
       return;
     }
 
-    /*
-     * Only Draft can be submitted.
-     *
-     * Pending means the student already submitted.
-     * Approved means the Registrar approved it.
-     * Rejected means the Registrar rejected it.
-     */
     if (!enrollmentIsDraft) {
       setError(
         `This enrollment cannot be submitted because its current status is "${enrollment.enrollment_status}".`,
       );
+
       return;
     }
 
     if (subjects.length === 0) {
       setError("There are no prepared subjects to submit.");
+
       return;
     }
 
     try {
       setSubmitting(true);
+
       setError("");
+
       setSuccessMessage("");
 
-      console.log("=================================");
-      console.log("SUBMITTING STUDENT ENROLLMENT");
-      console.log("Enrollment ID:", enrollment.enrollment_id);
-      console.log("User ID:", user.user_id);
-      console.log("=================================");
-
-      const response = await fetch(
+      const response = await authService.authFetch(
         `${API_BASE_URL}/${enrollment.enrollment_id}/submit`,
         {
           method: "POST",
 
           headers: {
-            "Content-Type": "application/json",
+            Accept: "application/json",
           },
 
-          /*
-           * IMPORTANT:
-           *
-           * The student sends ONLY user_id.
-           *
-           * DO NOT send:
-           * - subjects
-           * - sections
-           * - retakes
-           * - section IDs
-           * - subject IDs
-           *
-           * The backend reads the Registrar-prepared
-           * enrollment from the database.
-           */
-          body: JSON.stringify({
-            user_id: user.user_id,
-          }),
+          // No body required.
+          //
+          // The backend gets:
+          //
+          // req.user.user_id
         },
       );
 
-      const responseData = await response.json();
+      const contentType = response.headers.get("content-type") || "";
 
-      console.log("Submit status:", response.status);
-      console.log("Submit response:", responseData);
+      let responseData: ApiErrorResponse | null = null;
+
+      if (contentType.includes("application/json")) {
+        responseData = await response.json();
+      } else {
+        const text = await response.text();
+
+        throw new Error(
+          `Server returned a non-JSON response (${response.status}): ${text.slice(
+            0,
+            200,
+          )}`,
+        );
+      }
+
+      if (response.status === 401) {
+        authService.logout();
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      if (response.status === 403) {
+        throw new Error(
+          responseData?.message ||
+            responseData?.error ||
+            "You are not authorized to submit this enrollment.",
+        );
+      }
 
       if (!response.ok) {
         throw new Error(
           responseData?.message ||
-            `Enrollment submission failed (${response.status})`,
+            responseData?.error ||
+            `Enrollment submission failed (${response.status}).`,
         );
       }
 
-      if (!responseData.success) {
-        throw new Error(
-          responseData?.message || "Unable to submit enrollment.",
-        );
+      if (responseData?.success === false) {
+        throw new Error(responseData.message || "Unable to submit enrollment.");
       }
 
       setSuccessMessage(
-        responseData.message ||
+        responseData?.message ||
           "Your enrollment has been submitted successfully and is now pending Registrar review.",
       );
 
-      /*
-       * Reload immediately.
-       *
-       * Before:
-       * Draft
-       *
-       * After:
-       * Pending
-       *
-       * Therefore:
-       * - Submit button disappears
-       * - Pending notice appears
-       * - Subjects remain read-only
-       */
-      await loadEnrollment(user.user_id);
-    } catch (error) {
-      console.error("SUBMIT ENROLLMENT ERROR:", error);
+      await reloadEnrollment();
+    } catch (err) {
+      console.error("SUBMIT STUDENT ENROLLMENT ERROR:", err);
 
       setError(
-        error instanceof Error ? error.message : "Unable to submit enrollment.",
+        err instanceof Error ? err.message : "Unable to submit enrollment.",
       );
     } finally {
       setSubmitting(false);
@@ -1279,10 +1415,6 @@ export default function Enrollmentmain() {
         key={subject.enrollment_subject_id ?? subject.subject_id}
         className={`subject-card ${isRetake ? "retake-subject" : ""}`}
       >
-        {/* ==================================================
-            SUBJECT HEADER
-        ================================================== */}
-
         <div className="subject-header">
           <div className="subject-number">
             {isRetake ? "R" : subject.display_order}
@@ -1325,10 +1457,6 @@ export default function Enrollmentmain() {
           </div>
         </div>
 
-        {/* ==================================================
-            ASSIGNED SECTION
-        ================================================== */}
-
         <div className="section-area">
           <div className="section-area-header">
             <div>
@@ -1345,10 +1473,6 @@ export default function Enrollmentmain() {
               <span className="section-count">{enrollmentSubjectStatus}</span>
             )}
           </div>
-
-          {/* ==================================================
-              ASSIGNED SECTION
-          ================================================== */}
 
           {assignedSection ? (
             <div className="assigned-section-card">
@@ -1403,10 +1527,6 @@ export default function Enrollmentmain() {
             </div>
           )}
 
-          {/* ==================================================
-              STUDENT READ-ONLY NOTICE
-          ================================================== */}
-
           {assignedSection && (
             <div className="selected-section-message">
               <span>✓</span>
@@ -1414,7 +1534,8 @@ export default function Enrollmentmain() {
               <p>
                 You are assigned to{" "}
                 <strong>{assignedSection.section_name}</strong> for{" "}
-                <strong>{subject.subject_code}</strong>.
+                <strong>{subject.subject_code}</strong>
+                .
                 <br />
                 <small>Section changes are handled by the Registrar.</small>
               </p>

@@ -17,8 +17,12 @@ try {
   const conn = await db.getConnection();
   console.log("✅ MySQL Connected");
   conn.release();
-} catch (err) {
-  console.error("❌ MySQL connection failed:", err.message);
+} catch (error) {
+  console.error("❌ MySQL connection failed:");
+  console.error("Message:", error.message);
+  console.error("Code:", error.code);
+  console.error("Errno:", error.errno);
+  console.error("SQL State:", error.sqlState);
 }
 
 export default db;

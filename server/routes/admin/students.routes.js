@@ -121,6 +121,136 @@ s.first_name`,
 });
 
 // =====================================================
+// GET ACTIVE CURRICULA BY COURSE
+//
+// GET /api/students/curricula?course=BSIT
+//
+// Purpose:
+// - Used by Admin Create/Edit Student
+// - Returns active curricula belonging to the
+//   selected course
+// - Prevents frontend from using hard-coded curriculum
+// =====================================================
+
+router.get("/curricula", async (req, res) => {
+  const courseCode =
+    typeof req.query.course === "string" ? req.query.course.trim() : "";
+
+  // =====================================================
+  // VALIDATE COURSE
+  // =====================================================
+
+  if (!courseCode) {
+    return res.status(400).json({
+      success: false,
+      message: "Course is required.",
+    });
+  }
+
+  try {
+    // =====================================================
+    // FIND COURSE
+    // =====================================================
+
+    const [courseRows] = await db.execute(
+      `
+      SELECT
+          course_id,
+          course_code,
+          course_name,
+          total_years
+
+      FROM courses
+
+      WHERE course_code = ?
+
+      LIMIT 1
+      `,
+      [courseCode],
+    );
+
+    if (courseRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found.",
+      });
+    }
+
+    const course = courseRows[0];
+
+    // =====================================================
+    // GET ACTIVE CURRICULA
+    // =====================================================
+
+    const [curriculumRows] = await db.execute(
+      `
+      SELECT
+          curriculum_id,
+          course_id,
+          curriculum_name,
+          effective_year,
+          total_units,
+          is_active
+
+      FROM curriculum
+
+      WHERE course_id = ?
+        AND is_active = 1
+
+      ORDER BY
+          effective_year DESC,
+          curriculum_id DESC
+      `,
+      [course.course_id],
+    );
+
+    // =====================================================
+    // RESPONSE
+    // =====================================================
+
+    return res.status(200).json({
+      success: true,
+
+      course: {
+        course_id: Number(course.course_id),
+        course_code: course.course_code,
+        course_name: course.course_name,
+        total_years: Number(course.total_years || 0),
+      },
+
+      count: curriculumRows.length,
+
+      curricula: curriculumRows.map((curriculum) => ({
+        curriculum_id: Number(curriculum.curriculum_id),
+
+        curriculum_name: curriculum.curriculum_name,
+
+        effective_year: curriculum.effective_year
+          ? Number(curriculum.effective_year)
+          : null,
+
+        total_units:
+          curriculum.total_units !== null &&
+          curriculum.total_units !== undefined
+            ? Number(curriculum.total_units)
+            : null,
+
+        is_active: Boolean(curriculum.is_active),
+      })),
+    });
+  } catch (error) {
+    console.error("GET CURRICULA BY COURSE ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+
+      message: "Failed to fetch curricula for the selected course.",
+
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+// =====================================================
 // GET SINGLE STUDENT
 // =====================================================
 

@@ -1,0 +1,285 @@
+/* =====================================================
+   DELETE ANNOUNCEMENT MODAL
+===================================================== */
+
+.delete-announcement-modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.58);
+
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+
+  animation: deleteAnnouncementFadeIn 0.18s ease;
+}
+
+/* =====================================================
+   MODAL BOX
+===================================================== */
+
+.delete-announcement-modal {
+  width: 100%;
+  max-width: 470px;
+
+  background: #ffffff;
+
+  border-radius: 18px;
+
+  padding: 30px;
+
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.22),
+    0 8px 24px rgba(15, 23, 42, 0.12);
+
+  animation: deleteAnnouncementModalIn 0.2s ease;
+}
+
+/* =====================================================
+   WARNING ICON
+===================================================== */
+
+.delete-announcement-modal__icon {
+  width: 58px;
+  height: 58px;
+
+  margin: 0 auto 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #fee2e2;
+
+  color: #dc2626;
+}
+
+.delete-announcement-modal__icon span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+
+  border: 2px solid #dc2626;
+  border-radius: 50%;
+
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* =====================================================
+   CONTENT
+===================================================== */
+
+.delete-announcement-modal__content {
+  text-align: center;
+}
+
+.delete-announcement-modal__content h2 {
+  margin: 0 0 10px;
+
+  color: #111827;
+
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.delete-announcement-modal__content p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* =====================================================
+   ANNOUNCEMENT NAME
+===================================================== */
+
+.delete-announcement-modal__announcement {
+  margin: 16px 0;
+
+  padding: 12px 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #f8fafc;
+
+  color: #334155;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  word-break: break-word;
+}
+
+/* =====================================================
+   WARNING TEXT
+===================================================== */
+
+.delete-announcement-modal__warning {
+  color: #dc2626 !important;
+
+  font-weight: 600;
+}
+
+/* =====================================================
+   ACTIONS
+===================================================== */
+
+.delete-announcement-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+
+  margin-top: 26px;
+}
+
+/* =====================================================
+   CANCEL
+===================================================== */
+
+.delete-announcement-modal__cancel {
+  min-width: 105px;
+
+  padding: 10px 18px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  background: #ffffff;
+
+  color: #334155;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.delete-announcement-modal__cancel:hover:not(:disabled) {
+  background: #f8fafc;
+
+  border-color: #94a3b8;
+}
+
+.delete-announcement-modal__cancel:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* =====================================================
+   DELETE BUTTON
+===================================================== */
+
+.delete-announcement-modal__delete {
+  min-width: 170px;
+
+  padding: 10px 18px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #dc2626;
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.delete-announcement-modal__delete:hover:not(:disabled) {
+  background: #b91c1c;
+
+  box-shadow: 0 5px 15px rgba(220, 38, 38, 0.24);
+}
+
+.delete-announcement-modal__delete:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* =====================================================
+   DISABLED
+===================================================== */
+
+.delete-announcement-modal__cancel:disabled,
+.delete-announcement-modal__delete:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   ANIMATION
+===================================================== */
+
+@keyframes deleteAnnouncementFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes deleteAnnouncementModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =====================================================
+   MOBILE
+===================================================== */
+
+@media (max-width: 520px) {
+  .delete-announcement-modal-overlay {
+    padding: 16px;
+  }
+
+  .delete-announcement-modal {
+    padding: 24px 20px;
+  }
+
+  .delete-announcement-modal__actions {
+    flex-direction: column-reverse;
+  }
+
+  .delete-announcement-modal__cancel,
+  .delete-announcement-modal__delete {
+    width: 100%;
+  }
+}
