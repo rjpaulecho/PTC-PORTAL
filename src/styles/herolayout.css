@@ -7,23 +7,24 @@
 
 .root {
   font-family: "Georgia", "Times New Roman", serif;
-  min-height: 100vh;
+  height: calc(100vh - 64px);
   background: #0a0404;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ── Header ──────────────────────────────────────── */
 .header {
   height: 64px;
+  min-height: 64px;
   background: rgba(2, 94, 33, 0.96);
   border-bottom: 1px solid rgba(0, 0, 0, 0.07);
   display: flex;
   align-items: center;
   padding: 0 40px;
   gap: 32px;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 100;
   backdrop-filter: blur(12px);
 }
@@ -48,11 +49,13 @@
   overflow: hidden;
   margin-top: 20px;
 }
+
 .logoMark img {
   width: 80%;
   height: 80%;
   object-fit: contain;
 }
+
 .logoText {
   color: #fff;
   font-size: 19px;
@@ -72,11 +75,17 @@
   padding: 6px 14px;
   border-radius: 6px;
   font-family: "Helvetica Neue", sans-serif;
-  transition: color 0.2s;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .navLink:hover {
-  color: #fff;
+  color: #21eb07;
+}
+
+.navLink.active {
+  color: #39ea08;
 }
 
 .ctaGroup {
@@ -93,15 +102,19 @@
   font-size: 13px;
   font-family: "Helvetica Neue", sans-serif;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .btnLogin:hover {
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: #2edc02;
+  color: #09ff00;
 }
 
 .btnAdmission {
-  background: linear-gradient(135deg, #c8973a, #e8c06a);
+  background: linear-gradient(135deg, #0dff05, #027f02);
   border: none;
   color: #0b1120;
   padding: 7px 20px;
@@ -110,28 +123,38 @@
   font-weight: 700;
   font-family: "Helvetica Neue", sans-serif;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .btnAdmission:hover {
   opacity: 0.88;
+  transform: translateY(-1px);
 }
 
 /* ── Main Layout ─────────────────────────────────── */
 .main {
-  flex: 1;
+  height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: calc(100vh - 64px);
+  overflow: hidden;
 }
 
 /* ── Left Panel ──────────────────────────────────── */
 .leftPanel {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   padding: 64px 56px;
-  background: linear-gradient(135deg, rgba(10, 9, 22, 0.9), rgba(29, 182, 50, 0.9)),
+  background:
+    linear-gradient(
+      135deg,
+      rgba(10, 9, 22, 0.9),
+      rgba(29, 182, 50, 0.9)
+    ),
     url("../assets/BG.png") no-repeat center/cover;
 }
 
@@ -168,9 +191,9 @@
 /* ── Right Panel — Automatic Image Slideshow ─────── */
 
 .rightPanel {
-  height: calc(100vh - 64px);
-  position: sticky;
-  top: 64px;
+  height: 100%;
+  min-height: 0;
+  position: relative;
   overflow: hidden;
   background: #000;
 }
@@ -209,22 +232,16 @@
   object-fit: cover;
   display: block;
 
-  /* Start slightly zoomed out */
   transform: scale(1);
 
-  /* 5 second zoom animation */
   transition: transform 5s ease;
 }
 
-/*
-   When the image becomes active,
-   slowly zoom it in.
-*/
 .galleryItem.active img {
   transform: scale(1.12);
 }
 
-/* Caption */
+/* ── Caption ─────────────────────────────────────── */
 
 .galleryCaption {
   position: absolute;
@@ -289,22 +306,34 @@
 }
 
 .indicator:hover {
-  background: #ffffff;
+  background: #e8c06a;
 }
 
 /* ── Responsive ──────────────────────────────────── */
+
 @media (max-width: 768px) {
+  .root {
+    height: auto;
+    min-height: calc(100vh - 64px);
+    overflow: visible;
+  }
+
   .main {
+    height: auto;
+    min-height: calc(100vh - 64px);
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .rightPanel {
     height: 60vh;
-    position: static;
+    min-height: 400px;
+    position: relative;
   }
 
   .leftPanel {
     padding: 48px 28px;
+    min-height: 50vh;
   }
 
   .nav {
