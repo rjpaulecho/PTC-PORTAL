@@ -2,8 +2,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import type { UserRole } from "../services/auth.service";
 import { authService } from "../services/auth.service";
 
-
-
 import Navbar from "../components/Forms/HomeNavbar";
 
 // login and otp form here
@@ -13,7 +11,6 @@ import OtpAuth from "../pages/auth/Otp";
 import About from "../components/Forms/about";
 import Programs from "../components/Forms/programs";
 import Contact from "../components/Forms/contact";
-
 
 // Student pages
 import StudentDashboard from "../pages/student/Dashboard";
@@ -154,6 +151,7 @@ import SubjectmanagementR from "../pages/registrar/Subjects/SubjectManagementR";
 import CoursemanagementR from "../pages/registrar/Courses/CourseManagementR";
 import DepartmentManagementR from "../pages/registrar/Department/DepartmentManagementR";
 import EnrollmentPeriodMR from "../pages/registrar/Enrollment/EnrollmentPeriodMR";
+import ClassOfferingManagementR from "../pages/registrar/ClassOffering.tsx/ClassOfferingManagementR";
 
 // ─── Role guard ───────────────────────────────────────────────
 function ProtectedRoute({
@@ -207,488 +205,490 @@ function RegistrarRoute({ element }: { element: ReactElement }) {
 export default function AppRoutes() {
   return (
     <>
-
       <Routes>
+        {/* ── Public ── */}
+        <Route
+          path="/"
+          element={
+            <>
+              <Navbar />
+              <Home />
+            </>
+          }
+        />
 
+        <Route
+          path="/about"
+          element={
+            <>
+              <Navbar />
+              <About />
+            </>
+          }
+        />
 
-    {/* ── Public ── */}
-    <Route
-      path="/"
-      element={
-        <>
-          <Navbar />
-          <Home />
-        </>
-      }
-    />
+        <Route
+          path="/programs"
+          element={
+            <>
+              <Navbar />
+              <Programs />
+            </>
+          }
+        />
 
-    <Route
-      path="/about"
-      element={
-        <>
-          <Navbar />
-          <About />
-        </>
-      }
-    />
+        <Route
+          path="/contact"
+          element={
+            <>
+              <Navbar />
+              <Contact />
+            </>
+          }
+        />
 
-    <Route
-      path="/programs"
-      element={
-        <>
-          <Navbar />
-          <Programs />
-        </>
-      }
-    />
+        <Route path="/login" element={<LoginAuth />} />
+        <Route path="/otp" element={<OtpAuth />} />
 
-    <Route
-      path="/contact"
-      element={
-        <>
-          <Navbar />
-          <Contact />
-        </>
-      }
-    />
+        {/* ── Student: Solo links ── */}
+        <Route
+          path="/student/dashboard"
+          element={<StudentRoute element={<StudentDashboard />} />}
+        />
+        <Route
+          path="/student/profile"
+          element={<StudentRoute element={<StudentProfile />} />}
+        />
 
+        {/* ── Student: announcement ── */}
+        <Route
+          path="/student/announcement"
+          element={<StudentRoute element={<AnnouncementS />} />}
+        />
+        <Route
+          path="/student/announcementD/:id"
+          element={<StudentRoute element={<AnnouncementDetailsS />} />}
+        />
 
-      <Route path="/login" element={<LoginAuth />} />
-      <Route path="/otp" element={<OtpAuth />} />
+        {/* ── Student: Academic Records ── */}
+        <Route
+          path="/student/records"
+          element={<StudentRoute element={<StudentRecord />} />}
+        />
+        <Route
+          path="/student/transcript"
+          element={<StudentRoute element={<StudentTranscript />} />}
+        />
+        <Route
+          path="/student/course-history"
+          element={<StudentRoute element={<StudentCourseHistory />} />}
+        />
+        <Route
+          path="/student/schedule"
+          element={<StudentRoute element={<StudentSchedule />} />}
+        />
 
-      {/* ── Student: Solo links ── */}
-      <Route
-        path="/student/dashboard"
-        element={<StudentRoute element={<StudentDashboard />} />}
-      />
-      <Route
-        path="/student/profile"
-        element={<StudentRoute element={<StudentProfile />} />}
-      />
+        {/* ── Student: Enrollment ── */}
+        <Route
+          path="/student/enrollment/courses"
+          element={<StudentRoute element={<EnrollmentCourses />} />}
+        />
+        <Route
+          path="/student/enrollment/add-drop"
+          element={<StudentRoute element={<AddDropSubjects />} />}
+        />
+        <Route
+          path="/student/enrollment/submit"
+          element={<StudentRoute element={<SubmitEnrollment />} />}
+        />
+        <Route
+          path="/student/enrollment/main"
+          element={<StudentRoute element={<Enrollmentmain />} />}
+        />
 
-      {/* ── Student: announcement ── */}
-      <Route
-        path="/student/announcement"
-        element={<StudentRoute element={<AnnouncementS />} />}
-      />
-      <Route
-        path="/student/announcementD/:id"
-        element={<StudentRoute element={<AnnouncementDetailsS />} />}
-      />
+        {/* ── Student: Financial ── */}
+        <Route
+          path="/student/financial/tuition"
+          element={<StudentRoute element={<TuitionFees />} />}
+        />
+        <Route
+          path="/student/financial/history"
+          element={<StudentRoute element={<PaymentHistory />} />}
+        />
+        <Route
+          path="/student/financial/balance"
+          element={<StudentRoute element={<BalanceInquiry />} />}
+        />
+        <Route
+          path="/student/financial/pay"
+          element={<StudentRoute element={<OnlinePayment />} />}
+        />
 
-      {/* ── Student: Academic Records ── */}
-      <Route
-        path="/student/records"
-        element={<StudentRoute element={<StudentRecord />} />}
-      />
-      <Route
-        path="/student/transcript"
-        element={<StudentRoute element={<StudentTranscript />} />}
-      />
-      <Route
-        path="/student/course-history"
-        element={<StudentRoute element={<StudentCourseHistory />} />}
-      />
-      <Route
-        path="/student/schedule"
-        element={<StudentRoute element={<StudentSchedule />} />}
-      />
+        {/* ── Student: Document ── */}
+        <Route
+          path="/student/document/request"
+          element={<StudentRoute element={<RequestDocument />} />}
+        />
+        <Route
+          path="/student/document/release"
+          element={<StudentRoute element={<DocumentRelease />} />}
+        />
 
-      {/* ── Student: Enrollment ── */}
-      <Route
-        path="/student/enrollment/courses"
-        element={<StudentRoute element={<EnrollmentCourses />} />}
-      />
-      <Route
-        path="/student/enrollment/add-drop"
-        element={<StudentRoute element={<AddDropSubjects />} />}
-      />
-      <Route
-        path="/student/enrollment/submit"
-        element={<StudentRoute element={<SubmitEnrollment />} />}
-      />
-      <Route
-        path="/student/enrollment/main"
-        element={<StudentRoute element={<Enrollmentmain />} />}
-      />
+        {/* ── Student: Settings ── */}
+        <Route
+          path="/student/setting/user"
+          element={<StudentRoute element={<SettingUser />} />}
+        />
 
-      {/* ── Student: Financial ── */}
-      <Route
-        path="/student/financial/tuition"
-        element={<StudentRoute element={<TuitionFees />} />}
-      />
-      <Route
-        path="/student/financial/history"
-        element={<StudentRoute element={<PaymentHistory />} />}
-      />
-      <Route
-        path="/student/financial/balance"
-        element={<StudentRoute element={<BalanceInquiry />} />}
-      />
-      <Route
-        path="/student/financial/pay"
-        element={<StudentRoute element={<OnlinePayment />} />}
-      />
+        {/* ── Faculty: Solo links ── */}
+        <Route
+          path="/faculty/dashboard"
+          element={<FacultyRoute element={<FacultyDashboard />} />}
+        />
+        <Route
+          path="/faculty/profile"
+          element={<FacultyRoute element={<FacultyProfile />} />}
+        />
 
-      {/* ── Student: Document ── */}
-      <Route
-        path="/student/document/request"
-        element={<StudentRoute element={<RequestDocument />} />}
-      />
-      <Route
-        path="/student/document/release"
-        element={<StudentRoute element={<DocumentRelease />} />}
-      />
+        {/* ── Faculty: Announcement ── */}
+        <Route
+          path="/faculty/announcementF"
+          element={<FacultyRoute element={<FacultyAnnouncementsF />} />}
+        />
 
-      {/* ── Student: Settings ── */}
-      <Route
-        path="/student/setting/user"
-        element={<StudentRoute element={<SettingUser />} />}
-      />
+        <Route
+          path="/faculty/announcementDF/:id"
+          element={<FacultyRoute element={<FacultyAnnouncementsDF />} />}
+        />
 
-      {/* ── Faculty: Solo links ── */}
-      <Route
-        path="/faculty/dashboard"
-        element={<FacultyRoute element={<FacultyDashboard />} />}
-      />
-      <Route
-        path="/faculty/profile"
-        element={<FacultyRoute element={<FacultyProfile />} />}
-      />
+        {/* ── Faculty: Manage Classes ── */}
+        <Route
+          path="/faculty/classes"
+          element={<FacultyRoute element={<MyClasses />} />}
+        />
+        <Route
+          path="/faculty/classes/schedule"
+          element={<FacultyRoute element={<ClassSchedule />} />}
+        />
+        <Route
+          path="/faculty/classes/students"
+          element={<FacultyRoute element={<FacultyStudentList />} />}
+        />
 
-      {/* ── Faculty: Announcement ── */}
-      <Route
-        path="/faculty/announcementF"
-        element={<FacultyRoute element={<FacultyAnnouncementsF />} />}
-      />
+        {/* ── Faculty: Upload Materials ── */}
+        <Route
+          path="/faculty/materials/notes"
+          element={<FacultyRoute element={<FacultyLectureNotes />} />}
+        />
+        <Route
+          path="/faculty/materials/syllabus"
+          element={<FacultyRoute element={<FacultySyllabus />} />}
+        />
 
-      <Route
-        path="/faculty/announcementDF/:id"
-        element={<FacultyRoute element={<FacultyAnnouncementsDF />} />}
-      />
+        {/* ── Faculty: Post Grades ── */}
+        <Route
+          path="/faculty/grades/enter"
+          element={<FacultyRoute element={<EnterGrades />} />}
+        />
+        <Route
+          path="/faculty/grades/summary"
+          element={<FacultyRoute element={<GradeSummary />} />}
+        />
+        <Route
+          path="/faculty/grades/history"
+          element={<FacultyRoute element={<GradeHistory />} />}
+        />
 
-      {/* ── Faculty: Manage Classes ── */}
-      <Route
-        path="/faculty/classes"
-        element={<FacultyRoute element={<MyClasses />} />}
-      />
-      <Route
-        path="/faculty/classes/schedule"
-        element={<FacultyRoute element={<ClassSchedule />} />}
-      />
-      <Route
-        path="/faculty/classes/students"
-        element={<FacultyRoute element={<FacultyStudentList />} />}
-      />
+        {/* ── Faculty: Attendance ── */}
+        <Route
+          path="/faculty/attendance/take"
+          element={<FacultyRoute element={<TakeAttendance />} />}
+        />
+        <Route
+          path="/faculty/attendance/records"
+          element={<FacultyRoute element={<AttendanceRecords />} />}
+        />
+        <Route
+          path="/faculty/attendance/reports"
+          element={<FacultyRoute element={<AttendanceReports />} />}
+        />
 
-      {/* ── Faculty: Upload Materials ── */}
-      <Route
-        path="/faculty/materials/notes"
-        element={<FacultyRoute element={<FacultyLectureNotes />} />}
-      />
-      <Route
-        path="/faculty/materials/syllabus"
-        element={<FacultyRoute element={<FacultySyllabus />} />}
-      />
+        {/* ── Faculty: Communication ── */}
+        <Route
+          path="/faculty/communication/messages"
+          element={<FacultyRoute element={<FacultyMessages />} />}
+        />
+        <Route
+          path="/faculty/communication/announcements"
+          element={<FacultyRoute element={<FacultyAnnouncements />} />}
+        />
+        <Route
+          path="/faculty/communication/send"
+          element={<FacultyRoute element={<SendNotice />} />}
+        />
 
-      {/* ── Faculty: Post Grades ── */}
-      <Route
-        path="/faculty/grades/enter"
-        element={<FacultyRoute element={<EnterGrades />} />}
-      />
-      <Route
-        path="/faculty/grades/summary"
-        element={<FacultyRoute element={<GradeSummary />} />}
-      />
-      <Route
-        path="/faculty/grades/history"
-        element={<FacultyRoute element={<GradeHistory />} />}
-      />
+        {/* ── Admin ── */}
+        <Route
+          path="/admin/dashboard"
+          element={<AdminRoute element={<AdminDashboard />} />}
+        />
+        {/* ── Admin: Student Management ── */}
+        <Route
+          path="/admin/students/manage"
+          element={<AdminRoute element={<ManageStudentsNew />} />}
+        />
+        <Route
+          path="/admin/students/addeditdrop"
+          element={<AdminRoute element={<AddEditDrop />} />}
+        />
+        <Route
+          path="/admin/students/createstudents"
+          element={<AdminRoute element={<CreateStudent />} />}
+        />
+        <Route
+          path="/admin/students/editstudents/:id"
+          element={<AdminRoute element={<EditStudent />} />}
+        />
+        <Route
+          path="/admin/students/profile/:id"
+          element={<AdminRoute element={<Sprofile />} />}
+        />
 
-      {/* ── Faculty: Attendance ── */}
-      <Route
-        path="/faculty/attendance/take"
-        element={<FacultyRoute element={<TakeAttendance />} />}
-      />
-      <Route
-        path="/faculty/attendance/records"
-        element={<FacultyRoute element={<AttendanceRecords />} />}
-      />
-      <Route
-        path="/faculty/attendance/reports"
-        element={<FacultyRoute element={<AttendanceReports />} />}
-      />
+        {/* ── Admin: Enrollment Management ── */}
+        <Route
+          path="/admin/enrollment/approve"
+          element={<AdminRoute element={<ApproveEnrollment />} />}
+        />
+        <Route
+          path="/admin/enrollment/request"
+          element={<AdminRoute element={<EnrollmentRequests />} />}
+        />
+        <Route
+          path="/admin/enrollment/history"
+          element={<AdminRoute element={<EnrollmentHistory />} />}
+        />
+        <Route
+          path="/admin/enrollment/analytics"
+          element={<AdminRoute element={<EnrollmentAnalytics />} />}
+        />
 
-      {/* ── Faculty: Communication ── */}
-      <Route
-        path="/faculty/communication/messages"
-        element={<FacultyRoute element={<FacultyMessages />} />}
-      />
-      <Route
-        path="/faculty/communication/announcements"
-        element={<FacultyRoute element={<FacultyAnnouncements />} />}
-      />
-      <Route
-        path="/faculty/communication/send"
-        element={<FacultyRoute element={<SendNotice />} />}
-      />
+        {/* ── Admin: Financial Management ── */}
+        <Route
+          path="/admin/financial/payments"
+          element={<AdminRoute element={<Payment />} />}
+        />
+        <Route
+          path="/admin/financial/billing"
+          element={<AdminRoute element={<Billing />} />}
+        />
+        <Route
+          path="/admin/financial/scholarship"
+          element={<AdminRoute element={<Scholarship />} />}
+        />
+        <Route
+          path="/admin/financial/freport"
+          element={<AdminRoute element={<FinancialReport />} />}
+        />
 
-      {/* ── Admin ── */}
-      <Route
-        path="/admin/dashboard"
-        element={<AdminRoute element={<AdminDashboard />} />}
-      />
-      {/* ── Admin: Student Management ── */}
-      <Route
-        path="/admin/students/manage"
-        element={<AdminRoute element={<ManageStudentsNew />} />}
-      />
-      <Route
-        path="/admin/students/addeditdrop"
-        element={<AdminRoute element={<AddEditDrop />} />}
-      />
-      <Route
-        path="/admin/students/createstudents"
-        element={<AdminRoute element={<CreateStudent />} />}
-      />
-      <Route
-        path="/admin/students/editstudents/:id"
-        element={<AdminRoute element={<EditStudent />} />}
-      />
-      <Route
-        path="/admin/students/profile/:id"
-        element={<AdminRoute element={<Sprofile />} />}
-      />
+        {/* ── Admin: System Management ── */}
+        <Route
+          path="/admin/system/backup"
+          element={<AdminRoute element={<BackupManagement />} />}
+        />
+        <Route
+          path="/admin/system/acadsetting"
+          element={<AdminRoute element={<AcademicSetting />} />}
+        />
+        <Route
+          path="/admin/system/Gsettings"
+          element={<AdminRoute element={<GeneralSettings />} />}
+        />
+        <Route
+          path="/admin/system/security"
+          element={<AdminRoute element={<SecuritySetting />} />}
+        />
+        <Route
+          path="/admin/system/email"
+          element={<AdminRoute element={<EmailSetting />} />}
+        />
 
-      {/* ── Admin: Enrollment Management ── */}
-      <Route
-        path="/admin/enrollment/approve"
-        element={<AdminRoute element={<ApproveEnrollment />} />}
-      />
-      <Route
-        path="/admin/enrollment/request"
-        element={<AdminRoute element={<EnrollmentRequests />} />}
-      />
-      <Route
-        path="/admin/enrollment/history"
-        element={<AdminRoute element={<EnrollmentHistory />} />}
-      />
-      <Route
-        path="/admin/enrollment/analytics"
-        element={<AdminRoute element={<EnrollmentAnalytics />} />}
-      />
+        {/* ── Admin: Reports & Analytics ── */}
+        <Route
+          path="/admin/reports/Dashboard"
+          element={<AdminRoute element={<DashboardReport />} />}
+        />
+        <Route
+          path="/admin/reports/export"
+          element={<AdminRoute element={<ExportReports />} />}
+        />
+        <Route
+          path="/admin/reports/auditlog"
+          element={<AdminRoute element={<AuditlogReport />} />}
+        />
+        <Route
+          path="/admin/reports/analytics"
+          element={<AdminRoute element={<UsageAnalytics />} />}
+        />
 
-      {/* ── Admin: Financial Management ── */}
-      <Route
-        path="/admin/financial/payments"
-        element={<AdminRoute element={<Payment />} />}
-      />
-      <Route
-        path="/admin/financial/billing"
-        element={<AdminRoute element={<Billing />} />}
-      />
-      <Route
-        path="/admin/financial/scholarship"
-        element={<AdminRoute element={<Scholarship />} />}
-      />
-      <Route
-        path="/admin/financial/freport"
-        element={<AdminRoute element={<FinancialReport />} />}
-      />
+        {/* ── Admin: User Management ── */}
+        <Route
+          path="/admin/user/list"
+          element={<AdminRoute element={<UserList />} />}
+        />
+        <Route
+          path="/admin/user/create"
+          element={<AdminRoute element={<CreateUser />} />}
+        />
+        <Route
+          path="/admin/user/activity"
+          element={<AdminRoute element={<UserActivity />} />}
+        />
+        <Route
+          path="/admin/user/roles"
+          element={<AdminRoute element={<UserRoles />} />}
+        />
+        <Route
+          path="/admin/user/edit/:id"
+          element={<AdminRoute element={<EditUser />} />}
+        />
 
-      {/* ── Admin: System Management ── */}
-      <Route
-        path="/admin/system/backup"
-        element={<AdminRoute element={<BackupManagement />} />}
-      />
-      <Route
-        path="/admin/system/acadsetting"
-        element={<AdminRoute element={<AcademicSetting />} />}
-      />
-      <Route
-        path="/admin/system/Gsettings"
-        element={<AdminRoute element={<GeneralSettings />} />}
-      />
-      <Route
-        path="/admin/system/security"
-        element={<AdminRoute element={<SecuritySetting />} />}
-      />
-      <Route
-        path="/admin/system/email"
-        element={<AdminRoute element={<EmailSetting />} />}
-      />
+        {/* ── Admin: Announcement ── */}
+        <Route
+          path="/admin/announcement/list"
+          element={<AdminRoute element={<Announcementlist />} />}
+        />
+        <Route
+          path="/admin/announcement/create"
+          element={<AdminRoute element={<Announcementcreate />} />}
+        />
+        <Route
+          path="/admin/announcement/edit/:id"
+          element={<AdminRoute element={<Announcementedit />} />}
+        />
+        <Route
+          path="/admin/announcement/details/:id"
+          element={<AdminRoute element={<AnnouncementDetails />} />}
+        />
 
-      {/* ── Admin: Reports & Analytics ── */}
-      <Route
-        path="/admin/reports/Dashboard"
-        element={<AdminRoute element={<DashboardReport />} />}
-      />
-      <Route
-        path="/admin/reports/export"
-        element={<AdminRoute element={<ExportReports />} />}
-      />
-      <Route
-        path="/admin/reports/auditlog"
-        element={<AdminRoute element={<AuditlogReport />} />}
-      />
-      <Route
-        path="/admin/reports/analytics"
-        element={<AdminRoute element={<UsageAnalytics />} />}
-      />
+        {/* ── programhead: Dashboard ── */}
+        <Route
+          path="/programhead/dashboard"
+          element={<ProgramHeadRoute element={<ProgramHeadDashboard />} />}
+        />
+        <Route
+          path="/programhead/announcementprog"
+          element={<ProgramHeadRoute element={<AnnouncementProg />} />}
+        />
+        <Route
+          path="/programhead/announcementprogD/:id"
+          element={<ProgramHeadRoute element={<AnnouncementProgD />} />}
+        />
+        <Route
+          path="/programhead/gradeapproval/pending"
+          element={<ProgramHeadRoute element={<PendingGrades />} />}
+        />
 
-      {/* ── Admin: User Management ── */}
-      <Route
-        path="/admin/user/list"
-        element={<AdminRoute element={<UserList />} />}
-      />
-      <Route
-        path="/admin/user/create"
-        element={<AdminRoute element={<CreateUser />} />}
-      />
-      <Route
-        path="/admin/user/activity"
-        element={<AdminRoute element={<UserActivity />} />}
-      />
-      <Route
-        path="/admin/user/roles"
-        element={<AdminRoute element={<UserRoles />} />}
-      />
-      <Route
-        path="/admin/user/edit/:id"
-        element={<AdminRoute element={<EditUser />} />}
-      />
+        {/* ── Registrar ── */}
+        <Route
+          path="/registrar/dashboard"
+          element={<RegistrarRoute element={<RegistrarDashboard />} />}
+        />
 
-      {/* ── Admin: Announcement ── */}
-      <Route
-        path="/admin/announcement/list"
-        element={<AdminRoute element={<Announcementlist />} />}
-      />
-      <Route
-        path="/admin/announcement/create"
-        element={<AdminRoute element={<Announcementcreate />} />}
-      />
-      <Route
-        path="/admin/announcement/edit/:id"
-        element={<AdminRoute element={<Announcementedit />} />}
-      />
-      <Route
-        path="/admin/announcement/details/:id"
-        element={<AdminRoute element={<AnnouncementDetails />} />}
-      />
+        {/* ── Registrar StudentRecord ── */}
+        <Route
+          path="/registrar/student/listR"
+          element={<RegistrarRoute element={<RStudentlist />} />}
+        />
+        <Route
+          path="/registrar/student/:id/transcriptR"
+          element={<RegistrarRoute element={<TranscriptPreviewR />} />}
+        />
+        <Route
+          path="/registrar/student/DetailsR/:id"
+          element={<RegistrarRoute element={<StudentDetailsR />} />}
+        />
+        <Route
+          path="/registrar/student/:id/AcadRecR"
+          element={<RegistrarRoute element={<AcademicRecordsR />} />}
+        />
+        <Route
+          path="/registrar/student/:id/DocumentsR"
+          element={<RegistrarRoute element={<StudentDocumentsR />} />}
+        />
 
-      {/* ── programhead: Dashboard ── */}
-      <Route
-        path="/programhead/dashboard"
-        element={<ProgramHeadRoute element={<ProgramHeadDashboard />} />}
-      />
-      <Route
-        path="/programhead/announcementprog"
-        element={<ProgramHeadRoute element={<AnnouncementProg />} />}
-      />
-      <Route
-        path="/programhead/announcementprogD/:id"
-        element={<ProgramHeadRoute element={<AnnouncementProgD />} />}
-      />
-      <Route
-        path="/programhead/gradeapproval/pending"
-        element={<ProgramHeadRoute element={<PendingGrades />} />}
-      />
+        {/* ── Registrar Enrollment ── */}
+        <Route
+          path="/registrar/enrollment/management"
+          element={<RegistrarRoute element={<EnrollmentManagementR />} />}
+        />
+        <Route
+          path="/registrar/enrollment/:id"
+          element={<RegistrarRoute element={<EnrollmentDetailsR />} />}
+        />
+        <Route
+          path="/registrar/enrollment/subject/management"
+          element={<RegistrarRoute element={<EnrollmentDetailsR />} />}
+        />
+        <Route
+          path="/registrar/enrollment/periodM"
+          element={<RegistrarRoute element={<EnrollmentPeriodMR />} />}
+        />
 
-      {/* ── Registrar ── */}
-      <Route
-        path="/registrar/dashboard"
-        element={<RegistrarRoute element={<RegistrarDashboard />} />}
-      />
+        {/* ── Registrar Curriculum ── */}
+        <Route
+          path="/registrar/curriculum/management"
+          element={<RegistrarRoute element={<CurriculumManagementR />} />}
+        />
+        <Route
+          path="/registrar/curriculum/:id"
+          element={<RegistrarRoute element={<CurriculumDetailR />} />}
+        />
+        {/* ── Registrar Subjects ── */}
+        <Route
+          path="/registrar/subjects/management"
+          element={<RegistrarRoute element={<SubjectmanagementR />} />}
+        />
 
-      {/* ── Registrar StudentRecord ── */}
-      <Route
-        path="/registrar/student/listR"
-        element={<RegistrarRoute element={<RStudentlist />} />}
-      />
-      <Route
-        path="/registrar/student/:id/transcriptR"
-        element={<RegistrarRoute element={<TranscriptPreviewR />} />}
-      />
-      <Route
-        path="/registrar/student/DetailsR/:id"
-        element={<RegistrarRoute element={<StudentDetailsR />} />}
-      />
-      <Route
-        path="/registrar/student/:id/AcadRecR"
-        element={<RegistrarRoute element={<AcademicRecordsR />} />}
-      />
-      <Route
-        path="/registrar/student/:id/DocumentsR"
-        element={<RegistrarRoute element={<StudentDocumentsR />} />}
-      />
+        {/* ── Registrar Courses ── */}
+        <Route
+          path="/registrar/course/management"
+          element={<RegistrarRoute element={<CoursemanagementR />} />}
+        />
+        {/* ── Registrar Department ── */}
+        <Route
+          path="/registrar/department/management"
+          element={<RegistrarRoute element={<DepartmentManagementR />} />}
+        />
 
-      {/* ── Registrar Enrollment ── */}
-      <Route
-        path="/registrar/enrollment/management"
-        element={<RegistrarRoute element={<EnrollmentManagementR />} />}
-      />
-      <Route
-        path="/registrar/enrollment/:id"
-        element={<RegistrarRoute element={<EnrollmentDetailsR />} />}
-      />
-      <Route
-        path="/registrar/enrollment/subject/management"
-        element={<RegistrarRoute element={<EnrollmentDetailsR />} />}
-      />
-      <Route
-        path="/registrar/enrollment/periodM"
-        element={<RegistrarRoute element={<EnrollmentPeriodMR />} />}
-      />
+        {/* ── Registrar Class Offering ── */}
 
-      {/* ── Registrar Curriculum ── */}
-      <Route
-        path="/registrar/curriculum/management"
-        element={<RegistrarRoute element={<CurriculumManagementR />} />}
-      />
-      <Route
-        path="/registrar/curriculum/:id"
-        element={<RegistrarRoute element={<CurriculumDetailR />} />}
-      />
-      {/* ── Registrar Subjects ── */}
-      <Route
-        path="/registrar/subjects/management"
-        element={<RegistrarRoute element={<SubjectmanagementR />} />}
-      />
+        <Route
+          path="/registrar/offering/managementR"
+          element={<RegistrarRoute element={<ClassOfferingManagementR />} />}
+        />
 
-      {/* ── Registrar Courses ── */}
-      <Route
-        path="/registrar/course/management"
-        element={<RegistrarRoute element={<CoursemanagementR />} />}
-      />
-      {/* ── Registrar Department ── */}
-      <Route
-        path="/registrar/department/management"
-        element={<RegistrarRoute element={<DepartmentManagementR />} />}
-      />
+        {/* ── Registrar Announcements ── */}
+        <Route
+          path="/registrar/announcement/listR"
+          element={<RegistrarRoute element={<AnnouncementListR />} />}
+        />
+        <Route
+          path="/registrar/announcement/DetailR/:id"
+          element={<RegistrarRoute element={<AnnouncementDetailR />} />}
+        />
 
-      {/* ── Registrar Announcements ── */}
-      <Route
-        path="/registrar/announcement/listR"
-        element={<RegistrarRoute element={<AnnouncementListR />} />}
-      />
-      <Route
-        path="/registrar/announcement/DetailR/:id"
-        element={<RegistrarRoute element={<AnnouncementDetailR />} />}
-      />
+        <Route
+          path="/registrar/announcement/editR/:id"
+          element={<RegistrarRoute element={<AnnouncementEditR />} />}
+        />
 
-      <Route
-        path="/registrar/announcement/editR/:id"
-        element={<RegistrarRoute element={<AnnouncementEditR />} />}
-      />
+        <Route
+          path="/registrar/announcement/createR"
+          element={<RegistrarRoute element={<AnnouncementCreateR />} />}
+        />
 
-      <Route
-        path="/registrar/announcement/createR"
-        element={<RegistrarRoute element={<AnnouncementCreateR />} />}
-      />
-
-      {/* Catch-all */}
-  <Route path="*" element={<Navigate to="/" replace />} />
-
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   );

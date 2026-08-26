@@ -1,16 +1,9 @@
-import React, { useEffect, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import DashboardLayout from "../../../components/Layout/DashboardLayout";
-
 import { authService } from "../../../services/auth.service";
-
 import "../../../styles/EnrollmementDetailsR.css";
-
-// =====================================================
-// API
-// =====================================================
 
 const API_BASE_URL = "http://localhost:3000/api/registrar/enrollments";
 
@@ -18,102 +11,295 @@ const API_BASE_URL = "http://localhost:3000/api/registrar/enrollments";
 // TYPES
 // =====================================================
 
-interface Enrollment {
+type EnrollmentStatus =
+  | "Draft"
+  | "Pending"
+  | "Approved"
+  | "Rejected"
+  | "Cancelled"
+  | string;
+
+interface EnrollmentDetails {
   enrollment_id: number;
 
-  student_id: number;
+  student: {
+    student_id: number;
+    user_id: number | null;
+    student_number: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
+    student_name: string;
+    username: string | null;
+    email: string | null;
+    gender: string | null;
+    birth_date: string | null;
+    contact_number: string | null;
+    year_level: number | null;
+  };
 
-  student_number: string;
+  course: {
+    course_id: number | null;
+    course_code: string | null;
+    course_name: string | null;
+  };
 
-  first_name: string;
-  middle_name: string | null;
-  last_name: string;
+  student_section: {
+    section_id: number | null;
+    section_name: string | null;
+    year_level: number | null;
+  };
 
-  gender: string | null;
+  academic_period: {
+    academic_year_id: number;
+    academic_year: string;
+    semester_id: number;
+    semester_name: string;
+  };
 
-  birth_date: string | null;
-
-  contact_number: string | null;
-
-  year_level: number | null;
-
-  course_id: number | null;
-
-  course_code: string | null;
-
-  student_section_id: number | null;
-
-  student_section_name: string | null;
-
-  academic_year_id: number;
-
-  academic_year: string;
-
-  semester_id: number;
-
-  semester_name: string;
-
-  enrollment_status: string;
-
+  enrollment_status: EnrollmentStatus;
   remarks: string | null;
 
-  approved_by: number | null;
-
-  approved_by_username: string | null;
-
-  approved_at: string | null;
+  approval: {
+    approved_by: number | null;
+    approved_by_username: string | null;
+    approved_at: string | null;
+  };
 
   created_at: string;
 }
 
 interface EnrollmentSubject {
   enrollment_subject_id: number;
+  enrollment_id: number;
 
   subject_id: number;
-
   subject_code: string;
-
   subject_name: string;
-
   units: number;
-
   lecture_hours: number | null;
-
   laboratory_hours: number | null;
 
-  subject_status: string;
+  status: string;
 
-  section_id: number | null;
+  section: {
+    section_id: number | null;
+    section_name: string | null;
+    year_level: number | null;
+  };
 
-  section_name: string | null;
+  section_subject: {
+    section_subject_id: number | null;
+    status: string | null;
+  };
 
-  section_subject_id: number | null;
+  offering: {
+    offering_id: number | null;
+    status: string | null;
+    schedule_days: string | null;
+    schedule_time: string | null;
+    max_students: number | null;
+    enrolled_count: number;
+    available_slots: number | null;
+  };
 
-  offering_id: number | null;
+  faculty: {
+    faculty_id: number | null;
+    username: string | null;
+  };
 
-  faculty_id: number | null;
+  room: {
+    room_id: number | null;
+    room_name: string | null;
+  };
 
-  room_id: number | null;
+  assignment_complete: boolean;
+}
 
-  schedule_days: string | null;
-
-  schedule_time: string | null;
-
-  max_students: number | null;
+interface EnrollmentSummary {
+  total_subjects: number;
+  total_units: number;
+  assigned_subjects: number;
+  unassigned_subjects: number;
+  all_subjects_assigned: boolean;
 }
 
 interface EnrollmentDetailsResponse {
   success: boolean;
-
-  enrollment: Enrollment;
-
-  totalSubjects: number;
-
-  subjects: EnrollmentSubject[];
-
   message?: string;
-
   error?: string;
+  enrollment?: EnrollmentDetails;
+  subjects?: EnrollmentSubject[];
+  summary?: EnrollmentSummary;
+}
+
+interface ValidationIssue {
+  code?: string;
+  message?: string;
+  category?: string;
+  [key: string]: unknown;
+}
+
+interface PreviousGrade {
+  grade_id?: number;
+  final_grade?: number | null;
+  classification?: string | null;
+  result_code?: string | null;
+  enrollment_id?: number | null;
+  approved_by?: number | null;
+  approved_at?: string | null;
+}
+
+interface PrerequisiteEvaluation {
+  prerequisite_id?: number;
+  subject_id?: number;
+  subject_code?: string;
+  subject_name?: string;
+  required_for_attempt?: boolean;
+  satisfied?: boolean;
+  passed_grade?: number | null;
+  bypassed_for_retake?: boolean;
+  error?: string | null;
+}
+
+interface AcademicEligibility {
+  eligible: boolean;
+  attempt_type: "Regular" | "Retake" | string;
+  is_retake: boolean;
+  previous_grade: PreviousGrade | null;
+  prerequisite_policy: string | null;
+  prerequisites: PrerequisiteEvaluation[];
+  errors: ValidationIssue[];
+}
+
+interface ValidationSubject {
+  enrollment_subject_id: number;
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+  units: number;
+  offering_id: number | null;
+  section_id: number | null;
+  section_name: string | null;
+  section_subject_id: number | null;
+  offering_status: string | null;
+  section_subject_status: string | null;
+  capacity: {
+    max_students: number;
+    enrolled_count: number;
+    available_slots: number;
+  };
+  academic_eligibility?: AcademicEligibility;
+  valid: boolean;
+  errors: ValidationIssue[];
+}
+
+interface ValidationResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  ready_for_approval: boolean;
+  summary?: {
+    total_enrolled_subjects: number;
+    total_units: number;
+    valid_subjects: number;
+    invalid_subjects: number;
+    error_count: number;
+    warning_count: number;
+  };
+  subjects?: ValidationSubject[];
+  errors?: ValidationIssue[];
+  warnings?: ValidationIssue[];
+}
+
+interface AvailableOffering {
+  offering_id: number;
+
+  subject: {
+    subject_id: number;
+    subject_code: string;
+    subject_name: string;
+    units: number;
+    lecture_hours: number | null;
+    laboratory_hours: number | null;
+  };
+
+  section: {
+    section_id: number;
+    section_name: string;
+    year_level: number | null;
+    course_id: number | null;
+    course_code: string | null;
+    course_name: string | null;
+  };
+
+  section_subject: {
+    section_subject_id: number;
+    status: string;
+  };
+
+  faculty: {
+    faculty_id: number | null;
+    faculty_name: string | null;
+  };
+
+  room: {
+    room_id: number | null;
+    room_name: string | null;
+  };
+
+  schedule: {
+    days: string | null;
+    time: string | null;
+  };
+
+  capacity: {
+    max_students: number;
+    enrolled_count: number;
+    available_slots: number;
+    is_full: boolean;
+  };
+
+  offering_status: string;
+  academic_year_id: number;
+  semester_id: number;
+}
+
+interface AvailableOfferingsResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  count?: number;
+  offerings?: AvailableOffering[];
+}
+
+interface MutationResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  ready_for_approval?: boolean;
+  validation_errors?: ValidationIssue[];
+}
+
+// =====================================================
+// SAFE JSON
+// =====================================================
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+
+    throw new Error(
+      `Server returned a non-JSON response (${response.status}): ${text.slice(
+        0,
+        200,
+      )}`,
+    );
+  }
+
+  return response.json() as Promise<T>;
 }
 
 // =====================================================
@@ -122,95 +308,110 @@ interface EnrollmentDetailsResponse {
 
 export default function EnrollmentDetailsR() {
   const navigate = useNavigate();
-
   const { id } = useParams<{ id: string }>();
 
-  // =====================================================
-  // AUTHENTICATION
-  // =====================================================
-
   const user = authService.getSession();
-
-  const token = authService.getToken();
-
   const userRole = user?.role;
 
-  const authenticated = Boolean(user && token);
+  const enrollmentId = useMemo(() => {
+    const value = Number(id);
+
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }, [id]);
 
   // =====================================================
-  // STATES
+  // CORE DATA
   // =====================================================
 
-  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
-
+  const [enrollment, setEnrollment] = useState<EnrollmentDetails | null>(null);
   const [subjects, setSubjects] = useState<EnrollmentSubject[]>([]);
-
-  const [totalSubjects, setTotalSubjects] = useState(0);
+  const [summary, setSummary] = useState<EnrollmentSummary | null>(null);
 
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState("");
 
   // =====================================================
-  // AUTHORIZATION
+  // VALIDATION
+  // =====================================================
+
+  const [validation, setValidation] = useState<ValidationResponse | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationError, setValidationError] = useState("");
+
+  // =====================================================
+  // ASSIGNMENT PANEL
+  // =====================================================
+
+  const [selectedSubject, setSelectedSubject] =
+    useState<EnrollmentSubject | null>(null);
+  const [availableOfferings, setAvailableOfferings] = useState<
+    AvailableOffering[]
+  >([]);
+  const [offeringsLoading, setOfferingsLoading] = useState(false);
+  const [selectedOfferingId, setSelectedOfferingId] = useState("");
+  const [assignmentReason, setAssignmentReason] = useState(
+    "Assigned by Registrar.",
+  );
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+
+  // =====================================================
+  // APPROVAL
+  // =====================================================
+
+  const [approvalRemarks, setApprovalRemarks] = useState(
+    "Registrar verified enrollment subjects, offerings, academic eligibility, and capacity.",
+  );
+  const [approvalLoading, setApprovalLoading] = useState(false);
+
+  // =====================================================
+  // FEEDBACK / REFRESH
+  // =====================================================
+
+  const [actionError, setActionError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // =====================================================
+  // AUTH
   // =====================================================
 
   useEffect(() => {
-    // ---------------------------------------------------
-    // No session or no JWT
-    // ---------------------------------------------------
-
-    if (!authenticated) {
-      authService.logout();
-
-      navigate("/login", {
-        replace: true,
-      });
-
+    if (!user) {
+      navigate("/login", { replace: true });
       return;
     }
-
-    // ---------------------------------------------------
-    // Logged in but wrong role
-    // ---------------------------------------------------
 
     if (userRole !== "Registrar") {
-      if (user) {
-        navigate(authService.getDashboardRoute(user.role), {
-          replace: true,
-        });
-      } else {
-        navigate("/login", {
-          replace: true,
-        });
-      }
+      navigate(authService.getDashboardRoute(user.role), {
+        replace: true,
+      });
     }
-  }, [authenticated, userRole, user, navigate]);
+  }, [user, userRole, navigate]);
+
+  const handleUnauthorized = useCallback(() => {
+    authService.logout();
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  const refresh = useCallback(() => {
+    setRefreshKey((current) => current + 1);
+  }, []);
 
   // =====================================================
-  // FETCH ENROLLMENT DETAILS
+  // LOAD DETAILS
   // =====================================================
 
   useEffect(() => {
-    if (!authenticated || userRole !== "Registrar") {
+    if (!user || userRole !== "Registrar") {
       return;
     }
 
-    if (!id) {
+    if (!enrollmentId) {
+      setEnrollment(null);
+      setSubjects([]);
+      setSummary(null);
       setError("Invalid enrollment ID.");
-
       setLoading(false);
-
-      return;
-    }
-
-    const enrollmentId = Number(id);
-
-    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
-      setError("Invalid enrollment ID.");
-
-      setLoading(false);
-
       return;
     }
 
@@ -219,147 +420,56 @@ export default function EnrollmentDetailsR() {
     const loadEnrollment = async () => {
       try {
         setLoading(true);
-
         setError("");
 
-        const requestUrl = `${API_BASE_URL}/${enrollmentId}`;
-
-        console.log("GET REGISTRAR ENROLLMENT DETAILS:", requestUrl);
-
-        // =============================================
-        // AUTHENTICATED REQUEST
-        //
-        // authFetch automatically adds:
-        //
-        // Authorization: Bearer <JWT>
-        // =============================================
-
-        const response = await authService.authFetch(requestUrl, {
-          method: "GET",
-
-          signal: controller.signal,
-
-          headers: {
-            Accept: "application/json",
+        const response = await authService.authFetch(
+          `${API_BASE_URL}/${enrollmentId}`,
+          {
+            method: "GET",
+            signal: controller.signal,
+            headers: {
+              Accept: "application/json",
+            },
           },
-        });
-
-        // =============================================
-        // SAFE RESPONSE READ
-        // =============================================
-
-        const contentType = response.headers.get("content-type") || "";
-
-        let data: EnrollmentDetailsResponse | null = null;
-
-        if (contentType.includes("application/json")) {
-          data = await response.json();
-        } else {
-          const text = await response.text();
-
-          throw new Error(
-            `Server returned a non-JSON response (${response.status}): ${text.slice(
-              0,
-              200,
-            )}`,
-          );
-        }
-
-        // =============================================
-        // 401
-        //
-        // Missing / invalid / expired JWT
-        // =============================================
+        );
 
         if (response.status === 401) {
-          authService.logout();
-
-          navigate("/login", {
-            replace: true,
-          });
-
+          handleUnauthorized();
           return;
         }
 
-        // =============================================
-        // 403
-        //
-        // Authenticated but wrong role
-        // =============================================
+        const data =
+          await readJsonResponse<EnrollmentDetailsResponse>(response);
 
         if (response.status === 403) {
+          throw new Error(data.message || "Registrar access is required.");
+        }
+
+        if (!response.ok || !data.success || !data.enrollment) {
           throw new Error(
-            data?.message ||
-              data?.error ||
-              "You are not authorized to view this enrollment.",
+            data.message || data.error || "Failed to fetch enrollment details.",
           );
         }
-
-        // =============================================
-        // HTTP ERROR
-        // =============================================
-
-        if (!response.ok) {
-          throw new Error(
-            data?.message ||
-              data?.error ||
-              `Failed to fetch enrollment (${response.status}).`,
-          );
-        }
-
-        // =============================================
-        // API ERROR
-        // =============================================
-
-        if (!data?.success) {
-          throw new Error(data?.message || "Failed to fetch enrollment.");
-        }
-
-        // =============================================
-        // SUCCESS
-        // =============================================
 
         setEnrollment(data.enrollment);
-
         setSubjects(Array.isArray(data.subjects) ? data.subjects : []);
-
-        setTotalSubjects(Number(data.totalSubjects || 0));
-      } catch (err) {
-        // =============================================
-        // ABORTED REQUEST
-        // =============================================
-
-        if (err instanceof DOMException && err.name === "AbortError") {
+        setSummary(data.summary || null);
+      } catch (requestError) {
+        if (
+          requestError instanceof DOMException &&
+          requestError.name === "AbortError"
+        ) {
           return;
         }
 
-        console.error("GET ENROLLMENT DETAILS ERROR:", err);
+        console.error("GET ENROLLMENT DETAILS ERROR:", requestError);
 
         setEnrollment(null);
-
         setSubjects([]);
-
-        setTotalSubjects(0);
-
-        // =============================================
-        // NETWORK ERROR
-        // =============================================
-
-        if (err instanceof TypeError) {
-          setError(
-            "Unable to connect to the enrollment server. Make sure the backend is running on port 3000.",
-          );
-
-          return;
-        }
-
-        // =============================================
-        // NORMAL ERROR
-        // =============================================
-
+        setSummary(null);
         setError(
-          err instanceof Error
-            ? err.message
+          requestError instanceof Error
+            ? requestError.message
             : "Unable to load enrollment details.",
         );
       } finally {
@@ -371,28 +481,313 @@ export default function EnrollmentDetailsR() {
 
     void loadEnrollment();
 
-    return () => {
-      controller.abort();
-    };
-  }, [id, authenticated, userRole, navigate]);
+    return () => controller.abort();
+  }, [enrollmentId, user, userRole, refreshKey, handleUnauthorized]);
+
+  // =====================================================
+  // LOAD VALIDATION
+  // =====================================================
+
+  const loadValidation = useCallback(async () => {
+    if (!enrollmentId || !user || userRole !== "Registrar") {
+      return;
+    }
+
+    try {
+      setValidationLoading(true);
+      setValidationError("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/validate`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<ValidationResponse>(response);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || data.error || "Failed to validate enrollment.",
+        );
+      }
+
+      setValidation(data);
+    } catch (requestError) {
+      console.error("VALIDATE ENROLLMENT ERROR:", requestError);
+      setValidation(null);
+      setValidationError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to validate enrollment.",
+      );
+    } finally {
+      setValidationLoading(false);
+    }
+  }, [enrollmentId, user, userRole, handleUnauthorized]);
+
+  useEffect(() => {
+    if (!enrollment || !enrollmentId) {
+      return;
+    }
+
+    void loadValidation();
+  }, [enrollment, enrollmentId, refreshKey, loadValidation]);
+
+  // =====================================================
+  // VALIDATION LOOKUP
+  // =====================================================
+
+  const validationByEnrollmentSubjectId = useMemo(() => {
+    const map = new Map<number, ValidationSubject>();
+
+    for (const item of validation?.subjects || []) {
+      map.set(Number(item.enrollment_subject_id), item);
+    }
+
+    return map;
+  }, [validation?.subjects]);
+
+  // =====================================================
+  // OPEN ASSIGNMENT PANEL
+  // =====================================================
+
+  const openAssignment = async (subject: EnrollmentSubject) => {
+    if (!enrollmentId) {
+      return;
+    }
+
+    try {
+      setSelectedSubject(subject);
+      setAvailableOfferings([]);
+      setSelectedOfferingId(
+        subject.offering.offering_id
+          ? String(subject.offering.offering_id)
+          : "",
+      );
+      setAssignmentReason(
+        subject.assignment_complete
+          ? "Registrar changed the student's subject offering."
+          : "Assigned by Registrar.",
+      );
+      setActionError("");
+      setSuccessMessage("");
+      setOfferingsLoading(true);
+
+      const params = new URLSearchParams();
+      params.set("subject_id", String(subject.subject_id));
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/available-offerings?${params.toString()}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<AvailableOfferingsResponse>(response);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "Failed to load available subject offerings.",
+        );
+      }
+
+      setAvailableOfferings(
+        Array.isArray(data.offerings) ? data.offerings : [],
+      );
+    } catch (requestError) {
+      console.error("LOAD AVAILABLE OFFERINGS ERROR:", requestError);
+      setAvailableOfferings([]);
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load available offerings.",
+      );
+    } finally {
+      setOfferingsLoading(false);
+    }
+  };
+
+  const closeAssignment = () => {
+    if (assignmentLoading) {
+      return;
+    }
+
+    setSelectedSubject(null);
+    setAvailableOfferings([]);
+    setSelectedOfferingId("");
+    setAssignmentReason("Assigned by Registrar.");
+  };
+
+  // =====================================================
+  // ASSIGN / CHANGE OFFERING
+  // =====================================================
+
+  const saveAssignment = async () => {
+    if (!enrollmentId || !selectedSubject) {
+      return;
+    }
+
+    const offeringId = Number(selectedOfferingId);
+
+    if (!Number.isInteger(offeringId) || offeringId <= 0) {
+      setActionError("Select a valid available offering.");
+      return;
+    }
+
+    try {
+      setAssignmentLoading(true);
+      setActionError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/subjects/${selectedSubject.enrollment_subject_id}`,
+        {
+          method: "PUT",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            offering_id: offeringId,
+            reason: assignmentReason.trim() || "Assigned by Registrar.",
+          }),
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<MutationResponse>(response);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || data.error || "Failed to assign subject offering.",
+        );
+      }
+
+      setSuccessMessage(
+        data.message || "Subject offering assigned successfully.",
+      );
+
+      closeAssignment();
+      refresh();
+    } catch (requestError) {
+      console.error("ASSIGN SUBJECT OFFERING ERROR:", requestError);
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to assign the selected offering.",
+      );
+    } finally {
+      setAssignmentLoading(false);
+    }
+  };
+
+  // =====================================================
+  // APPROVE
+  // =====================================================
+
+  const approveEnrollment = async () => {
+    if (!enrollmentId || !enrollment) {
+      return;
+    }
+
+    if (enrollment.enrollment_status !== "Pending") {
+      setActionError("Only Pending enrollments can be approved.");
+      return;
+    }
+
+    if (!validation?.ready_for_approval) {
+      setActionError(
+        "Enrollment is not ready for approval. Resolve all validation errors first.",
+      );
+      return;
+    }
+
+    try {
+      setApprovalLoading(true);
+      setActionError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/approve`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            remarks: approvalRemarks.trim() || undefined,
+          }),
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<MutationResponse>(response);
+
+      if (!response.ok || !data.success) {
+        const validationMessages = Array.isArray(data.validation_errors)
+          ? data.validation_errors
+              .map((item) => item.message)
+              .filter(Boolean)
+              .join(" ")
+          : "";
+
+        throw new Error(
+          validationMessages ||
+            data.message ||
+            data.error ||
+            "Failed to approve enrollment.",
+        );
+      }
+
+      setSuccessMessage(data.message || "Enrollment approved successfully.");
+
+      refresh();
+    } catch (requestError) {
+      console.error("APPROVE ENROLLMENT ERROR:", requestError);
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to approve enrollment.",
+      );
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
 
   // =====================================================
   // HELPERS
   // =====================================================
 
-  const getFullName = () => {
-    if (!enrollment) {
-      return "";
-    }
-
-    return [enrollment.first_name, enrollment.middle_name, enrollment.last_name]
-      .filter(Boolean)
-      .join(" ");
-  };
-
-  const getStatusClass = (value: string) => {
-    return `status ${(value || "").toLowerCase().replace(/\s+/g, "-")}`;
-  };
+  const getStatusClass = (value: string) =>
+    `status ${value.toLowerCase().replace(/\s+/g, "-")}`;
 
   const formatDate = (value: string | null) => {
     if (!value) {
@@ -412,17 +807,13 @@ export default function EnrollmentDetailsR() {
     });
   };
 
-  const formatSchedule = (
-    days: string | null,
-
-    time: string | null,
-  ) => {
+  const formatSchedule = (days: string | null, time: string | null) => {
     if (!days && !time) {
-      return "—";
+      return "Not assigned";
     }
 
     if (!days) {
-      return time || "—";
+      return time || "Not assigned";
     }
 
     if (!time) {
@@ -432,101 +823,19 @@ export default function EnrollmentDetailsR() {
     return `${days} • ${time}`;
   };
 
-  // =====================================================
-  // SUBJECT ACTION PLACEHOLDERS
-  // =====================================================
+  const getAttemptType = (subject: EnrollmentSubject) => {
+    const validationSubject = validationByEnrollmentSubjectId.get(
+      subject.enrollment_subject_id,
+    );
 
-  const handleChangeSection = (subject: EnrollmentSubject) => {
-    console.log("Change section:", subject.enrollment_subject_id);
-
-    // ==================================================
-    // TODO:
-    //
-    // Later connect this to the Registrar endpoint that
-    // assigns a valid offering / section_subject /
-    // section to this enrollment subject.
-    //
-    // This must use authService.authFetch().
-    // ==================================================
-  };
-
-  const handleDropSubject = (subject: EnrollmentSubject) => {
-    console.log("Drop subject:", subject.enrollment_subject_id);
-
-    // ==================================================
-    // TODO:
-    //
-    // Later connect this to the official Registrar
-    // enrollment-subject status endpoint.
-    //
-    // Do not delete the academic intent blindly.
-    //
-    // Expected subject status:
-    // DROPPED
-    //
-    // This must use authService.authFetch().
-    // ==================================================
+    return validationSubject?.academic_eligibility?.attempt_type || "Regular";
   };
 
   // =====================================================
-  // ENROLLMENT ACTION PLACEHOLDERS
+  // GUARD
   // =====================================================
 
-  const handleRejectEnrollment = () => {
-    if (!enrollment) {
-      return;
-    }
-
-    console.log("Reject enrollment:", enrollment.enrollment_id);
-
-    // ==================================================
-    // TODO:
-    //
-    // Connect to the real Registrar reject endpoint.
-    //
-    // When implemented:
-    //
-    // authService.authFetch(...)
-    //
-    // Backend actor:
-    // req.user.user_id
-    //
-    // Do not send frontend approved_by / user_id.
-    // ==================================================
-  };
-
-  const handleApproveEnrollment = () => {
-    if (!enrollment) {
-      return;
-    }
-
-    console.log("Approve enrollment:", enrollment.enrollment_id);
-
-    // ==================================================
-    // TODO:
-    //
-    // Connect to the final Registrar approval endpoint.
-    //
-    // Before approval backend must validate:
-    //
-    // - enrollment still Pending / Under Review
-    // - enrollment period rules
-    // - every subject valid
-    // - section/offering assignments
-    // - prerequisites
-    // - capacity
-    // - duplicate enrollment
-    //
-    // Actor must come from:
-    // req.user.user_id
-    // ==================================================
-  };
-
-  // =====================================================
-  // AUTH RENDER GUARD
-  // =====================================================
-
-  if (!authenticated || !user || userRole !== "Registrar") {
+  if (!user || userRole !== "Registrar") {
     return null;
   }
 
@@ -566,16 +875,7 @@ export default function EnrollmentDetailsR() {
 
           <div className="enrollment-details-error">
             <h2>Unable to Load Enrollment</h2>
-
             <p>{error || "Enrollment record not found."}</p>
-
-            <button
-              type="button"
-              className="retry-btn"
-              onClick={() => window.location.reload()}
-            >
-              Try Again
-            </button>
           </div>
         </div>
       </DashboardLayout>
@@ -589,10 +889,6 @@ export default function EnrollmentDetailsR() {
   return (
     <DashboardLayout>
       <div className="registrar-enrollment-details">
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
         <div className="enrollment-details-header">
           <div>
             <button
@@ -604,8 +900,10 @@ export default function EnrollmentDetailsR() {
             </button>
 
             <h1>Enrollment Details</h1>
-
-            <p>Review this student's current enrollment record.</p>
+            <p>
+              Review student subjects, academic eligibility, offering
+              assignments, and final enrollment validation.
+            </p>
           </div>
 
           <span className={getStatusClass(enrollment.enrollment_status)}>
@@ -613,9 +911,17 @@ export default function EnrollmentDetailsR() {
           </span>
         </div>
 
-        {/* =================================================
-            STUDENT INFORMATION
-        ================================================= */}
+        {successMessage && (
+          <div className="remarks-box">
+            <strong>{successMessage}</strong>
+          </div>
+        )}
+
+        {actionError && (
+          <div className="enrollment-details-error">
+            <p>{actionError}</p>
+          </div>
+        )}
 
         <div className="enrollment-details-card">
           <div className="details-card-header">
@@ -625,39 +931,39 @@ export default function EnrollmentDetailsR() {
           <div className="details-grid">
             <div className="detail-item">
               <span>Student Number</span>
-
-              <strong>{enrollment.student_number}</strong>
+              <strong>{enrollment.student.student_number}</strong>
             </div>
 
             <div className="detail-item">
               <span>Student Name</span>
+              <strong>{enrollment.student.student_name}</strong>
+            </div>
 
-              <strong>{getFullName()}</strong>
+            <div className="detail-item">
+              <span>Year Level</span>
+              <strong>
+                {enrollment.student.year_level
+                  ? `Year ${enrollment.student.year_level}`
+                  : "—"}
+              </strong>
             </div>
 
             <div className="detail-item">
               <span>Gender</span>
-
-              <strong>{enrollment.gender || "—"}</strong>
-            </div>
-
-            <div className="detail-item">
-              <span>Birth Date</span>
-
-              <strong>{formatDate(enrollment.birth_date)}</strong>
+              <strong>{enrollment.student.gender || "—"}</strong>
             </div>
 
             <div className="detail-item">
               <span>Contact Number</span>
+              <strong>{enrollment.student.contact_number || "—"}</strong>
+            </div>
 
-              <strong>{enrollment.contact_number || "—"}</strong>
+            <div className="detail-item">
+              <span>Email</span>
+              <strong>{enrollment.student.email || "—"}</strong>
             </div>
           </div>
         </div>
-
-        {/* =================================================
-            ENROLLMENT INFORMATION
-        ================================================= */}
 
         <div className="enrollment-details-card">
           <div className="details-card-header">
@@ -667,84 +973,150 @@ export default function EnrollmentDetailsR() {
           <div className="details-grid">
             <div className="detail-item">
               <span>Course</span>
-
-              <strong>{enrollment.course_code || "—"}</strong>
-            </div>
-
-            <div className="detail-item">
-              <span>Year Level</span>
-
               <strong>
-                {enrollment.year_level ? `Year ${enrollment.year_level}` : "—"}
+                {enrollment.course.course_code || "—"}
+                {enrollment.course.course_name
+                  ? ` — ${enrollment.course.course_name}`
+                  : ""}
               </strong>
             </div>
 
             <div className="detail-item">
-              <span>Section</span>
-
+              <span>Student Section</span>
               <strong>
-                {enrollment.student_section_name || "Not Assigned"}
+                {enrollment.student_section.section_name || "Not Assigned"}
               </strong>
             </div>
 
             <div className="detail-item">
               <span>Academic Year</span>
-
-              <strong>{enrollment.academic_year}</strong>
+              <strong>{enrollment.academic_period.academic_year}</strong>
             </div>
 
             <div className="detail-item">
               <span>Semester</span>
-
-              <strong>{enrollment.semester_name}</strong>
+              <strong>{enrollment.academic_period.semester_name}</strong>
             </div>
 
             <div className="detail-item">
               <span>Total Subjects</span>
+              <strong>{summary?.total_subjects ?? subjects.length}</strong>
+            </div>
 
-              <strong>{totalSubjects}</strong>
+            <div className="detail-item">
+              <span>Total Units</span>
+              <strong>{summary?.total_units ?? 0}</strong>
+            </div>
+
+            <div className="detail-item">
+              <span>Assigned</span>
+              <strong>{summary?.assigned_subjects ?? 0}</strong>
+            </div>
+
+            <div className="detail-item">
+              <span>Unassigned</span>
+              <strong>{summary?.unassigned_subjects ?? 0}</strong>
             </div>
 
             <div className="detail-item">
               <span>Created</span>
-
               <strong>{formatDate(enrollment.created_at)}</strong>
             </div>
 
             <div className="detail-item">
               <span>Approved By</span>
-
-              <strong>{enrollment.approved_by_username || "—"}</strong>
+              <strong>{enrollment.approval.approved_by_username || "—"}</strong>
             </div>
 
             <div className="detail-item">
               <span>Approved At</span>
-
-              <strong>{formatDate(enrollment.approved_at)}</strong>
+              <strong>{formatDate(enrollment.approval.approved_at)}</strong>
             </div>
           </div>
 
           {enrollment.remarks && (
             <div className="remarks-box">
               <span>Remarks</span>
-
               <p>{enrollment.remarks}</p>
             </div>
           )}
         </div>
 
-        {/* =================================================
-            SUBJECTS
-        ================================================= */}
+        <div className="enrollment-details-card">
+          <div className="details-card-header">
+            <div>
+              <h2>Enrollment Validation</h2>
+              <span>
+                Structural assignment + academic eligibility + capacity
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="subject-action-btn"
+              disabled={validationLoading}
+              onClick={() => void loadValidation()}
+            >
+              {validationLoading ? "Validating..." : "Validate"}
+            </button>
+          </div>
+
+          {validationError && (
+            <div className="enrollment-details-error">
+              <p>{validationError}</p>
+            </div>
+          )}
+
+          {validation && (
+            <div className="details-grid">
+              <div className="detail-item">
+                <span>Ready for Approval</span>
+                <strong>{validation.ready_for_approval ? "YES" : "NO"}</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Valid Subjects</span>
+                <strong>{validation.summary?.valid_subjects ?? 0}</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Invalid Subjects</span>
+                <strong>{validation.summary?.invalid_subjects ?? 0}</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Errors</span>
+                <strong>{validation.summary?.error_count ?? 0}</strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Warnings</span>
+                <strong>{validation.summary?.warning_count ?? 0}</strong>
+              </div>
+            </div>
+          )}
+
+          {validation && (validation.errors?.length || 0) > 0 && (
+            <div className="remarks-box">
+              <span>Validation Errors</span>
+              <ul>
+                {(validation.errors || []).map((issue, index) => (
+                  <li key={`${issue.code || "error"}-${index}`}>
+                    {issue.message || issue.code || "Validation error"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
 
         <div className="enrollment-details-card">
           <div className="details-card-header">
             <div>
               <h2>Enrolled Subjects</h2>
-
               <span>
-                {totalSubjects} subject
-                {totalSubjects !== 1 ? "s" : ""}
+                {summary?.total_subjects ?? subjects.length} active subject
+                {(summary?.total_subjects ?? subjects.length) !== 1 ? "s" : ""}
               </span>
             </div>
           </div>
@@ -754,21 +1126,15 @@ export default function EnrollmentDetailsR() {
               <thead>
                 <tr>
                   <th>Code</th>
-
                   <th>Subject</th>
-
+                  <th>Attempt</th>
                   <th>Units</th>
-
                   <th>Section</th>
-
                   <th>Schedule</th>
-
                   <th>Faculty</th>
-
                   <th>Room</th>
-
-                  <th>Status</th>
-
+                  <th>Capacity</th>
+                  <th>Validation</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -776,104 +1142,264 @@ export default function EnrollmentDetailsR() {
               <tbody>
                 {subjects.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="subjects-empty">
+                    <td colSpan={11} className="subjects-empty">
                       No enrolled subjects found.
                     </td>
                   </tr>
                 )}
 
-                {subjects.map((subject) => (
-                  <tr key={subject.enrollment_subject_id}>
-                    <td>
-                      <strong>{subject.subject_code}</strong>
-                    </td>
+                {subjects.map((subject) => {
+                  const validationSubject = validationByEnrollmentSubjectId.get(
+                    subject.enrollment_subject_id,
+                  );
 
-                    <td>
-                      <div className="subject-name-cell">
-                        <strong>{subject.subject_name}</strong>
+                  const attemptType = getAttemptType(subject);
 
-                        <small>Subject ID: {subject.subject_id}</small>
-                      </div>
-                    </td>
+                  return (
+                    <tr key={subject.enrollment_subject_id}>
+                      <td>
+                        <strong>{subject.subject_code}</strong>
+                      </td>
 
-                    <td>{subject.units}</td>
+                      <td>
+                        <div className="subject-name-cell">
+                          <strong>{subject.subject_name}</strong>
+                          <small>{subject.status}</small>
+                        </div>
+                      </td>
 
-                    <td>{subject.section_name || "Not Assigned"}</td>
+                      <td>
+                        <span className={getStatusClass(attemptType)}>
+                          {attemptType}
+                        </span>
+                      </td>
 
-                    <td>
-                      {formatSchedule(
-                        subject.schedule_days,
-                        subject.schedule_time,
-                      )}
-                    </td>
+                      <td>{subject.units}</td>
 
-                    <td>
-                      {subject.faculty_id
-                        ? `Faculty #${subject.faculty_id}`
-                        : "—"}
-                    </td>
+                      <td>{subject.section.section_name || "Not Assigned"}</td>
 
-                    <td>
-                      {subject.room_id ? `Room #${subject.room_id}` : "—"}
-                    </td>
+                      <td>
+                        {formatSchedule(
+                          subject.offering.schedule_days,
+                          subject.offering.schedule_time,
+                        )}
+                      </td>
 
-                    <td>
-                      <span className={getStatusClass(subject.subject_status)}>
-                        {subject.subject_status}
-                      </span>
-                    </td>
+                      <td>{subject.faculty.username || "Not Assigned"}</td>
 
-                    <td>
-                      <div className="subject-actions">
-                        <button
-                          type="button"
-                          className="subject-action-btn"
-                          onClick={() => handleChangeSection(subject)}
-                        >
-                          Change
-                        </button>
+                      <td>{subject.room.room_name || "—"}</td>
 
-                        <button
-                          type="button"
-                          className="subject-action-btn danger"
-                          onClick={() => handleDropSubject(subject)}
-                        >
-                          Drop
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td>
+                        {subject.offering.max_students !== null
+                          ? `${subject.offering.enrolled_count}/${subject.offering.max_students}`
+                          : "—"}
+                      </td>
+
+                      <td>
+                        {validationLoading ? (
+                          "Checking..."
+                        ) : validationSubject ? (
+                          <span
+                            className={getStatusClass(
+                              validationSubject.valid ? "Valid" : "Invalid",
+                            )}
+                          >
+                            {validationSubject.valid ? "VALID" : "INVALID"}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+
+                        {validationSubject &&
+                          validationSubject.errors.length > 0 && (
+                            <small>
+                              {validationSubject.errors
+                                .map((item) => item.message || item.code)
+                                .filter(Boolean)
+                                .join(" • ")}
+                            </small>
+                          )}
+                      </td>
+
+                      <td>
+                        {subject.status === "Enrolled" ? (
+                          <button
+                            type="button"
+                            className="subject-action-btn"
+                            onClick={() => void openAssignment(subject)}
+                          >
+                            {subject.assignment_complete ? "Change" : "Assign"}
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* =================================================
-            ACTIONS
-        ================================================= */}
+        {selectedSubject && (
+          <div className="enrollment-details-card">
+            <div className="details-card-header">
+              <div>
+                <h2>
+                  {selectedSubject.assignment_complete
+                    ? "Change Offering"
+                    : "Assign Offering"}
+                </h2>
+                <span>
+                  {selectedSubject.subject_code} —{" "}
+                  {selectedSubject.subject_name}
+                </span>
+              </div>
+            </div>
 
-        <div className="enrollment-details-actions">
-          <button
-            type="button"
-            className="reject-enrollment-btn"
-            onClick={handleRejectEnrollment}
-            disabled={enrollment.enrollment_status === "Approved"}
-          >
-            Reject Enrollment
-          </button>
+            {offeringsLoading ? (
+              <div className="enrollment-details-loading">
+                Loading available offerings...
+              </div>
+            ) : (
+              <>
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <span>Available Offering</span>
+                    <select
+                      value={selectedOfferingId}
+                      disabled={assignmentLoading}
+                      onChange={(event) =>
+                        setSelectedOfferingId(event.target.value)
+                      }
+                    >
+                      <option value="">Select offering</option>
 
-          <button
-            type="button"
-            className="approve-enrollment-btn"
-            onClick={handleApproveEnrollment}
-            disabled={
-              enrollment.enrollment_status === "Approved" ||
-              subjects.length === 0
-            }
-          >
-            Approve Enrollment
-          </button>
+                      {availableOfferings.map((offering) => (
+                        <option
+                          key={offering.offering_id}
+                          value={offering.offering_id}
+                        >
+                          #{offering.offering_id} ·{" "}
+                          {offering.section.section_name} ·{" "}
+                          {offering.faculty.faculty_name ||
+                            "Faculty not assigned"}{" "}
+                          ·{" "}
+                          {formatSchedule(
+                            offering.schedule.days,
+                            offering.schedule.time,
+                          )}{" "}
+                          · {offering.capacity.available_slots} slot
+                          {offering.capacity.available_slots !== 1 ? "s" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="detail-item">
+                    <span>Reason</span>
+                    <textarea
+                      value={assignmentReason}
+                      disabled={assignmentLoading}
+                      onChange={(event) =>
+                        setAssignmentReason(event.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                {availableOfferings.length === 0 && (
+                  <div className="remarks-box">
+                    <p>
+                      No READY / Open offering is currently available for this
+                      subject in the enrollment's academic period.
+                    </p>
+                  </div>
+                )}
+
+                <div className="enrollment-details-actions">
+                  <button
+                    type="button"
+                    className="reject-enrollment-btn"
+                    disabled={assignmentLoading}
+                    onClick={closeAssignment}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    className="approve-enrollment-btn"
+                    disabled={
+                      assignmentLoading ||
+                      !selectedOfferingId ||
+                      availableOfferings.length === 0
+                    }
+                    onClick={() => void saveAssignment()}
+                  >
+                    {assignmentLoading ? "Saving..." : "Save Assignment"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="enrollment-details-card">
+          <div className="details-card-header">
+            <div>
+              <h2>Final Approval</h2>
+              <span>
+                Approval is available only when final validation has no errors.
+              </span>
+            </div>
+          </div>
+
+          {enrollment.enrollment_status === "Pending" ? (
+            <>
+              <div className="remarks-box">
+                <span>Approval Remarks</span>
+                <textarea
+                  value={approvalRemarks}
+                  disabled={approvalLoading}
+                  onChange={(event) => setApprovalRemarks(event.target.value)}
+                />
+              </div>
+
+              <div className="enrollment-details-actions">
+                <button
+                  type="button"
+                  className="subject-action-btn"
+                  disabled={validationLoading || approvalLoading}
+                  onClick={() => void loadValidation()}
+                >
+                  {validationLoading ? "Validating..." : "Validate Enrollment"}
+                </button>
+
+                <button
+                  type="button"
+                  className="approve-enrollment-btn"
+                  disabled={
+                    approvalLoading ||
+                    validationLoading ||
+                    !validation?.ready_for_approval
+                  }
+                  onClick={() => void approveEnrollment()}
+                >
+                  {approvalLoading ? "Approving..." : "Approve Enrollment"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="remarks-box">
+              <p>
+                Enrollment status is{" "}
+                <strong>{enrollment.enrollment_status}</strong>. Final approval
+                action is available only for Pending enrollment.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

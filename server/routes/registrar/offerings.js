@@ -2614,46 +2614,521 @@ router.get("/section-subjects", async (req, res) => {
     });
   }
 });
+// =====================================================
+// OFFERING SCHEDULE CONFLICT HELPERS
+// =====================================================
+//
+// Conflict rules:
+//
+// 1. Same section + overlapping day/time = SECTION conflict
+// 2. Same faculty + overlapping day/time = FACULTY conflict
+//
+// Room is NOT part of schedule conflict validation.
+//
+// Open and Closed offerings participate.
+// Cancelled offerings are ignored.
+//
+// Adjacent schedules are allowed:
+//
+// 8:00 AM - 10:00 AM
+// 10:00 AM - 12:00 PM
+//
+// These do NOT overlap.
+// =====================================================
 
+// =====================================================
+// NORMALIZE SCHEDULE DAY
+// =====================================================
+
+function normalizeOfferingScheduleDay(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, "");
+
+  const dayMap = {
+    monday: "Monday",
+    mon: "Monday",
+
+    tuesday: "Tuesday",
+    tue: "Tuesday",
+    tues: "Tuesday",
+
+    wednesday: "Wednesday",
+    wed: "Wednesday",
+
+    thursday: "Thursday",
+    thu: "Thursday",
+    thur: "Thursday",
+    thurs: "Thursday",
+
+    friday: "Friday",
+    fri: "Friday",
+
+    saturday: "Saturday",
+    sat: "Saturday",
+
+    sunday: "Sunday",
+    sun: "Sunday",
+  };
+
+  return dayMap[normalized] || null;
+}
+
+// =====================================================
+// PARSE SCHEDULE DAYS
+// =====================================================
+
+function parseOfferingScheduleDays(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return [];
+  }
+
+  return String(value)
+    .split(/[,/;&]+/)
+    .map((day) => normalizeOfferingScheduleDay(day))
+    .filter(Boolean);
+}
+
+// =====================================================
+// PARSE CLOCK TIME
+//
+// Supports:
+// 8am
+// 8:00am
+// 8:00 AM
+// 10pm
+// 13:00
+// =====================================================
+
+function parseOfferingClockTime(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const text = String(value).trim().toUpperCase().replace(/\s+/g, "");
+
+  // ===============================================
+  // 12-HOUR FORMAT
+  // ===============================================
+
+  const twelveHourMatch = text.match(/^(\d{1,2})(?::(\d{2}))?(AM|PM)$/);
+
+  if (twelveHourMatch) {
+    let hours = Number(twelveHourMatch[1]);
+
+    const minutes = Number(twelveHourMatch[2] || 0);
+
+    const period = twelveHourMatch[3];
+
+    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+
+    if (period === "AM") {
+      if (hours === 12) {
+        hours = 0;
+      }
+    } else if (period === "PM" && hours !== 12) {
+      hours += 12;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  // ===============================================
+  // 24-HOUR FORMAT
+  // ===============================================
+
+  const twentyFourHourMatch = text.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (twentyFourHourMatch) {
+    const hours = Number(twentyFourHourMatch[1]);
+
+    const minutes = Number(twentyFourHourMatch[2]);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  return null;
+}
+
+// =====================================================
+// PARSE TIME RANGE
+//
+// Example:
+//
+// 8:00 AM - 10:00 AM
+//
+// Returns:
+//
+// {
+//   start: 480,
+//   end: 600
+// }
+// =====================================================
+
+function parseOfferingScheduleTimeRange(value) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+
+  const normalized = String(value).trim().replace(/[–—]/g, "-");
+
+  const parts = normalized
+    .split(/\s*-\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const start = parseOfferingClockTime(parts[0]);
+
+  const end = parseOfferingClockTime(parts[1]);
+
+  if (start === null || end === null) {
+    return null;
+  }
+
+  // End must be later than start.
+  if (end <= start) {
+    return null;
+  }
+
+  return {
+    start,
+    end,
+  };
+}
+
+// =====================================================
+// CHECK COMMON DAY
+// =====================================================
+
+function offeringSchedulesShareDay(firstDays, secondDays) {
+  const first = parseOfferingScheduleDays(firstDays);
+
+  const second = parseOfferingScheduleDays(secondDays);
+
+  if (first.length === 0 || second.length === 0) {
+    return false;
+  }
+
+  const secondSet = new Set(second);
+
+  return first.some((day) => secondSet.has(day));
+}
+
+// =====================================================
+// CHECK TIME OVERLAP
+//
+// Correct overlap formula:
+//
+// firstStart < secondEnd
+// AND
+// secondStart < firstEnd
+//
+// Therefore:
+//
+// 8-10 and 10-12 = allowed
+// 8-10 and 9-11  = conflict
+// =====================================================
+
+function offeringTimesOverlap(firstTime, secondTime) {
+  const first = parseOfferingScheduleTimeRange(firstTime);
+
+  const second = parseOfferingScheduleTimeRange(secondTime);
+
+  if (!first || !second) {
+    return false;
+  }
+
+  return first.start < second.end && second.start < first.end;
+}
+
+// =====================================================
+// CHECK FULL SCHEDULE OVERLAP
+// =====================================================
+
+function offeringSchedulesOverlap(
+  firstDays,
+  firstTime,
+  secondDays,
+  secondTime,
+) {
+  return (
+    offeringSchedulesShareDay(firstDays, secondDays) &&
+    offeringTimesOverlap(firstTime, secondTime)
+  );
+}
+
+// =====================================================
+// FIND CREATE-OFFERING CONFLICTS
+//
+// New offering has no offering_id yet.
+//
+// Conflict dimensions:
+//
+// - SECTION
+// - FACULTY
+//
+// Room is intentionally NOT checked.
+//
+// Open / Closed offerings participate.
+// Cancelled offerings do not.
+// =====================================================
+
+async function findCreateOfferingScheduleConflicts(
+  connection,
+  {
+    academicYearId,
+    semesterId,
+    sectionId,
+    facultyId,
+    scheduleDays,
+    scheduleTime,
+  },
+) {
+  // ===================================================
+  // NO COMPLETE SCHEDULE = NOTHING TO CHECK
+  // ===================================================
+
+  if (!scheduleDays || !scheduleTime) {
+    return [];
+  }
+
+  // ===================================================
+  // LOAD EXISTING PLANNED OFFERINGS
+  // ===================================================
+
+  const [rows] = await connection.execute(
+    `
+        SELECT
+            so.offering_id,
+
+            so.section_subject_id,
+
+            so.subject_id,
+
+            sub.subject_code,
+            sub.subject_name,
+
+            so.section_id,
+
+            sec.section_name,
+
+            so.faculty_id,
+
+            CONCAT_WS(
+              ' ',
+              f.first_name,
+              NULLIF(
+                f.middle_name,
+                ''
+              ),
+              f.last_name
+            ) AS faculty_name,
+
+            so.schedule_days,
+            so.schedule_time,
+
+            so.status
+
+        FROM subject_offerings so
+
+        INNER JOIN subjects sub
+            ON sub.subject_id =
+               so.subject_id
+
+        INNER JOIN sections sec
+            ON sec.section_id =
+               so.section_id
+
+        LEFT JOIN faculty f
+            ON f.faculty_id =
+               so.faculty_id
+
+        WHERE so.academic_year_id = ?
+
+          AND so.semester_id = ?
+
+          AND so.status
+              IN (
+                'Open',
+                'Closed'
+              )
+
+          AND so.schedule_days
+              IS NOT NULL
+
+          AND TRIM(
+                so.schedule_days
+              ) <> ''
+
+          AND so.schedule_time
+              IS NOT NULL
+
+          AND TRIM(
+                so.schedule_time
+              ) <> ''
+
+        ORDER BY
+            so.offering_id ASC
+      `,
+    [academicYearId, semesterId],
+  );
+
+  const conflicts = [];
+
+  // ===================================================
+  // CHECK EACH EXISTING OFFERING
+  // ===================================================
+
+  for (const existing of rows) {
+    // ===============================================
+    // MUST OVERLAP DAY + TIME
+    // ===============================================
+
+    const overlaps = offeringSchedulesOverlap(
+      scheduleDays,
+      scheduleTime,
+
+      existing.schedule_days,
+      existing.schedule_time,
+    );
+
+    if (!overlaps) {
+      continue;
+    }
+
+    // ===============================================
+    // COMMON CONFLICT DATA
+    // ===============================================
+
+    const conflictOffering = {
+      offering_id: Number(existing.offering_id),
+
+      section_subject_id: Number(existing.section_subject_id),
+
+      subject: {
+        subject_id: Number(existing.subject_id),
+
+        subject_code: existing.subject_code,
+
+        subject_name: existing.subject_name,
+      },
+
+      section: {
+        section_id: Number(existing.section_id),
+
+        section_name: existing.section_name,
+      },
+
+      faculty:
+        existing.faculty_id !== null
+          ? {
+              faculty_id: Number(existing.faculty_id),
+
+              faculty_name: existing.faculty_name,
+            }
+          : null,
+
+      schedule: {
+        days: existing.schedule_days,
+
+        time: existing.schedule_time,
+      },
+
+      status: existing.status,
+    };
+
+    // ===============================================
+    // SECTION CONFLICT
+    //
+    // Students in the same section cannot have
+    // two subjects at overlapping times.
+    // ===============================================
+
+    if (Number(existing.section_id) === Number(sectionId)) {
+      conflicts.push({
+        type: "SECTION",
+
+        message: `${existing.section_name} already has ${existing.subject_code} scheduled at this time.`,
+
+        conflicting_offering: conflictOffering,
+      });
+    }
+
+    // ===============================================
+    // FACULTY CONFLICT
+    //
+    // One faculty member cannot teach two
+    // offerings at the same time.
+    // ===============================================
+
+    if (
+      facultyId &&
+      existing.faculty_id !== null &&
+      Number(existing.faculty_id) === Number(facultyId)
+    ) {
+      conflicts.push({
+        type: "FACULTY",
+
+        message: `${
+          existing.faculty_name || "The selected faculty"
+        } is already assigned to another class at this time.`,
+
+        conflicting_offering: conflictOffering,
+      });
+    }
+  }
+
+  return conflicts;
+}
 // =====================================================
 // CREATE SUBJECT OFFERING
 //
 // POST /api/registrar/offerings/subject-offerings
 //
-// Example - incomplete / planning stage:
+// IMPORTANT:
 //
-// {
-//   "section_subject_id": 7,
-//   "max_students": 50,
-//   "status": "Closed"
-// }
+// The backend determines the initial offering status.
 //
-// Example - complete offering:
+// COMPLETE + VALID + NO CONFLICT
+//     → Open
+//     → ready_for_enrollment = true
 //
-// {
-//   "section_subject_id": 7,
-//   "faculty_id": 5,
-//   "room_id": 3,
-//   "schedule_days": "Monday, Wednesday",
-//   "schedule_time": "10:00 AM - 12:00 PM",
-//   "max_students": 40,
-//   "status": "Open"
-// }
+// INCOMPLETE
+//     → Closed
+//     → ready_for_enrollment = false
 //
-// RULE:
-// - section_subject is authoritative for:
-//      subject
-//      section
-//      academic year
-//      semester
+// CONFLICT
+//     → 409
+//     → no record created
 //
-// Client does NOT separately supply those IDs.
+// Cancelled offerings are NOT created directly.
+// Cancellation belongs to the status-management route.
 //
-// - Closed offering may be incomplete.
-// - Open offering must be ready for enrollment.
+// section_subject is authoritative for:
+// - subject
+// - section
+// - academic year
+// - semester
+//
+// Client does not separately supply those IDs.
 // =====================================================
 
 router.post("/subject-offerings", async (req, res) => {
+  // ===================================================
+  // AUTHENTICATED REGISTRAR
+  // ===================================================
+
   const actor = getRegistrarActor(req, res);
 
   if (!actor) {
@@ -2662,6 +3137,11 @@ router.post("/subject-offerings", async (req, res) => {
 
   // ===================================================
   // REQUEST DATA
+  //
+  // NOTE:
+  // status is intentionally NOT read from req.body.
+  //
+  // Backend will calculate Open / Closed automatically.
   // ===================================================
 
   const sectionSubjectId = toPositiveInt(req.body?.section_subject_id);
@@ -2702,13 +3182,11 @@ router.post("/subject-offerings", async (req, res) => {
     if (!maxStudents) {
       return res.status(400).json({
         success: false,
+
         message: "max_students must be a positive integer.",
       });
     }
   }
-
-  const status =
-    typeof req.body?.status === "string" ? req.body.status.trim() : "Closed";
 
   // ===================================================
   // BASIC VALIDATION
@@ -2717,9 +3195,14 @@ router.post("/subject-offerings", async (req, res) => {
   if (!sectionSubjectId) {
     return res.status(400).json({
       success: false,
+
       message: "A valid section_subject_id is required.",
     });
   }
+
+  // ===================================================
+  // FACULTY ID VALIDATION
+  // ===================================================
 
   if (
     req.body?.faculty_id !== undefined &&
@@ -2729,9 +3212,18 @@ router.post("/subject-offerings", async (req, res) => {
   ) {
     return res.status(400).json({
       success: false,
+
       message: "faculty_id must be a positive integer.",
     });
   }
+
+  // ===================================================
+  // ROOM ID VALIDATION
+  //
+  // Room remains optional.
+  //
+  // Room is NOT part of schedule conflict validation.
+  // ===================================================
 
   if (
     req.body?.room_id !== undefined &&
@@ -2741,59 +3233,72 @@ router.post("/subject-offerings", async (req, res) => {
   ) {
     return res.status(400).json({
       success: false,
+
       message: "room_id must be a positive integer.",
     });
   }
 
-  const allowedStatuses = ["Open", "Closed", "Cancelled"];
+  // ===================================================
+  // SCHEDULE PAIR VALIDATION
+  //
+  // Both schedule fields must exist together.
+  //
+  // Empty + empty:
+  //     allowed → planning / Closed
+  //
+  // days + time:
+  //     allowed → validate schedule
+  //
+  // only one:
+  //     invalid
+  // ===================================================
 
-  if (!allowedStatuses.includes(status)) {
+  const hasScheduleDays = Boolean(scheduleDays);
+
+  const hasScheduleTime = Boolean(scheduleTime);
+
+  if (hasScheduleDays !== hasScheduleTime) {
     return res.status(400).json({
       success: false,
 
-      message: "Invalid subject offering status.",
-
-      allowed_statuses: allowedStatuses,
+      message:
+        "schedule_days and schedule_time must either both be provided or both be empty.",
     });
   }
 
   // ===================================================
-  // OPEN OFFERING READINESS
-  //
-  // We intentionally require faculty + schedule before
-  // an offering can enter the enrollment pool.
-  //
-  // room_id remains optional because the DB explicitly
-  // permits NULL and some classes may legitimately have
-  // no physical room assigned yet.
+  // SCHEDULE FORMAT VALIDATION
   // ===================================================
 
-  if (status === "Open") {
-    const missingFields = [];
+  if (scheduleDays && scheduleTime) {
+    const parsedDays = parseOfferingScheduleDays(scheduleDays);
 
-    if (!facultyId) {
-      missingFields.push("faculty_id");
-    }
-
-    if (!scheduleDays) {
-      missingFields.push("schedule_days");
-    }
-
-    if (!scheduleTime) {
-      missingFields.push("schedule_time");
-    }
-
-    if (missingFields.length > 0) {
-      return res.status(409).json({
+    if (parsedDays.length === 0) {
+      return res.status(400).json({
         success: false,
 
-        message:
-          "An Open offering must have complete teaching and schedule information.",
+        message: "Invalid schedule_days format.",
 
-        missing_fields: missingFields,
+        examples: ["Monday", "Monday, Wednesday", "Tuesday, Thursday"],
+      });
+    }
+
+    const parsedTime = parseOfferingScheduleTimeRange(scheduleTime);
+
+    if (!parsedTime) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Invalid schedule_time format.",
+
+        examples: ["8:00 AM - 10:00 AM", "1:00 PM - 3:00 PM", "13:00 - 15:00"],
       });
     }
   }
+
+  // ===================================================
+  // DATABASE TRANSACTION
+  // ===================================================
 
   let connection;
 
@@ -2804,73 +3309,97 @@ router.post("/subject-offerings", async (req, res) => {
 
     // =================================================
     // GET SECTION SUBJECT
+    //
+    // section_subject determines:
+    //
+    // - section
+    // - subject
+    // - AY
+    // - semester
     // =================================================
 
     const [sectionSubjectRows] = await connection.execute(
       `
-        SELECT
-            ss.section_subject_id,
-            ss.section_id,
-            ss.subject_id,
-            ss.academic_year_id,
-            ss.semester_id,
-            ss.max_students,
-            ss.status
-                AS section_subject_status,
+          SELECT
+              ss.section_subject_id,
 
-            sec.section_name,
-            sec.course_id,
-            sec.year_level,
-            sec.max_students
-                AS section_max_students,
+              ss.section_id,
 
-            c.course_code,
-            c.course_name,
+              ss.subject_id,
 
-            sub.subject_code,
-            sub.subject_name,
-            sub.units,
+              ss.academic_year_id,
 
-            ay.academic_year,
+              ss.semester_id,
 
-            sem.semester_name
+              ss.max_students,
 
-        FROM section_subjects ss
+              ss.status
+                  AS section_subject_status,
 
-        INNER JOIN sections sec
-            ON sec.section_id =
-               ss.section_id
+              sec.section_name,
 
-        INNER JOIN courses c
-            ON c.course_id =
-               sec.course_id
+              sec.course_id,
 
-        INNER JOIN subjects sub
-            ON sub.subject_id =
-               ss.subject_id
+              sec.year_level,
 
-        INNER JOIN academic_years ay
-            ON ay.academic_year_id =
-               ss.academic_year_id
+              sec.max_students
+                  AS section_max_students,
 
-        INNER JOIN semesters sem
-            ON sem.semester_id =
-               ss.semester_id
+              c.course_code,
 
-        WHERE ss.section_subject_id = ?
+              c.course_name,
 
-        LIMIT 1
+              sub.subject_code,
 
-        FOR UPDATE
+              sub.subject_name,
+
+              sub.units,
+
+              ay.academic_year,
+
+              sem.semester_name
+
+          FROM section_subjects ss
+
+          INNER JOIN sections sec
+              ON sec.section_id =
+                 ss.section_id
+
+          INNER JOIN courses c
+              ON c.course_id =
+                 sec.course_id
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 ss.subject_id
+
+          INNER JOIN academic_years ay
+              ON ay.academic_year_id =
+                 ss.academic_year_id
+
+          INNER JOIN semesters sem
+              ON sem.semester_id =
+                 ss.semester_id
+
+          WHERE ss.section_subject_id = ?
+
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [sectionSubjectId],
     );
+
+    // =================================================
+    // SECTION SUBJECT NOT FOUND
+    // =================================================
 
     if (sectionSubjectRows.length === 0) {
       await connection.rollback();
 
       return res.status(404).json({
         success: false,
+
         message: "Section subject not found.",
       });
     }
@@ -2878,7 +3407,10 @@ router.post("/subject-offerings", async (req, res) => {
     const sectionSubject = sectionSubjectRows[0];
 
     // =================================================
-    // CANCELLED SECTION SUBJECT CANNOT GET OFFERING
+    // CANCELLED SECTION SUBJECT
+    //
+    // A cancelled academic subject cannot receive
+    // another offering.
     // =================================================
 
     if (sectionSubject.section_subject_status === "Cancelled") {
@@ -2886,50 +3418,39 @@ router.post("/subject-offerings", async (req, res) => {
 
       return res.status(409).json({
         success: false,
+
         message: "Cannot create an offering for a cancelled section subject.",
-      });
-    }
-
-    // =================================================
-    // OPEN OFFERING REQUIRES OPEN SECTION SUBJECT
-    // =================================================
-
-    if (status === "Open" && sectionSubject.section_subject_status !== "Open") {
-      await connection.rollback();
-
-      return res.status(409).json({
-        success: false,
-
-        message:
-          "An offering cannot be opened while its section subject is not Open.",
-
-        section_subject_status: sectionSubject.section_subject_status,
       });
     }
 
     // =================================================
     // CHECK EXISTING OFFERING
     //
-    // Current DB unique rule represents one offering
-    // per subject + section + AY + semester.
+    // Current business rule:
+    //
+    // one normal offering for:
+    // subject + section + AY + semester
     // =================================================
 
     const [existingRows] = await connection.execute(
       `
-        SELECT
-            offering_id,
-            status
+          SELECT
+              offering_id,
+              status
 
-        FROM subject_offerings
+          FROM subject_offerings
 
-        WHERE subject_id = ?
-          AND section_id = ?
-          AND academic_year_id = ?
-          AND semester_id = ?
+          WHERE subject_id = ?
 
-        LIMIT 1
+            AND section_id = ?
 
-        FOR UPDATE
+            AND academic_year_id = ?
+
+            AND semester_id = ?
+
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [
         Number(sectionSubject.subject_id),
@@ -2959,7 +3480,7 @@ router.post("/subject-offerings", async (req, res) => {
     }
 
     // =================================================
-    // VALIDATE FACULTY IF PROVIDED
+    // VALIDATE FACULTY
     // =================================================
 
     let faculty = null;
@@ -2967,32 +3488,38 @@ router.post("/subject-offerings", async (req, res) => {
     if (facultyId) {
       const [facultyRows] = await connection.execute(
         `
-          SELECT
-              faculty_id,
-              user_id,
-              employee_number,
-              first_name,
-              middle_name,
-              last_name,
+            SELECT
+                faculty_id,
 
-              CONCAT_WS(
-                ' ',
+                user_id,
+
+                employee_number,
+
                 first_name,
-                NULLIF(
-                  middle_name,
-                  ''
-                ),
-                last_name
-              ) AS faculty_name,
 
-              department_id,
-              employment_status
+                middle_name,
 
-          FROM faculty
+                last_name,
 
-          WHERE faculty_id = ?
+                CONCAT_WS(
+                  ' ',
+                  first_name,
+                  NULLIF(
+                    middle_name,
+                    ''
+                  ),
+                  last_name
+                ) AS faculty_name,
 
-          LIMIT 1
+                department_id,
+
+                employment_status
+
+            FROM faculty
+
+            WHERE faculty_id = ?
+
+            LIMIT 1
           `,
         [facultyId],
       );
@@ -3002,6 +3529,7 @@ router.post("/subject-offerings", async (req, res) => {
 
         return res.status(404).json({
           success: false,
+
           message: "Faculty record not found.",
         });
       }
@@ -3011,6 +3539,11 @@ router.post("/subject-offerings", async (req, res) => {
 
     // =================================================
     // VALIDATE ROOM IF PROVIDED
+    //
+    // Room is optional.
+    //
+    // IMPORTANT:
+    // Room does NOT participate in schedule conflicts.
     // =================================================
 
     let room = null;
@@ -3018,18 +3551,22 @@ router.post("/subject-offerings", async (req, res) => {
     if (roomId) {
       const [roomRows] = await connection.execute(
         `
-          SELECT
-              room_id,
-              building_id,
-              room_code,
-              room_name,
-              capacity
+            SELECT
+                room_id,
 
-          FROM rooms
+                building_id,
 
-          WHERE room_id = ?
+                room_code,
 
-          LIMIT 1
+                room_name,
+
+                capacity
+
+            FROM rooms
+
+            WHERE room_id = ?
+
+            LIMIT 1
           `,
         [roomId],
       );
@@ -3039,6 +3576,7 @@ router.post("/subject-offerings", async (req, res) => {
 
         return res.status(404).json({
           success: false,
+
           message: "Room not found.",
         });
       }
@@ -3063,7 +3601,12 @@ router.post("/subject-offerings", async (req, res) => {
           : 50);
 
     // =================================================
-    // ROOM CAPACITY CHECK
+    // ROOM CAPACITY
+    //
+    // This is NOT schedule-conflict validation.
+    //
+    // It only prevents assigning 50 students to
+    // a room that physically supports fewer students.
     // =================================================
 
     if (room && room.capacity !== null) {
@@ -3087,38 +3630,136 @@ router.post("/subject-offerings", async (req, res) => {
     }
 
     // =================================================
+    // AUTHORITATIVE SCHEDULE CONFLICT CHECK
+    //
+    // Conflict dimensions:
+    //
+    // SECTION
+    // FACULTY
+    //
+    // Room is NOT checked.
+    //
+    // Both Open and Closed scheduled offerings
+    // participate in conflict checking.
+    // =================================================
+
+    if (scheduleDays && scheduleTime) {
+      const conflicts = await findCreateOfferingScheduleConflicts(connection, {
+        academicYearId: Number(sectionSubject.academic_year_id),
+
+        semesterId: Number(sectionSubject.semester_id),
+
+        sectionId: Number(sectionSubject.section_id),
+
+        facultyId,
+
+        scheduleDays,
+
+        scheduleTime,
+      });
+
+      if (conflicts.length > 0) {
+        await connection.rollback();
+
+        const conflictTypes = [
+          ...new Set(conflicts.map((conflict) => conflict.type)),
+        ];
+
+        return res.status(409).json({
+          success: false,
+
+          message:
+            "Schedule conflict detected. The class offering was not created.",
+
+          conflict_count: conflicts.length,
+
+          conflict_types: conflictTypes,
+
+          conflicts,
+        });
+      }
+    }
+
+    // =================================================
+    // DETERMINE CONFIGURATION COMPLETENESS
+    //
+    // Required to automatically become Open:
+    //
+    // ✓ section subject is Open
+    // ✓ faculty assigned
+    // ✓ schedule days assigned
+    // ✓ schedule time assigned
+    // ✓ valid capacity
+    //
+    // Room is optional.
+    //
+    // Schedule conflict has already been validated above.
+    // =================================================
+
+    const configurationComplete =
+      sectionSubject.section_subject_status === "Open" &&
+      Boolean(facultyId) &&
+      Boolean(scheduleDays) &&
+      Boolean(scheduleTime) &&
+      finalMaxStudents > 0;
+
+    // =================================================
+    // AUTOMATIC INITIAL STATUS
+    //
+    // Complete:
+    //     → Open
+    //     → READY
+    //
+    // Incomplete:
+    //     → Closed
+    //     → Registrar can finish configuration later
+    // =================================================
+
+    const finalStatus = configurationComplete ? "Open" : "Closed";
+
+    // =================================================
     // CREATE OFFERING
     // =================================================
 
     const [insertResult] = await connection.execute(
       `
-        INSERT INTO subject_offerings (
-            section_subject_id,
-            subject_id,
-            section_id,
-            faculty_id,
-            room_id,
-            academic_year_id,
-            semester_id,
-            schedule_days,
-            schedule_time,
-            max_students,
-            status
-        )
+          INSERT INTO subject_offerings (
+              section_subject_id,
 
-        VALUES (
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?
-        )
+              subject_id,
+
+              section_id,
+
+              faculty_id,
+
+              room_id,
+
+              academic_year_id,
+
+              semester_id,
+
+              schedule_days,
+
+              schedule_time,
+
+              max_students,
+
+              status
+          )
+
+          VALUES (
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?
+          )
         `,
       [
         sectionSubjectId,
@@ -3141,7 +3782,7 @@ router.post("/subject-offerings", async (req, res) => {
 
         finalMaxStudents,
 
-        status,
+        finalStatus,
       ],
     );
 
@@ -3153,23 +3794,28 @@ router.post("/subject-offerings", async (req, res) => {
 
     await connection.execute(
       `
-      INSERT INTO audit_trail (
-          user_id,
-          table_name,
-          record_id,
-          action,
-          old_values,
-          new_values
-      )
+        INSERT INTO audit_trail (
+            user_id,
 
-      VALUES (
-          ?,
-          'subject_offerings',
-          ?,
-          'INSERT',
-          NULL,
-          ?
-      )
+            table_name,
+
+            record_id,
+
+            action,
+
+            old_values,
+
+            new_values
+        )
+
+        VALUES (
+            ?,
+            'subject_offerings',
+            ?,
+            'INSERT',
+            NULL,
+            ?
+        )
       `,
       [
         actor.user_id,
@@ -3199,10 +3845,16 @@ router.post("/subject-offerings", async (req, res) => {
 
           max_students: finalMaxStudents,
 
-          status,
+          status: finalStatus,
+
+          configuration_complete: configurationComplete,
         }),
       ],
     );
+
+    // =================================================
+    // COMMIT
+    // =================================================
 
     await connection.commit();
 
@@ -3213,7 +3865,10 @@ router.post("/subject-offerings", async (req, res) => {
     return res.status(201).json({
       success: true,
 
-      message: "Subject offering created successfully.",
+      message:
+        finalStatus === "Open"
+          ? "Subject offering created and opened successfully."
+          : "Subject offering created as Closed because its configuration is incomplete.",
 
       offering: {
         offering_id: offeringId,
@@ -3288,14 +3943,20 @@ router.post("/subject-offerings", async (req, res) => {
 
         available_slots: finalMaxStudents,
 
-        status,
+        status: finalStatus,
 
-        ready_for_enrollment: status === "Open",
+        configuration_complete: configurationComplete,
+
+        ready_for_enrollment: finalStatus === "Open",
       },
 
       actor,
     });
   } catch (error) {
+    // =================================================
+    // ROLLBACK
+    // =================================================
+
     if (connection) {
       try {
         await connection.rollback();
@@ -3306,6 +3967,10 @@ router.post("/subject-offerings", async (req, res) => {
 
     console.error("CREATE SUBJECT OFFERING ERROR:", error);
 
+    // =================================================
+    // DUPLICATE
+    // =================================================
+
     if (error?.code === "ER_DUP_ENTRY") {
       return res.status(409).json({
         success: false,
@@ -3315,6 +3980,10 @@ router.post("/subject-offerings", async (req, res) => {
       });
     }
 
+    // =================================================
+    // SERVER ERROR
+    // =================================================
+
     return res.status(500).json({
       success: false,
 
@@ -3323,6 +3992,10 @@ router.post("/subject-offerings", async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   } finally {
+    // =================================================
+    // RELEASE CONNECTION
+    // =================================================
+
     if (connection) {
       connection.release();
     }

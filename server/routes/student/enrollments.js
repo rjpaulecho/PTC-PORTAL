@@ -938,6 +938,7 @@ router.get("/subjects", async (req, res) => {
 
         WHERE g.student_id = ?
           AND g.final_grade IS NOT NULL
+            AND g.grade_status = 'Approved'
           AND e.enrollment_status = 'Approved'
 
         ORDER BY
@@ -1965,6 +1966,7 @@ router.post("/prepare", async (req, res) => {
 
         WHERE g.student_id = ?
           AND g.final_grade IS NOT NULL
+            AND g.grade_status = 'Approved'
           AND e.enrollment_status = 'Approved'
 
         ORDER BY
@@ -2981,6 +2983,7 @@ router.post("/:enrollment_id/submit", async (req, res) => {
 
         WHERE g.student_id = ?
           AND g.final_grade IS NOT NULL
+            AND g.grade_status = 'Approved'
           AND e.enrollment_status = 'Approved'
 
         ORDER BY

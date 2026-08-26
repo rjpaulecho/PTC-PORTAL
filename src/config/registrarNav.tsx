@@ -61,6 +61,11 @@ export const registrarNavGroups = [
         path: "/registrar/enrollment/periodM",
         icon: "",
       },
+      {
+        label: "Class Offering",
+        path: "/registrar/offering/managementR",
+        icon: "",
+      },
     ],
   },
 ];
