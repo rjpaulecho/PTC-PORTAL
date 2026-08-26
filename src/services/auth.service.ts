@@ -3,6 +3,7 @@ const API_BASE_URL = "http://localhost:3000";
 // ======================
 // User Roles
 // ======================
+
 export type UserRole =
   | "Admin"
   | "Registrar"
@@ -13,6 +14,7 @@ export type UserRole =
 // ======================
 // User Session
 // ======================
+
 export interface User {
   user_id: number;
   username: string;
@@ -24,24 +26,33 @@ export interface User {
 // ======================
 // Login Response
 // ======================
+
 export interface LoginResponse {
   message: string;
 }
 
 // ======================
 // Backend Auth User
+//
+// Supports:
+// role_name = current backend format
+// role      = optional future format
 // ======================
+
 interface BackendUser {
   user_id: number;
   username: string;
   email: string;
   role_id: number;
-  role_name: UserRole;
+
+  role_name?: UserRole;
+  role?: UserRole;
 }
 
 // ======================
 // Authentication Response
 // ======================
+
 interface AuthResponse {
   success: boolean;
   message: string;
@@ -52,97 +63,269 @@ interface AuthResponse {
 // ======================
 // Current User Response
 // ======================
+
 interface CurrentUserResponse {
   success: boolean;
   user: BackendUser;
 }
 
 // ======================
-// Convert backend user
+// VALID ROLES
 // ======================
+
+const VALID_ROLES: UserRole[] = [
+  "Admin",
+  "Registrar",
+  "Program Head",
+  "Faculty",
+  "Student",
+];
+
+// ======================
+// Convert backend user
+//
+// Backend:
+// role_name: "Student"
+//
+// Frontend:
+// role: "Student"
+// ======================
+
 function mapBackendUser(user: BackendUser): User {
+  const role = user.role ?? user.role_name;
+
+  if (!role || !VALID_ROLES.includes(role)) {
+    throw new Error(
+      `Invalid or missing user role returned by server: ${String(role)}`,
+    );
+  }
+
+  const userId = Number(user.user_id);
+  const roleId = Number(user.role_id);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error("Invalid user ID returned by the authentication server.");
+  }
+
+  if (!Number.isInteger(roleId) || roleId <= 0) {
+    throw new Error("Invalid role ID returned by the authentication server.");
+  }
+
   return {
-    user_id: Number(user.user_id),
+    user_id: userId,
     username: user.username,
     email: user.email,
-    role_id: Number(user.role_id),
-    role: user.role_name,
+    role_id: roleId,
+    role,
   };
 }
 
 // ======================
 // Authentication Service
 // ======================
+
 export const authService = {
   // =====================================================
   // STEP 1 — NORMAL LOGIN
+  //
   // Username + Password
+  //
+  // IMPORTANT:
+  // Starting a new login removes any previous authenticated
+  // account from this browser tab/session.
+  //
+  // This prevents:
+  //
+  // Student A session
+  //       ↓
+  // Student B login
+  //       ↓
+  // old Student A JWT interfering with Student B OTP
   // =====================================================
+
   async login(username: string, password: string): Promise<LoginResponse> {
+    // =====================================================
+    // START CLEAN AUTHENTICATION FLOW
+    // =====================================================
+
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("pending_username");
+
+    // =====================================================
+    // NORMALIZE USERNAME
+    // =====================================================
+
+    const cleanUsername = username.trim();
+
+    if (!cleanUsername) {
+      throw new Error("Username is required.");
+    }
+
+    if (!password) {
+      throw new Error("Password is required.");
+    }
+
+    // =====================================================
+    // LOGIN REQUEST
+    // =====================================================
+
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
 
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
 
       body: JSON.stringify({
-        username,
+        username: cleanUsername,
         password,
       }),
     });
 
-    const data = await response.json();
+    // =====================================================
+    // READ RESPONSE
+    // =====================================================
+
+    const data: LoginResponse & {
+      error?: string;
+      success?: boolean;
+    } = await response.json();
+
+    // =====================================================
+    // ERROR
+    // =====================================================
 
     if (!response.ok) {
       throw new Error(data.error || data.message || "Login failed.");
     }
+
+    // =====================================================
+    // OTP FLOW STARTED
+    //
+    // Save ONLY the username currently waiting for OTP.
+    // =====================================================
+
+    this.savePendingUsername(cleanUsername);
 
     return data;
   },
 
   // =====================================================
   // STEP 2 — VERIFY OTP
-  // Successful OTP returns JWT + user
+  //
+  // Successful OTP:
+  //
+  // Backend returns:
+  //
+  // token
+  // +
+  // user
+  //
+  // Then frontend:
+  //
+  // maps role_name → role
+  // clears old credentials
+  // stores NEW JWT
+  // stores NEW user session
+  // clears pending username
   // =====================================================
+
   async verifyOtp(username: string, otp: string): Promise<User> {
+    const cleanUsername = username.trim();
+    const cleanOtp = otp.trim();
+
+    if (!cleanUsername) {
+      throw new Error("Username is required.");
+    }
+
+    if (!cleanOtp) {
+      throw new Error("OTP is required.");
+    }
+
+    // =====================================================
+    // VERIFY OTP REQUEST
+    // =====================================================
+
     const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
       method: "POST",
 
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
 
       body: JSON.stringify({
-        username,
-        otp,
+        username: cleanUsername,
+        otp: cleanOtp,
       }),
     });
+
+    // =====================================================
+    // READ RESPONSE
+    // =====================================================
 
     const data: AuthResponse & {
       error?: string;
     } = await response.json();
 
+    // =====================================================
+    // ERROR
+    // =====================================================
+
     if (!response.ok) {
       throw new Error(data.error || data.message || "OTP verification failed.");
     }
+
+    // =====================================================
+    // TOKEN VALIDATION
+    // =====================================================
 
     if (!data.token) {
       throw new Error("Authentication token was not returned by the server.");
     }
 
+    // =====================================================
+    // USER VALIDATION
+    // =====================================================
+
     if (!data.user) {
       throw new Error("Authenticated user information was not returned.");
     }
 
-    // Save JWT
-    this.saveToken(data.token);
+    // =====================================================
+    // MAP BACKEND USER
+    //
+    // This validates role before saving anything.
+    // =====================================================
 
-    // Convert backend role_name → frontend role
     const user = mapBackendUser(data.user);
 
-    // Save frontend session
+    // =====================================================
+    // REPLACE AUTHENTICATED SESSION
+    //
+    // Make absolutely sure credentials from another
+    // account cannot remain.
+    // =====================================================
+
+    this.clearToken();
+
+    sessionStorage.removeItem("user");
+
+    // =====================================================
+    // SAVE NEW AUTHENTICATED ACCOUNT
+    // =====================================================
+
+    this.saveToken(data.token);
+
     this.saveSession(user);
+
+    // =====================================================
+    // OTP FLOW COMPLETE
+    // =====================================================
+
+    this.clearPendingUsername();
 
     return user;
   },
@@ -151,24 +334,49 @@ export const authService = {
   // DEVELOPMENT LOGIN
   //
   // One-click login but still:
+  //
   // - loads REAL user from database
   // - receives REAL JWT
   // - uses REAL RBAC
   //
   // Backend /auth/dev-login must be disabled in production.
   // =====================================================
+
   async devLogin(username: string): Promise<User> {
+    // =====================================================
+    // CLEAR PREVIOUS ACCOUNT FIRST
+    // =====================================================
+
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("pending_username");
+
+    const cleanUsername = username.trim();
+
+    if (!cleanUsername) {
+      throw new Error("Username is required.");
+    }
+
+    // =====================================================
+    // REQUEST
+    // =====================================================
+
     const response = await fetch(`${API_BASE_URL}/auth/dev-login`, {
       method: "POST",
 
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
 
       body: JSON.stringify({
-        username,
+        username: cleanUsername,
       }),
     });
+
+    // =====================================================
+    // RESPONSE
+    // =====================================================
 
     const data: AuthResponse & {
       error?: string;
@@ -188,13 +396,18 @@ export const authService = {
       throw new Error("Development user information was not returned.");
     }
 
-    // Save REAL JWT
-    this.saveToken(data.token);
+    // =====================================================
+    // MAP BACKEND USER
+    // =====================================================
 
-    // Convert backend response
     const user = mapBackendUser(data.user);
 
-    // Save frontend user for UI / route guards
+    // =====================================================
+    // SAVE REAL JWT + SESSION
+    // =====================================================
+
+    this.saveToken(data.token);
+
     this.saveSession(user);
 
     return user;
@@ -204,9 +417,19 @@ export const authService = {
   // AUTHENTICATED FETCH
   //
   // Use this instead of normal fetch() for protected APIs.
+  //
+  // Automatically sends:
+  //
+  // Authorization:
+  // Bearer <JWT>
   // =====================================================
+
   async authFetch(url: string, options: RequestInit = {}): Promise<Response> {
     const token = this.getToken();
+
+    // =====================================================
+    // TOKEN REQUIRED
+    // =====================================================
 
     if (!token) {
       this.logout();
@@ -214,12 +437,22 @@ export const authService = {
       throw new Error("Authentication required. Please login again.");
     }
 
+    // =====================================================
+    // HEADERS
+    // =====================================================
+
     const headers = new Headers(options.headers || {});
 
     headers.set("Authorization", `Bearer ${token}`);
 
-    // Add JSON content type only when there is a body
-    // and the caller did not already define it.
+    // Add JSON Content-Type only when:
+    //
+    // - request has body
+    // - caller did not already set Content-Type
+    // - body is not FormData
+    //
+    // Browser must create multipart/form-data boundary
+    // automatically for FormData.
     if (
       options.body &&
       !headers.has("Content-Type") &&
@@ -228,12 +461,19 @@ export const authService = {
       headers.set("Content-Type", "application/json");
     }
 
+    // =====================================================
+    // REQUEST
+    // =====================================================
+
     const response = await fetch(url, {
       ...options,
       headers,
     });
 
-    // JWT invalid / expired
+    // =====================================================
+    // JWT INVALID / EXPIRED
+    // =====================================================
+
     if (response.status === 401) {
       this.logout();
     }
@@ -244,10 +484,23 @@ export const authService = {
   // =====================================================
   // GET CURRENT AUTHENTICATED USER
   //
-  // Backend decides who the user really is.
+  // Backend is the source of truth.
+  //
+  // GET /auth/me
   // =====================================================
+
   async getCurrentUser(): Promise<User> {
-    const response = await this.authFetch(`${API_BASE_URL}/auth/me`);
+    const response = await this.authFetch(`${API_BASE_URL}/auth/me`, {
+      method: "GET",
+
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    // =====================================================
+    // RESPONSE
+    // =====================================================
 
     const data: CurrentUserResponse & {
       error?: string;
@@ -264,9 +517,16 @@ export const authService = {
       throw new Error("Authenticated user information was not returned.");
     }
 
+    // =====================================================
+    // MAP BACKEND USER
+    // =====================================================
+
     const user = mapBackendUser(data.user);
 
-    // Refresh local UI session from backend truth
+    // =====================================================
+    // REFRESH FRONTEND SESSION FROM BACKEND TRUTH
+    // =====================================================
+
     this.saveSession(user);
 
     return user;
@@ -275,6 +535,7 @@ export const authService = {
   // =====================================================
   // TOKEN STORAGE
   // =====================================================
+
   saveToken(token: string): void {
     sessionStorage.setItem("access_token", token);
   },
@@ -289,10 +550,16 @@ export const authService = {
 
   // =====================================================
   // PENDING USERNAME
-  // Used between login → OTP page
+  //
+  // Used only between:
+  //
+  // Login
+  //   ↓
+  // OTP
   // =====================================================
+
   savePendingUsername(username: string): void {
-    sessionStorage.setItem("pending_username", username);
+    sessionStorage.setItem("pending_username", username.trim());
   },
 
   getPendingUsername(): string | null {
@@ -307,13 +574,16 @@ export const authService = {
   // FRONTEND USER SESSION
   //
   // Used for:
+  //
   // - UI display
   // - role-based navigation
   // - ProtectedRoute
   //
   // NOT the security authority.
-  // Backend JWT + RBAC is authoritative.
+  //
+  // Backend JWT + RBAC remains authoritative.
   // =====================================================
+
   saveSession(user: User): void {
     sessionStorage.setItem("user", JSON.stringify(user));
   },
@@ -326,7 +596,27 @@ export const authService = {
     }
 
     try {
-      return JSON.parse(session) as User;
+      const parsed = JSON.parse(session) as User;
+
+      // ===================================================
+      // BASIC SESSION VALIDATION
+      // ===================================================
+
+      if (
+        !parsed ||
+        !Number(parsed.user_id) ||
+        !parsed.username ||
+        !parsed.role ||
+        !VALID_ROLES.includes(parsed.role)
+      ) {
+        console.error("INVALID USER SESSION STRUCTURE:", parsed);
+
+        this.logout();
+
+        return null;
+      }
+
+      return parsed;
     } catch (error) {
       console.error("INVALID USER SESSION:", error);
 
@@ -339,6 +629,7 @@ export const authService = {
   // =====================================================
   // LOGOUT
   // =====================================================
+
   logout(): void {
     sessionStorage.removeItem("user");
 
@@ -350,6 +641,7 @@ export const authService = {
   // =====================================================
   // AUTH HELPERS
   // =====================================================
+
   isLoggedIn(): boolean {
     return Boolean(this.getSession() && this.getToken());
   },
@@ -363,6 +655,7 @@ export const authService = {
   // =====================================================
   // ROLE DASHBOARD
   // =====================================================
+
   getDashboardRoute(role: UserRole): string {
     const routes: Record<UserRole, string> = {
       Admin: "/admin/dashboard",

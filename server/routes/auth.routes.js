@@ -326,6 +326,11 @@ router.post("/verify-otp", async (req, res) => {
         username: user.username,
         email: user.email,
         role_id: Number(user.role_id),
+
+        // Frontend canonical role field
+        role: user.role_name,
+
+        // Keep DB/API field too
         role_name: user.role_name,
       },
     });
@@ -347,11 +352,16 @@ router.get("/me", authenticate, async (req, res) => {
       success: true,
 
       user: {
-        user_id: req.user.user_id,
-        username: req.user.username,
-        email: req.user.email,
-        role_id: req.user.role_id,
-        role_name: req.user.role_name,
+        user_id: Number(user.user_id),
+        username: user.username,
+        email: user.email,
+        role_id: Number(user.role_id),
+
+        // Frontend canonical role field
+        role: user.role_name,
+
+        // Keep DB/API field too
+        role_name: user.role_name,
       },
     });
   } catch (error) {
@@ -493,6 +503,8 @@ router.post("/dev-login", async (req, res) => {
         username: user.username,
         email: user.email,
         role_id: Number(user.role_id),
+
+        role: user.role_name,
         role_name: user.role_name,
       },
     });

@@ -273,12 +273,79 @@ interface AvailableOfferingsResponse {
   offerings?: AvailableOffering[];
 }
 
+interface AvailableSubjectOffering {
+  offering_id: number;
+  offering_status: string;
+
+  section: {
+    section_id: number;
+    section_name: string;
+    year_level: number | null;
+    course_id: number | null;
+    course_code: string | null;
+    course_name: string | null;
+  };
+
+  section_subject: {
+    section_subject_id: number;
+    status: string;
+  };
+
+  faculty: {
+    faculty_id: number | null;
+    faculty_name: string | null;
+  };
+
+  room: {
+    room_id: number | null;
+    room_name: string | null;
+  };
+
+  schedule: {
+    days: string | null;
+    time: string | null;
+  };
+
+  capacity: {
+    max_students: number;
+    enrolled_count: number;
+    available_slots: number;
+    is_full: boolean;
+  };
+
+  academic_year_id: number;
+  semester_id: number;
+}
+
+interface AvailableSubject {
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+  units: number;
+  lecture_hours: number | null;
+  laboratory_hours: number | null;
+  offering_count: number;
+  available_offerings: AvailableSubjectOffering[];
+  academic_eligibility?: AcademicEligibility;
+}
+
+interface AvailableSubjectsResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  total_subjects?: number;
+  total_offerings?: number;
+  subjects?: AvailableSubject[];
+}
+
 interface MutationResponse {
   success: boolean;
   message?: string;
   error?: string;
   ready_for_approval?: boolean;
   validation_errors?: ValidationIssue[];
+  errors?: ValidationIssue[];
+  academic_eligibility?: AcademicEligibility;
 }
 
 // =====================================================
@@ -310,7 +377,11 @@ export default function EnrollmentDetailsR() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
-  const user = authService.getSession();
+  // Keep the session object stable for this page mount.
+  // authService.getSession() parses sessionStorage and can return a new object
+  // on every render; using that object directly in effect dependencies causes
+  // the enrollment-loading effect to run again after every state update.
+  const [user] = useState(() => authService.getSession());
   const userRole = user?.role;
 
   const enrollmentId = useMemo(() => {
@@ -353,6 +424,23 @@ export default function EnrollmentDetailsR() {
     "Assigned by Registrar.",
   );
   const [assignmentLoading, setAssignmentLoading] = useState(false);
+
+  // =====================================================
+  // ADD SUBJECT PANEL
+  // =====================================================
+
+  const [addSubjectOpen, setAddSubjectOpen] = useState(false);
+  const [availableSubjects, setAvailableSubjects] = useState<
+    AvailableSubject[]
+  >([]);
+  const [availableSubjectsLoading, setAvailableSubjectsLoading] =
+    useState(false);
+  const [selectedAddSubjectId, setSelectedAddSubjectId] = useState("");
+  const [selectedAddOfferingId, setSelectedAddOfferingId] = useState("");
+  const [addSubjectReason, setAddSubjectReason] = useState(
+    "Registrar added subject.",
+  );
+  const [addSubjectLoading, setAddSubjectLoading] = useState(false);
 
   // =====================================================
   // APPROVAL
@@ -626,8 +714,8 @@ export default function EnrollmentDetailsR() {
     }
   };
 
-  const closeAssignment = () => {
-    if (assignmentLoading) {
+  const closeAssignment = (force = false) => {
+    if (assignmentLoading && !force) {
       return;
     }
 
@@ -690,7 +778,7 @@ export default function EnrollmentDetailsR() {
         data.message || "Subject offering assigned successfully.",
       );
 
-      closeAssignment();
+      closeAssignment(true);
       refresh();
     } catch (requestError) {
       console.error("ASSIGN SUBJECT OFFERING ERROR:", requestError);
@@ -701,6 +789,205 @@ export default function EnrollmentDetailsR() {
       );
     } finally {
       setAssignmentLoading(false);
+    }
+  };
+
+  // =====================================================
+  // ADD SUBJECT
+  // =====================================================
+
+  const selectedAddSubject = useMemo(() => {
+    const subjectId = Number(selectedAddSubjectId);
+
+    if (!Number.isInteger(subjectId) || subjectId <= 0) {
+      return null;
+    }
+
+    return (
+      availableSubjects.find((subject) => subject.subject_id === subjectId) ||
+      null
+    );
+  }, [availableSubjects, selectedAddSubjectId]);
+
+  const selectedAddOffering = useMemo(() => {
+    const offeringId = Number(selectedAddOfferingId);
+
+    if (
+      !selectedAddSubject ||
+      !Number.isInteger(offeringId) ||
+      offeringId <= 0
+    ) {
+      return null;
+    }
+
+    return (
+      selectedAddSubject.available_offerings.find(
+        (offering) => offering.offering_id === offeringId,
+      ) || null
+    );
+  }, [selectedAddSubject, selectedAddOfferingId]);
+
+  const resetAddSubjectPanel = () => {
+    setAddSubjectOpen(false);
+    setAvailableSubjects([]);
+    setSelectedAddSubjectId("");
+    setSelectedAddOfferingId("");
+    setAddSubjectReason("Registrar added subject.");
+  };
+
+  const closeAddSubject = () => {
+    if (addSubjectLoading || availableSubjectsLoading) {
+      return;
+    }
+
+    resetAddSubjectPanel();
+  };
+
+  const openAddSubject = async () => {
+    if (!enrollmentId || !enrollment) {
+      return;
+    }
+
+    if (
+      !["Pending", "Approved"].includes(String(enrollment.enrollment_status))
+    ) {
+      setActionError(
+        `Subjects cannot be added while enrollment status is '${enrollment.enrollment_status}'.`,
+      );
+      return;
+    }
+
+    try {
+      closeAssignment(true);
+      setAddSubjectOpen(true);
+      setAvailableSubjects([]);
+      setSelectedAddSubjectId("");
+      setSelectedAddOfferingId("");
+      setAddSubjectReason("Registrar added subject.");
+      setActionError("");
+      setSuccessMessage("");
+      setAvailableSubjectsLoading(true);
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/available-subjects`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<AvailableSubjectsResponse>(response);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "Failed to load subjects available for addition.",
+        );
+      }
+
+      setAvailableSubjects(Array.isArray(data.subjects) ? data.subjects : []);
+    } catch (requestError) {
+      console.error("LOAD AVAILABLE SUBJECTS ERROR:", requestError);
+      setAvailableSubjects([]);
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load subjects available for addition.",
+      );
+    } finally {
+      setAvailableSubjectsLoading(false);
+    }
+  };
+
+  const addSelectedSubject = async () => {
+    if (!enrollmentId || !selectedAddSubject || !selectedAddOffering) {
+      setActionError("Select a subject and one of its available offerings.");
+      return;
+    }
+
+    if (selectedAddSubject.academic_eligibility?.eligible === false) {
+      const academicMessage = selectedAddSubject.academic_eligibility.errors
+        .map((issue) => issue.message || issue.code)
+        .filter(Boolean)
+        .join(" ");
+
+      setActionError(
+        academicMessage || "The selected subject is not academically eligible.",
+      );
+      return;
+    }
+
+    try {
+      setAddSubjectLoading(true);
+      setActionError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/subjects`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            offering_id: selectedAddOffering.offering_id,
+            reason: addSubjectReason.trim() || "Registrar added subject.",
+          }),
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<MutationResponse>(response);
+
+      if (!response.ok || !data.success) {
+        const issueMessages = [
+          ...(Array.isArray(data.validation_errors)
+            ? data.validation_errors
+            : []),
+          ...(Array.isArray(data.errors) ? data.errors : []),
+          ...(Array.isArray(data.academic_eligibility?.errors)
+            ? data.academic_eligibility.errors
+            : []),
+        ]
+          .map((issue) => issue.message || issue.code)
+          .filter(Boolean)
+          .join(" ");
+
+        throw new Error(
+          issueMessages ||
+            data.message ||
+            data.error ||
+            "Failed to add subject to enrollment.",
+        );
+      }
+
+      setSuccessMessage(
+        data.message || "Subject added to enrollment successfully.",
+      );
+      resetAddSubjectPanel();
+      refresh();
+    } catch (requestError) {
+      console.error("ADD SUBJECT ERROR:", requestError);
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to add the selected subject.",
+      );
+    } finally {
+      setAddSubjectLoading(false);
     }
   };
 
@@ -1119,6 +1406,21 @@ export default function EnrollmentDetailsR() {
                 {(summary?.total_subjects ?? subjects.length) !== 1 ? "s" : ""}
               </span>
             </div>
+
+            <button
+              type="button"
+              className="subject-action-btn"
+              disabled={
+                addSubjectLoading ||
+                availableSubjectsLoading ||
+                !["Pending", "Approved"].includes(
+                  String(enrollment.enrollment_status),
+                )
+              }
+              onClick={() => void openAddSubject()}
+            >
+              {availableSubjectsLoading ? "Loading..." : "+ Add Subject"}
+            </button>
           </div>
 
           <div className="subjects-table-wrapper">
@@ -1242,6 +1544,202 @@ export default function EnrollmentDetailsR() {
           </div>
         </div>
 
+        {addSubjectOpen && (
+          <div className="enrollment-details-card">
+            <div className="details-card-header">
+              <div>
+                <h2>Add Subject</h2>
+                <span>
+                  Select an academically valid subject and one READY / Open
+                  offering. The backend remains authoritative.
+                </span>
+              </div>
+            </div>
+
+            {availableSubjectsLoading ? (
+              <div className="enrollment-details-loading">
+                Loading subjects available for addition...
+              </div>
+            ) : (
+              <>
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <span>Subject</span>
+                    <select
+                      value={selectedAddSubjectId}
+                      disabled={addSubjectLoading}
+                      onChange={(event) => {
+                        setSelectedAddSubjectId(event.target.value);
+                        setSelectedAddOfferingId("");
+                        setActionError("");
+                      }}
+                    >
+                      <option value="">Select subject</option>
+
+                      {availableSubjects.map((subject) => {
+                        const eligibility = subject.academic_eligibility;
+                        const eligibilitySuffix = eligibility
+                          ? eligibility.eligible
+                            ? ` · ${eligibility.attempt_type}`
+                            : " · BLOCKED"
+                          : "";
+
+                        return (
+                          <option
+                            key={subject.subject_id}
+                            value={subject.subject_id}
+                            disabled={eligibility?.eligible === false}
+                          >
+                            {subject.subject_code} — {subject.subject_name} ·{" "}
+                            {subject.units} unit{subject.units !== 1 ? "s" : ""}
+                            {eligibilitySuffix}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="detail-item">
+                    <span>Offering</span>
+                    <select
+                      value={selectedAddOfferingId}
+                      disabled={addSubjectLoading || !selectedAddSubject}
+                      onChange={(event) =>
+                        setSelectedAddOfferingId(event.target.value)
+                      }
+                    >
+                      <option value="">Select offering</option>
+
+                      {(selectedAddSubject?.available_offerings || []).map(
+                        (offering) => (
+                          <option
+                            key={offering.offering_id}
+                            value={offering.offering_id}
+                          >
+                            #{offering.offering_id} ·{" "}
+                            {offering.section.section_name}
+                            {" · "}
+                            {offering.faculty.faculty_name ||
+                              "Faculty not assigned"}
+                            {" · "}
+                            {formatSchedule(
+                              offering.schedule.days,
+                              offering.schedule.time,
+                            )}
+                            {" · "}
+                            {offering.capacity.available_slots} slot
+                            {offering.capacity.available_slots !== 1 ? "s" : ""}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="detail-item">
+                    <span>Reason</span>
+                    <textarea
+                      value={addSubjectReason}
+                      disabled={addSubjectLoading}
+                      onChange={(event) =>
+                        setAddSubjectReason(event.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                {selectedAddSubject?.academic_eligibility && (
+                  <div className="remarks-box">
+                    <span>Academic Eligibility</span>
+                    <p>
+                      <strong>
+                        {selectedAddSubject.academic_eligibility.eligible
+                          ? "ELIGIBLE"
+                          : "BLOCKED"}
+                      </strong>
+                      {" · "}
+                      Attempt:{" "}
+                      {selectedAddSubject.academic_eligibility.attempt_type ||
+                        "—"}
+                    </p>
+
+                    {selectedAddSubject.academic_eligibility.previous_grade && (
+                      <p>
+                        Previous approved grade:{" "}
+                        {selectedAddSubject.academic_eligibility.previous_grade
+                          .final_grade ?? "—"}
+                        {selectedAddSubject.academic_eligibility.previous_grade
+                          .classification
+                          ? ` (${selectedAddSubject.academic_eligibility.previous_grade.classification})`
+                          : ""}
+                      </p>
+                    )}
+
+                    {selectedAddSubject.academic_eligibility.errors.length >
+                      0 && (
+                      <ul>
+                        {selectedAddSubject.academic_eligibility.errors.map(
+                          (issue, index) => (
+                            <li key={`${issue.code || "academic"}-${index}`}>
+                              {issue.message ||
+                                issue.code ||
+                                "Academic validation error"}
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {availableSubjects.length === 0 && (
+                  <div className="remarks-box">
+                    <p>
+                      No subject with an available READY / Open offering can be
+                      added to this enrollment right now.
+                    </p>
+                  </div>
+                )}
+
+                {selectedAddSubject &&
+                  selectedAddSubject.available_offerings.length === 0 && (
+                    <div className="remarks-box">
+                      <p>
+                        The selected subject does not currently have an
+                        available READY / Open offering with capacity.
+                      </p>
+                    </div>
+                  )}
+
+                <div className="enrollment-details-actions">
+                  <button
+                    type="button"
+                    className="reject-enrollment-btn"
+                    disabled={addSubjectLoading}
+                    onClick={() => closeAddSubject()}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    className="approve-enrollment-btn"
+                    disabled={
+                      addSubjectLoading ||
+                      !selectedAddSubject ||
+                      !selectedAddOffering ||
+                      selectedAddSubject.academic_eligibility?.eligible ===
+                        false
+                    }
+                    onClick={() => void addSelectedSubject()}
+                  >
+                    {addSubjectLoading ? "Adding..." : "Add Subject"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {selectedSubject && (
           <div className="enrollment-details-card">
             <div className="details-card-header">
@@ -1323,7 +1821,7 @@ export default function EnrollmentDetailsR() {
                     type="button"
                     className="reject-enrollment-btn"
                     disabled={assignmentLoading}
-                    onClick={closeAssignment}
+                    onClick={() => closeAssignment()}
                   >
                     Cancel
                   </button>
