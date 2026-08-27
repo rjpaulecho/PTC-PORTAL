@@ -27,17 +27,83 @@ interface UpdateSectionSubjectStatusResponse {
 
   error?: string;
 
-  active_assignments?: number;
+  changed?: boolean;
 
-  pending_assignments?: number;
+  reason?: string;
 
-  approved_assignments?: number;
+  required_action?: string;
 
-  offering_count?: number;
+  enrollment_counts?: {
+    pending?: number;
 
-  open_offerings?: number;
+    approved?: number;
 
-  section_subject?: unknown;
+    active?: number;
+  };
+
+  offering?: {
+    offering_id?: number;
+
+    status?: "Open" | "Closed" | "Cancelled" | null;
+  };
+
+  section_subject?: {
+    section_subject_id?: number;
+
+    status?: SectionSubjectStatus;
+
+    previous_status?: SectionSubjectStatus;
+
+    linked_offering?: {
+      offering_id?: number | null;
+
+      status?: "Open" | "Closed" | "Cancelled" | null;
+    };
+
+    enrollment_counts?: {
+      pending?: number;
+
+      approved?: number;
+
+      active?: number;
+    };
+
+    [key: string]: unknown;
+  } | null;
+}
+
+// =====================================================
+// BACKEND BLOCK DETAILS
+// =====================================================
+
+interface SectionSubjectBlockDetails {
+  pendingAssignments: number | null;
+
+  approvedAssignments: number | null;
+
+  activeAssignments: number | null;
+
+  requiredAction: string | null;
+
+  linkedOffering: {
+    offeringId: number | null;
+
+    status: string | null;
+  } | null;
+}
+
+function emptyBlockDetails(): SectionSubjectBlockDetails {
+  return {
+    pendingAssignments: null,
+
+    approvedAssignments: null,
+
+    activeAssignments: null,
+
+    requiredAction: null,
+
+    linkedOffering: null,
+  };
 }
 
 // =====================================================
@@ -109,6 +175,10 @@ export default function SectionSubjectStatusModal({
 
   const isCancelled = currentStatus === "Cancelled";
 
+  const linkedOffering = subject?.offering || null;
+
+  const linkedOfferingOpen = linkedOffering?.status === "Open";
+
   // =====================================================
   // NORMAL LIFECYCLE
   //
@@ -136,9 +206,8 @@ export default function SectionSubjectStatusModal({
 
   const [error, setError] = useState("");
 
-  const [backendDetails, setBackendDetails] = useState<
-    Record<string, number | null>
-  >({});
+  const [backendDetails, setBackendDetails] =
+    useState<SectionSubjectBlockDetails>(emptyBlockDetails);
 
   // =====================================================
   // RESET
@@ -157,7 +226,7 @@ export default function SectionSubjectStatusModal({
 
     setError("");
 
-    setBackendDetails({});
+    setBackendDetails(emptyBlockDetails());
   }, [open, sectionSubjectId]);
 
   // =====================================================
@@ -194,7 +263,7 @@ export default function SectionSubjectStatusModal({
   const clearFeedback = () => {
     setError("");
 
-    setBackendDetails({});
+    setBackendDetails(emptyBlockDetails());
   };
 
   // =====================================================
@@ -248,29 +317,37 @@ export default function SectionSubjectStatusModal({
   // =====================================================
 
   const captureBackendDetails = (data: UpdateSectionSubjectStatusResponse) => {
-    const details: Record<string, number | null> = {};
+    const counts = data.enrollment_counts;
 
-    if (typeof data.active_assignments === "number") {
-      details.active_assignments = data.active_assignments;
-    }
+    const offering = data.offering;
 
-    if (typeof data.pending_assignments === "number") {
-      details.pending_assignments = data.pending_assignments;
-    }
+    setBackendDetails({
+      pendingAssignments:
+        typeof counts?.pending === "number" ? counts.pending : null,
 
-    if (typeof data.approved_assignments === "number") {
-      details.approved_assignments = data.approved_assignments;
-    }
+      approvedAssignments:
+        typeof counts?.approved === "number" ? counts.approved : null,
 
-    if (typeof data.offering_count === "number") {
-      details.offering_count = data.offering_count;
-    }
+      activeAssignments:
+        typeof counts?.active === "number" ? counts.active : null,
 
-    if (typeof data.open_offerings === "number") {
-      details.open_offerings = data.open_offerings;
-    }
+      requiredAction:
+        typeof data.required_action === "string" && data.required_action.trim()
+          ? data.required_action.trim()
+          : null,
 
-    setBackendDetails(details);
+      linkedOffering: offering
+        ? {
+            offeringId:
+              typeof offering.offering_id === "number"
+                ? offering.offering_id
+                : null,
+
+            status:
+              typeof offering.status === "string" ? offering.status : null,
+          }
+        : null,
+    });
   };
 
   // =====================================================
@@ -290,6 +367,27 @@ export default function SectionSubjectStatusModal({
     }
 
     if (loading) {
+      return;
+    }
+
+    if (currentStatus === "Cancelled") {
+      setError(
+        "This section subject is Cancelled and cannot return to Open or Closed.",
+      );
+
+      return;
+    }
+
+    if (
+      (targetStatus === "Closed" || targetStatus === "Cancelled") &&
+      linkedOfferingOpen
+    ) {
+      setError(
+        targetStatus === "Closed"
+          ? "Close the linked subject offering before closing this section subject."
+          : "Close or cancel the linked subject offering before cancelling this section subject.",
+      );
+
       return;
     }
 
@@ -395,11 +493,7 @@ export default function SectionSubjectStatusModal({
       // Display the backend's authoritative explanation.
       // ===============================================
 
-      if (
-        response.status === 400 ||
-        response.status === 409 ||
-        response.status === 422
-      ) {
+      if (response.status === 400 || response.status === 409) {
         captureBackendDetails(data);
 
         setError(
@@ -436,6 +530,8 @@ export default function SectionSubjectStatusModal({
       console.log("UPDATE SECTION SUBJECT STATUS SUCCESS:", data);
 
       onSuccess();
+
+      onClose();
     } catch (requestError) {
       console.error("UPDATE SECTION SUBJECT STATUS ERROR:", requestError);
 
@@ -469,7 +565,17 @@ export default function SectionSubjectStatusModal({
   // BACKEND DETAIL ROWS
   // =====================================================
 
-  const backendDetailRows = Object.entries(backendDetails);
+  const hasBackendDetails =
+    backendDetails.pendingAssignments !== null ||
+    backendDetails.approvedAssignments !== null ||
+    backendDetails.activeAssignments !== null ||
+    backendDetails.requiredAction !== null ||
+    backendDetails.linkedOffering !== null;
+
+  const closeBlockedByOpenOffering =
+    normalTargetStatus === "Closed" && linkedOfferingOpen;
+
+  const cancellationBlockedByOpenOffering = cancelMode && linkedOfferingOpen;
 
   // =====================================================
   // DO NOT RENDER
@@ -562,8 +668,8 @@ export default function SectionSubjectStatusModal({
 
             <p>
               Section capacity: {sectionSubject.max_students ?? 0} · Offering:{" "}
-              {subject.offering
-                ? `#${subject.offering.offering_id} (${subject.offering.status})`
+              {linkedOffering
+                ? `#${linkedOffering.offering_id} (${linkedOffering.status})`
                 : "No offering created"}
             </p>
           </div>
@@ -572,20 +678,48 @@ export default function SectionSubjectStatusModal({
           {/* BACKEND PROTECTION DETAILS */}
           {/* =============================================== */}
 
-          {backendDetailRows.length > 0 && (
+          {hasBackendDetails && (
             <div className="class-offering-open-requirements">
               <h3>Status Change Blocked</h3>
 
               <ul>
-                {backendDetailRows.map(([key, value]) => (
-                  <li key={key}>
-                    {key
-                      .replaceAll("_", " ")
-                      .replace(/\b\w/g, (letter) => letter.toUpperCase())}
-                    : {value}
+                {backendDetails.linkedOffering && (
+                  <li>
+                    Linked offering:{" "}
+                    {backendDetails.linkedOffering.offeringId !== null
+                      ? `#${backendDetails.linkedOffering.offeringId}`
+                      : "Existing offering"}
+                    {backendDetails.linkedOffering.status
+                      ? ` (${backendDetails.linkedOffering.status})`
+                      : ""}
                   </li>
-                ))}
+                )}
+
+                {backendDetails.pendingAssignments !== null && (
+                  <li>
+                    Pending assignments: {backendDetails.pendingAssignments}
+                  </li>
+                )}
+
+                {backendDetails.approvedAssignments !== null && (
+                  <li>
+                    Approved assignments: {backendDetails.approvedAssignments}
+                  </li>
+                )}
+
+                {backendDetails.activeAssignments !== null && (
+                  <li>
+                    Active assignments: {backendDetails.activeAssignments}
+                  </li>
+                )}
               </ul>
+
+              {backendDetails.requiredAction && (
+                <p>
+                  <strong>Required action:</strong>{" "}
+                  {backendDetails.requiredAction}
+                </p>
+              )}
             </div>
           )}
 
@@ -620,21 +754,30 @@ export default function SectionSubjectStatusModal({
                   </li>
 
                   <li>
-                    An existing child offering is not deleted by this frontend
-                    action.
-                  </li>
-
-                  <li>
                     A Closed section subject prevents its offering from being
                     treated as ready for normal enrollment assignment.
                   </li>
 
+                  <li>The linked offering must not still be Open.</li>
+
                   <li>
-                    The backend will apply any protection rules before the
-                    status is changed.
+                    Pending enrollment assignments must be resolved before the
+                    section subject can be closed.
+                  </li>
+
+                  <li>
+                    Approved students may remain when closing; closing stops
+                    future readiness without deleting official enrollment.
                   </li>
                 </ul>
               </div>
+
+              {closeBlockedByOpenOffering && (
+                <div className="class-offering-error">
+                  Close the linked offering first. The backend does not allow
+                  section_subject = Closed while its offering is still Open.
+                </div>
+              )}
 
               <div className="class-offering-prepare-notice">
                 <strong>Close this section subject?</strong>
@@ -704,13 +847,18 @@ export default function SectionSubjectStatusModal({
                   </li>
 
                   <li>
-                    Existing child offering records are not deleted by this
-                    frontend action.
+                    Cancellation is terminal. A Cancelled section subject is not
+                    silently reopened later.
                   </li>
 
                   <li>
-                    The backend may block cancellation when related records
-                    still require protection.
+                    The linked offering must be Closed or Cancelled first; it
+                    cannot remain Open.
+                  </li>
+
+                  <li>
+                    No active Pending or Approved student assignments may
+                    remain.
                   </li>
 
                   <li>
@@ -719,6 +867,13 @@ export default function SectionSubjectStatusModal({
                   </li>
                 </ul>
               </div>
+
+              {cancellationBlockedByOpenOffering && (
+                <div className="class-offering-error">
+                  Close or cancel the linked offering before cancelling this
+                  section subject.
+                </div>
+              )}
 
               <div className="class-offering-field">
                 <label htmlFor="section-subject-cancellation-reason">
@@ -768,7 +923,9 @@ export default function SectionSubjectStatusModal({
               <button
                 type="button"
                 className="class-offering-primary-button"
-                disabled={loading || reason.trim().length === 0}
+                disabled={
+                  loading || reason.trim().length === 0 || linkedOfferingOpen
+                }
                 onClick={handleCancellation}
               >
                 {loading ? "Cancelling..." : "Confirm Cancellation"}
@@ -791,7 +948,11 @@ export default function SectionSubjectStatusModal({
               <button
                 type="button"
                 className="class-offering-primary-button"
-                disabled={loading || !normalTargetStatus}
+                disabled={
+                  loading ||
+                  !normalTargetStatus ||
+                  (normalTargetStatus === "Closed" && linkedOfferingOpen)
+                }
                 onClick={handleNormalStatusChange}
               >
                 {loading ? "Updating..." : normalButtonText}

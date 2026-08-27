@@ -84,60 +84,138 @@ export default function OfferingReadiness({
   const cancelledOfferings = Number(summary.cancelled_offerings || 0);
 
   // =====================================================
-  // OFFERING SETUP COMPLETE
+  // ALL REQUIRED OFFERINGS EXIST
   //
-  // This is DIFFERENT from enrollment readiness.
+  // IMPORTANT:
   //
-  // It only means:
+  // This is DIFFERENT from backend enrollment readiness.
   //
-  // 1. All curriculum subjects have section_subjects
-  // 2. All required section subjects have offerings
-  // 3. No required offering is cancelled
+  // It only answers:
   //
-  // Closed offerings are allowed here because the
-  // Registrar may intentionally finish setup before
-  // opening enrollment.
+  // "Has the Registrar already created every required
+  // curriculum offering for this section?"
+  //
+  // TRUE means:
+  //
+  // 1. The curriculum contains at least one subject.
+  // 2. No curriculum subject is missing a section_subject.
+  // 3. No prepared section_subject is missing an offering.
+  //
+  // Offering status does NOT affect this creation check.
+  //
+  // Therefore:
+  //
+  // - Closed offering     = offering still exists
+  // - Cancelled offering  = offering still exists
+  //
+  // Those statuses can prevent enrollment readiness, but
+  // they must not make the UI claim that an offering has
+  // never been created.
   // =====================================================
 
-  const offeringSetupComplete =
-    totalSubjects > 0 &&
-    missingSectionSubjects === 0 &&
-    missingOfferings === 0 &&
-    cancelledOfferings === 0;
-
-  // =====================================================
-  // PROGRESS
-  // =====================================================
-
-  const readinessPercentage =
-    totalSubjects > 0 ? Math.round((readyOfferings / totalSubjects) * 100) : 0;
+  const allRequiredOfferingsExist =
+    totalSubjects > 0 && missingSectionSubjects === 0 && missingOfferings === 0;
 
   // =====================================================
   // OFFERING CREATION PROGRESS
   //
-  // How many curriculum subjects already have an offering?
+  // Backend missing_offerings only counts subjects that
+  // already have a section_subject but have no offering.
+  //
+  // Subjects without a section_subject also cannot have a
+  // normal curriculum offering yet, so subtract both.
   // =====================================================
 
-  const subjectsWithOffering = Math.max(
-    0,
-    totalSubjects - missingSectionSubjects - missingOfferings,
+  const subjectsWithOffering = Math.min(
+    totalSubjects,
+    Math.max(0, totalSubjects - missingSectionSubjects - missingOfferings),
   );
 
   const offeringSetupPercentage =
     totalSubjects > 0
-      ? Math.round((subjectsWithOffering / totalSubjects) * 100)
+      ? Math.min(
+          100,
+          Math.max(0, Math.round((subjectsWithOffering / totalSubjects) * 100)),
+        )
       : 0;
 
   // =====================================================
-  // SECTION STATUS
+  // ENROLLMENT READINESS PROGRESS
+  //
+  // `ready` and ready_for_enrollment come from the backend.
+  // Frontend does not redefine the business readiness rule.
+  // =====================================================
+
+  const readinessPercentage =
+    totalSubjects > 0
+      ? Math.min(
+          100,
+          Math.max(0, Math.round((readyOfferings / totalSubjects) * 100)),
+        )
+      : 0;
+
+  // =====================================================
+  // SECTION VISUAL STATUS
+  //
+  // INCOMPLETE
+  // - section_subject(s) still missing
+  // - and/or offering(s) still missing
+  //
+  // COMPLETE
+  // - all required offering records exist
+  // - but backend says the section is not enrollment-ready
+  //
+  // READY
+  // - backend readiness is true
   // =====================================================
 
   let sectionStatus: "ready" | "complete" | "incomplete" = "incomplete";
 
   if (ready) {
     sectionStatus = "ready";
-  } else if (offeringSetupComplete) {
+  } else if (allRequiredOfferingsExist) {
     sectionStatus = "complete";
+  }
+
+  // =====================================================
+  // COMPLETION LABEL
+  // =====================================================
+
+  let completionLabel = `${subjectsWithOffering}/${totalSubjects} OFFERINGS`;
+
+  if (totalSubjects === 0) {
+    completionLabel = "NO SUBJECTS";
+  } else if (sectionStatus === "ready") {
+    completionLabel = "ENROLLMENT READY";
+  } else if (sectionStatus === "complete") {
+    completionLabel = "ALL OFFERINGS CREATED";
+  }
+
+  // =====================================================
+  // OFFERING CREATION MESSAGE
+  // =====================================================
+
+  let offeringCreationMessage = "✓ All required offerings exist";
+
+  if (!allRequiredOfferingsExist) {
+    if (missingSectionSubjects > 0 && missingOfferings > 0) {
+      offeringCreationMessage = `${missingSectionSubjects} section subject${
+        missingSectionSubjects === 1 ? "" : "s"
+      } and ${missingOfferings} offering${
+        missingOfferings === 1 ? "" : "s"
+      } still missing`;
+    } else if (missingSectionSubjects > 0) {
+      offeringCreationMessage = `${missingSectionSubjects} section subject${
+        missingSectionSubjects === 1 ? "" : "s"
+      } must be prepared first`;
+    } else if (missingOfferings > 0) {
+      offeringCreationMessage = `${missingOfferings} still need offering${
+        missingOfferings === 1 ? "" : "s"
+      }`;
+    } else if (totalSubjects === 0) {
+      offeringCreationMessage =
+        "No curriculum subjects found for this selected setup";
+    }
   }
 
   // =====================================================
@@ -198,24 +276,26 @@ export default function OfferingReadiness({
 
               <p>
                 All required class offerings for <strong>{sectionName}</strong>{" "}
-                are configured and available for enrollment.
+                are configured, Open, and available for enrollment.
               </p>
             </>
           )}
 
           {sectionStatus === "complete" && (
             <>
-              <h3>Offering Setup Complete</h3>
+              <h3>All Required Offerings Created</h3>
 
               <p>
                 All <strong>{totalSubjects}</strong> required curriculum
                 subjects for <strong>{sectionName}</strong> already have class
-                offerings.
+                offering records.
               </p>
 
               <small>
-                The section is not enrollment-ready yet because some offerings
-                may still be Closed or need configuration.
+                Creation is complete, but the section is not enrollment-ready
+                yet. Check configuration and offering/section-subject status
+                below. Closed or Cancelled offerings still count as created
+                records, but they are not enrollment-ready.
               </small>
             </>
           )}
@@ -224,10 +304,21 @@ export default function OfferingReadiness({
             <>
               <h3>Offering Setup Incomplete</h3>
 
-              <p>
-                This section still has required subjects that need to be
-                prepared or given a class offering.
-              </p>
+              {totalSubjects === 0 ? (
+                <p>
+                  No curriculum subjects were found for this selected academic
+                  setup.
+                </p>
+              ) : (
+                <p>
+                  <strong>
+                    {subjectsWithOffering}/{totalSubjects}
+                  </strong>{" "}
+                  required curriculum offerings currently exist for{" "}
+                  <strong>{sectionName}</strong>. Prepare the remaining section
+                  subjects and create their offerings.
+                </p>
+              )}
             </>
           )}
         </div>
@@ -237,11 +328,7 @@ export default function OfferingReadiness({
         {/* =============================================== */}
 
         <div className="class-offering-section-completion-label">
-          {sectionStatus === "ready"
-            ? "ENROLLMENT READY"
-            : sectionStatus === "complete"
-              ? "ALL OFFERINGS CREATED"
-              : `${subjectsWithOffering}/${totalSubjects} OFFERINGS`}
+          {completionLabel}
         </div>
       </div>
 
@@ -254,12 +341,20 @@ export default function OfferingReadiness({
         {/* CURRICULUM */}
         {/* =============================================== */}
 
-        <div className="class-offering-summary-card">
+        <div
+          className={`class-offering-summary-card ${
+            totalSubjects === 0 ? "warning" : ""
+          }`}
+        >
           <span>Curriculum Subjects</span>
 
-          <strong>{summary.curriculum_subjects}</strong>
+          <strong>{totalSubjects}</strong>
 
-          <small>Expected subjects for this curriculum term</small>
+          <small>
+            {totalSubjects > 0
+              ? "Expected subjects for this curriculum term"
+              : "No expected subjects found"}
+          </small>
         </div>
 
         {/* =============================================== */}
@@ -268,7 +363,9 @@ export default function OfferingReadiness({
 
         <div
           className={`class-offering-summary-card ${
-            missingSectionSubjects === 0 ? "complete" : "warning"
+            totalSubjects > 0 && missingSectionSubjects === 0
+              ? "complete"
+              : "warning"
           }`}
         >
           <span>Section Subjects</span>
@@ -276,9 +373,11 @@ export default function OfferingReadiness({
           <strong>{summary.section_subjects}</strong>
 
           <small>
-            {missingSectionSubjects === 0
-              ? "✓ All section subjects prepared"
-              : `${missingSectionSubjects} still missing`}
+            {totalSubjects === 0
+              ? "No curriculum subjects to prepare"
+              : missingSectionSubjects === 0
+                ? "✓ All section subjects prepared"
+                : `${missingSectionSubjects} still missing`}
           </small>
         </div>
 
@@ -288,11 +387,7 @@ export default function OfferingReadiness({
 
         <div
           className={`class-offering-summary-card ${
-            offeringSetupComplete
-              ? "complete"
-              : missingOfferings > 0
-                ? "warning"
-                : ""
+            allRequiredOfferingsExist ? "complete" : "warning"
           }`}
         >
           <span>Offerings Created</span>
@@ -301,11 +396,7 @@ export default function OfferingReadiness({
             {subjectsWithOffering}/{totalSubjects}
           </strong>
 
-          <small>
-            {offeringSetupComplete
-              ? "✓ All required offerings exist"
-              : `${missingOfferings} still need offerings`}
-          </small>
+          <small>{offeringCreationMessage}</small>
         </div>
 
         {/* =============================================== */}
@@ -316,7 +407,9 @@ export default function OfferingReadiness({
           className={`class-offering-summary-card ${
             readyOfferings === totalSubjects && totalSubjects > 0
               ? "complete"
-              : ""
+              : readyOfferings > 0
+                ? "info"
+                : ""
           }`}
         >
           <span>Ready Offerings</span>
@@ -348,35 +441,34 @@ export default function OfferingReadiness({
 
         <div
           className={`class-offering-summary-card ${
-            summary.not_ready > 0 ? "warning" : "complete"
+            Number(summary.not_ready || 0) > 0 ? "warning" : "complete"
           }`}
         >
           <span>Not Ready</span>
 
-          <strong>{summary.not_ready}</strong>
+          <strong>{Number(summary.not_ready || 0)}</strong>
 
           <small>Subjects not currently available for enrollment</small>
         </div>
       </div>
 
       {/* ================================================= */}
-      {/* OFFERING SETUP PROGRESS */}
+      {/* OFFERING CREATION PROGRESS */}
       {/* ================================================= */}
 
       <div className="class-offering-readiness-progress">
         <div className="class-offering-progress-header">
-          <span>Class Offering Setup</span>
+          <span>Required Offerings Created</span>
 
           <strong>
-            {subjectsWithOffering}/{totalSubjects} ({offeringSetupPercentage}
-            %)
+            {subjectsWithOffering}/{totalSubjects} ({offeringSetupPercentage}%)
           </strong>
         </div>
 
         <div className="class-offering-progress-track">
           <div
             className={`class-offering-progress-value ${
-              offeringSetupComplete ? "complete" : ""
+              allRequiredOfferingsExist ? "complete" : ""
             }`}
             style={{
               width: `${offeringSetupPercentage}%`,
@@ -394,8 +486,7 @@ export default function OfferingReadiness({
           <span>Enrollment Readiness Progress</span>
 
           <strong>
-            {readyOfferings}/{totalSubjects} ({readinessPercentage}
-            %)
+            {readyOfferings}/{totalSubjects} ({readinessPercentage}%)
           </strong>
         </div>
 
@@ -458,6 +549,13 @@ export default function OfferingReadiness({
               </div>
             )}
           </div>
+
+          {allRequiredOfferingsExist && (
+            <small>
+              ✓ Every required offering record already exists. Remaining issues
+              are configuration or status issues, not missing offering records.
+            </small>
+          )}
         </div>
       )}
 

@@ -2086,6 +2086,21 @@
   scrollbar-width: thin;
 }
 
+.class-offering-edit-modal {
+  width: min(760px, calc(100vw - 32px));
+
+  max-height: 90vh;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+
+  scrollbar-width: thin;
+}
 /* =====================================================
    REMOVE NESTED BODY SCROLL
    Edit modal uses the parent scrollbar only.

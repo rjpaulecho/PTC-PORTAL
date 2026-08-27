@@ -28,6 +28,20 @@ interface StatusBlockDetails {
   pendingAssignments: number | null;
 
   approvedAssignments: number | null;
+
+  requiredAction: string | null;
+
+  capacity: {
+    maxStudents: number;
+    enrolledCount: number;
+    availableSlots: number;
+  } | null;
+
+  roomCapacity: {
+    offeringCapacity: number | null;
+    roomCapacity: number | null;
+    roomLabel: string | null;
+  } | null;
 }
 
 // =====================================================
@@ -43,19 +57,49 @@ interface UpdateOfferingStatusResponse {
 
   conflict?: boolean;
 
-  conflict_count?: number;
-
-  conflict_types?: string[];
-
   conflicts?: OfferingConflict[];
 
-  missing_fields?: string[];
+  summary?: {
+    total_conflicts?: number;
 
-  active_assignments?: number;
+    faculty_conflicts?: number;
 
-  pending_assignments?: number;
+    section_conflicts?: number;
 
-  approved_assignments?: number;
+    room_conflicts?: number;
+  };
+
+  missing_configuration?: string[];
+
+  enrollment_counts?: {
+    pending?: number;
+
+    approved?: number;
+
+    active?: number;
+  };
+
+  required_action?: string;
+
+  capacity?: {
+    max_students?: number;
+
+    enrolled_count?: number;
+
+    available_slots?: number;
+  };
+
+  offering_capacity?: number;
+
+  room?: {
+    room_id?: number;
+
+    room_code?: string;
+
+    room_name?: string;
+
+    capacity?: number;
+  };
 
   offering?: unknown;
 }
@@ -110,6 +154,12 @@ function emptyBlockDetails(): StatusBlockDetails {
     pendingAssignments: null,
 
     approvedAssignments: null,
+
+    requiredAction: null,
+
+    capacity: null,
+
+    roomCapacity: null,
   };
 }
 
@@ -205,8 +255,12 @@ export default function OfferingStatusModal({
   // Frontend guidance only.
   // Backend remains authoritative.
   //
-  // Room is optional.
-  // Schedule conflict resources are SECTION and FACULTY.
+  // Room is optional, but when assigned the backend checks:
+  // - physical room capacity
+  // - overlapping ROOM schedules
+  //
+  // The backend also refuses to Open an offering that has
+  // no available capacity.
   // =====================================================
 
   const openingRequirements = useMemo(() => {
@@ -230,8 +284,12 @@ export default function OfferingStatusModal({
 
     const maxStudents = Number(offering?.capacity?.max_students || 0);
 
+    const enrolledCount = Number(offering?.capacity?.enrolled_count || 0);
+
     if (!Number.isFinite(maxStudents) || maxStudents <= 0) {
       missing.push("Maximum students must be greater than 0");
+    } else if (offering?.capacity?.is_full || enrolledCount >= maxStudents) {
+      missing.push("At least one available capacity slot is required");
     }
 
     return missing;
@@ -241,6 +299,8 @@ export default function OfferingStatusModal({
     offering?.schedule?.days,
     offering?.schedule?.time,
     offering?.capacity?.max_students,
+    offering?.capacity?.enrolled_count,
+    offering?.capacity?.is_full,
   ]);
 
   const canOpen = openingRequirements.length === 0;
@@ -335,28 +395,97 @@ export default function OfferingStatusModal({
   };
 
   // =====================================================
+  // BACKEND CONFIGURATION FIELD LABEL
+  // =====================================================
+
+  const getConfigurationFieldLabel = (field: string) => {
+    switch (field) {
+      case "section_subject_open":
+        return "Section subject must be Open";
+
+      case "faculty_id":
+        return "Faculty must be assigned";
+
+      case "schedule_days":
+        return "Schedule days are required";
+
+      case "schedule_time":
+        return "Schedule time is required";
+
+      case "max_students":
+        return "Maximum students must be greater than 0";
+
+      default:
+        return field;
+    }
+  };
+
+  // =====================================================
   // CAPTURE BACKEND BUSINESS-RULE DETAILS
   // =====================================================
 
   const captureBlockDetails = (data: UpdateOfferingStatusResponse) => {
+    const enrollmentCounts = data.enrollment_counts;
+
+    const capacity = data.capacity;
+
+    const room = data.room;
+
     setBlockDetails({
-      missingFields: Array.isArray(data.missing_fields)
-        ? data.missing_fields
+      missingFields: Array.isArray(data.missing_configuration)
+        ? data.missing_configuration
         : [],
 
       activeAssignments:
-        typeof data.active_assignments === "number"
-          ? data.active_assignments
+        typeof enrollmentCounts?.active === "number"
+          ? enrollmentCounts.active
           : null,
 
       pendingAssignments:
-        typeof data.pending_assignments === "number"
-          ? data.pending_assignments
+        typeof enrollmentCounts?.pending === "number"
+          ? enrollmentCounts.pending
           : null,
 
       approvedAssignments:
-        typeof data.approved_assignments === "number"
-          ? data.approved_assignments
+        typeof enrollmentCounts?.approved === "number"
+          ? enrollmentCounts.approved
+          : null,
+
+      requiredAction:
+        typeof data.required_action === "string" && data.required_action.trim()
+          ? data.required_action.trim()
+          : null,
+
+      capacity:
+        typeof capacity?.max_students === "number" ||
+        typeof capacity?.enrolled_count === "number" ||
+        typeof capacity?.available_slots === "number"
+          ? {
+              maxStudents: Number(capacity?.max_students || 0),
+
+              enrolledCount: Number(capacity?.enrolled_count || 0),
+
+              availableSlots: Number(capacity?.available_slots || 0),
+            }
+          : null,
+
+      roomCapacity:
+        typeof data.offering_capacity === "number" ||
+        typeof room?.capacity === "number"
+          ? {
+              offeringCapacity:
+                typeof data.offering_capacity === "number"
+                  ? data.offering_capacity
+                  : null,
+
+              roomCapacity:
+                typeof room?.capacity === "number" ? room.capacity : null,
+
+              roomLabel:
+                room?.room_code && room?.room_name
+                  ? `${room.room_code} — ${room.room_name}`
+                  : room?.room_code || room?.room_name || null,
+            }
           : null,
     });
   };
@@ -496,13 +625,35 @@ export default function OfferingStatusModal({
       }
 
       // ===============================================
+      // 400
+      //
+      // Invalid requested status, missing cancellation
+      // reason, or invalid stored schedule format.
+      // ===============================================
+
+      if (response.status === 400) {
+        captureBlockDetails(data);
+
+        setError(
+          data.message ||
+            data.error ||
+            "The offering status request is invalid.",
+        );
+
+        return;
+      }
+
+      // ===============================================
       // 409
       //
       // Can be:
       // - SECTION conflict
       // - FACULTY conflict
+      // - ROOM conflict
       // - incomplete configuration
       // - section subject not Open
+      // - assigned room too small
+      // - no available offering capacity
       // - Pending assignment protection when closing
       // - Pending / Approved protection when cancelling
       // ===============================================
@@ -550,6 +701,8 @@ export default function OfferingStatusModal({
       console.log("UPDATE OFFERING STATUS SUCCESS:", data);
 
       onSuccess();
+
+      onClose();
     } catch (requestError) {
       console.error("UPDATE OFFERING STATUS ERROR:", requestError);
 
@@ -591,7 +744,10 @@ export default function OfferingStatusModal({
     blockDetails.missingFields.length > 0 ||
     blockDetails.activeAssignments !== null ||
     blockDetails.pendingAssignments !== null ||
-    blockDetails.approvedAssignments !== null;
+    blockDetails.approvedAssignments !== null ||
+    blockDetails.requiredAction !== null ||
+    blockDetails.capacity !== null ||
+    blockDetails.roomCapacity !== null;
 
   // =====================================================
   // DO NOT RENDER
@@ -699,7 +855,10 @@ export default function OfferingStatusModal({
               {offering.schedule?.days && offering.schedule?.time
                 ? `${offering.schedule.days} · ${offering.schedule.time}`
                 : "Not Assigned"}{" "}
-              · Capacity: {offering.capacity?.max_students ?? 0}
+              · Capacity:{" "}
+              {offering.capacity
+                ? `${offering.capacity.enrolled_count}/${offering.capacity.max_students}`
+                : "0"}
             </p>
           </div>
 
@@ -713,12 +872,8 @@ export default function OfferingStatusModal({
 
               <ul>
                 {blockDetails.missingFields.map((item) => (
-                  <li key={item}>Missing: {item}</li>
+                  <li key={item}>{getConfigurationFieldLabel(item)}</li>
                 ))}
-
-                {blockDetails.activeAssignments !== null && (
-                  <li>Active assignments: {blockDetails.activeAssignments}</li>
-                )}
 
                 {blockDetails.pendingAssignments !== null && (
                   <li>
@@ -731,7 +886,55 @@ export default function OfferingStatusModal({
                     Approved assignments: {blockDetails.approvedAssignments}
                   </li>
                 )}
+
+                {blockDetails.activeAssignments !== null && (
+                  <li>Active assignments: {blockDetails.activeAssignments}</li>
+                )}
+
+                {blockDetails.capacity && (
+                  <>
+                    <li>
+                      Maximum students: {blockDetails.capacity.maxStudents}
+                    </li>
+
+                    <li>
+                      Assigned students: {blockDetails.capacity.enrolledCount}
+                    </li>
+
+                    <li>
+                      Available slots: {blockDetails.capacity.availableSlots}
+                    </li>
+                  </>
+                )}
+
+                {blockDetails.roomCapacity && (
+                  <>
+                    {blockDetails.roomCapacity.roomLabel && (
+                      <li>Room: {blockDetails.roomCapacity.roomLabel}</li>
+                    )}
+
+                    {blockDetails.roomCapacity.offeringCapacity !== null && (
+                      <li>
+                        Offering capacity:{" "}
+                        {blockDetails.roomCapacity.offeringCapacity}
+                      </li>
+                    )}
+
+                    {blockDetails.roomCapacity.roomCapacity !== null && (
+                      <li>
+                        Room capacity: {blockDetails.roomCapacity.roomCapacity}
+                      </li>
+                    )}
+                  </>
+                )}
               </ul>
+
+              {blockDetails.requiredAction && (
+                <p>
+                  <strong>Required action:</strong>{" "}
+                  {blockDetails.requiredAction}
+                </p>
+              )}
             </div>
           )}
 
@@ -771,11 +974,16 @@ export default function OfferingStatusModal({
 
                     <li>Capacity is greater than 0</li>
 
+                    <li>At least one capacity slot is available</li>
+
                     <li>Backend will check SECTION schedule conflicts</li>
 
                     <li>Backend will check FACULTY schedule conflicts</li>
 
-                    <li>Room is optional</li>
+                    <li>
+                      Room is optional; when assigned, room capacity and ROOM
+                      schedule conflicts are checked
+                    </li>
                   </ul>
                 ) : (
                   <>
@@ -799,7 +1007,9 @@ export default function OfferingStatusModal({
                 <p>
                   A successful Open transition makes this offering available for
                   Registrar enrollment assignment and allows it to contribute to
-                  section readiness.
+                  section readiness. The backend still verifies stored schedule
+                  format, room capacity, schedule conflicts, and available
+                  capacity at the moment the transition is requested.
                 </p>
               </div>
             </>

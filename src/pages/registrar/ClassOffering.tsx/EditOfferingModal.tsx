@@ -41,6 +41,8 @@ interface RoomOption {
   capacity?: number | null;
 }
 
+type OfferingStatus = "Open" | "Closed" | "Cancelled";
+
 // =====================================================
 // RESPONSE
 // =====================================================
@@ -64,6 +66,8 @@ interface UpdateOfferingResponse {
     section_conflicts?: number;
 
     room_conflicts?: number;
+
+    [key: string]: unknown;
   };
 
   proposed_schedule?: {
@@ -80,8 +84,15 @@ interface UpdateOfferingResponse {
 
   conflict_types?: string[];
 
+  missing_configuration?: string[];
+
+  max_students?: number;
+
+  enrolled_count?: number;
+
   offering?: unknown;
 }
+
 // =====================================================
 // PROPS
 // =====================================================
@@ -194,6 +205,29 @@ export default function EditOfferingModal({
 
   const offeringId = offering?.offering_id;
 
+  const currentStatus: OfferingStatus =
+    offering?.status === "Open" ||
+    offering?.status === "Closed" ||
+    offering?.status === "Cancelled"
+      ? offering.status
+      : "Closed";
+
+  const isOpen = currentStatus === "Open";
+
+  const isClosed = currentStatus === "Closed";
+
+  const isCancelled = currentStatus === "Cancelled";
+
+  // =====================================================
+  // SECTION SUBJECT
+  // =====================================================
+
+  const sectionSubject = subject?.section_subject || null;
+
+  const sectionSubjectStatus = sectionSubject?.status || null;
+
+  const sectionSubjectOpen = sectionSubjectStatus === "Open";
+
   // =====================================================
   // RESET / LOAD CURRENT VALUES
   // =====================================================
@@ -213,11 +247,13 @@ export default function EditOfferingModal({
 
     setMaxStudents(
       String(
-        offering.capacity?.max_students ||
-          subject.section_subject?.max_students ||
+        offering.capacity?.max_students ??
+          subject.section_subject?.max_students ??
           50,
       ),
     );
+
+    setLoading(false);
 
     setError("");
 
@@ -247,23 +283,103 @@ export default function EditOfferingModal({
 
   // =====================================================
   // CURRENT ASSIGNED STUDENTS
+  //
+  // Backend counts active Pending + Approved assignments.
+  // The readiness row exposes that as enrolled_count.
   // =====================================================
 
   const enrolledCount = Number(offering?.capacity?.enrolled_count || 0);
 
+  const belowAssignedStudents =
+    validCapacity && numericCapacity < enrolledCount;
+
   // =====================================================
-  // DETECT CURRENT STATUS
+  // ROOM CAPACITY
   // =====================================================
 
-  const currentStatus = offering?.status || "Closed";
+  const roomCapacityExceeded = Boolean(
+    selectedRoom?.capacity &&
+    Number(selectedRoom.capacity) > 0 &&
+    validCapacity &&
+    numericCapacity > Number(selectedRoom.capacity),
+  );
 
-  const isOpen = currentStatus === "Open";
+  // =====================================================
+  // SCHEDULE STATE
+  // =====================================================
+
+  const hasDays = Boolean(scheduleDays.trim());
+
+  const hasTime = Boolean(scheduleTime.trim());
+
+  const schedulePairValid = hasDays === hasTime;
+
+  const hasCompleteSchedule = hasDays && hasTime;
+
+  // =====================================================
+  // CONFIGURATION PREVIEW
+  //
+  // This preview does NOT change status.
+  //
+  // PUT /subject-offerings/:id preserves current status.
+  // A Closed offering stays Closed after Edit.
+  // Registrar opens it separately through status management.
+  // =====================================================
+
+  const configurationComplete =
+    sectionSubjectOpen &&
+    Boolean(facultyId) &&
+    hasCompleteSchedule &&
+    validCapacity;
+
+  // =====================================================
+  // OPEN OFFERING VALIDITY
+  //
+  // An existing Open offering must remain completely
+  // configured after the edit.
+  // =====================================================
+
+  const openOfferingWouldRemainValid = !isOpen || configurationComplete;
+
+  // =====================================================
+  // FRONTEND SAVE ELIGIBILITY
+  // =====================================================
+
+  const canSave =
+    Boolean(subject) &&
+    Boolean(offering) &&
+    Boolean(offeringId) &&
+    !loading &&
+    !isCancelled &&
+    validCapacity &&
+    !belowAssignedStudents &&
+    !roomCapacityExceeded &&
+    schedulePairValid &&
+    openOfferingWouldRemainValid;
+
+  // =====================================================
+  // CLEAR SERVER FEEDBACK
+  // =====================================================
+
+  const clearFeedback = () => {
+    setError("");
+
+    setConflicts([]);
+  };
 
   // =====================================================
   // VALIDATE
   // =====================================================
 
   const validateForm = () => {
+    // ===============================================
+    // CANCELLED
+    // ===============================================
+
+    if (isCancelled) {
+      throw new Error("A cancelled subject offering cannot be edited.");
+    }
+
     // ===============================================
     // CAPACITY
     // ===============================================
@@ -286,13 +402,13 @@ export default function EditOfferingModal({
 
     // ===============================================
     // ROOM CAPACITY
-    //
-    // Room is NOT part of schedule conflicts.
-    //
-    // This only checks physical capacity.
     // ===============================================
 
-    if (selectedRoom?.capacity && numericCapacity > selectedRoom.capacity) {
+    if (
+      selectedRoom?.capacity &&
+      Number(selectedRoom.capacity) > 0 &&
+      numericCapacity > Number(selectedRoom.capacity)
+    ) {
       throw new Error(
         `Maximum students cannot exceed the selected room capacity of ${selectedRoom.capacity}.`,
       );
@@ -302,11 +418,7 @@ export default function EditOfferingModal({
     // SCHEDULE PAIR
     // ===============================================
 
-    const hasDays = Boolean(scheduleDays.trim());
-
-    const hasTime = Boolean(scheduleTime.trim());
-
-    if (hasDays !== hasTime) {
+    if (!schedulePairValid) {
       throw new Error(
         "Schedule days and schedule time must either both be provided or both be empty.",
       );
@@ -315,10 +427,19 @@ export default function EditOfferingModal({
     // ===============================================
     // OPEN OFFERING
     //
-    // An Open offering must remain complete.
+    // An Open offering must remain fully configured.
+    //
+    // This includes the section_subject itself remaining
+    // Open.
     // ===============================================
 
     if (isOpen) {
+      if (!sectionSubjectOpen) {
+        throw new Error(
+          "An Open offering requires its section subject to remain Open.",
+        );
+      }
+
       if (!facultyId) {
         throw new Error(
           "An Open offering must have an assigned faculty member.",
@@ -344,9 +465,7 @@ export default function EditOfferingModal({
       return;
     }
 
-    setError("");
-
-    setConflicts([]);
+    clearFeedback();
 
     onClose();
   };
@@ -365,9 +484,7 @@ export default function EditOfferingModal({
     try {
       setLoading(true);
 
-      setError("");
-
-      setConflicts([]);
+      clearFeedback();
 
       // ===============================================
       // VALIDATE FRONTEND
@@ -378,16 +495,13 @@ export default function EditOfferingModal({
       // ===============================================
       // PAYLOAD
       //
-      // IMPORTANT:
-      //
-      // Missing field in backend = preserve old value.
-      //
+      // Missing backend field = preserve current value.
       // Explicit null = clear optional value.
       //
-      // We intentionally send all editable values so
-      // the Registrar can clear optional assignments.
+      // Send every editable configuration field so the
+      // Registrar can intentionally clear optional values.
       //
-      // STATUS IS NOT EDITED HERE.
+      // STATUS IS NEVER EDITED HERE.
       // ===============================================
 
       const payload = {
@@ -401,8 +515,6 @@ export default function EditOfferingModal({
 
         max_students: numericCapacity,
       };
-
-      console.log("UPDATE SUBJECT OFFERING:", offeringId, payload);
 
       // ===============================================
       // REQUEST
@@ -428,30 +540,6 @@ export default function EditOfferingModal({
       // ===============================================
       // AUTHENTICATION
       // ===============================================
-      if (response.status === 409) {
-        console.log("========================================");
-
-        console.log("OFFERING CONFLICT RESPONSE:", data);
-
-        console.log(
-          "OFFERING CONFLICTS JSON:",
-          JSON.stringify(data.conflicts || [], null, 2),
-        );
-
-        console.log("CONFLICT SUMMARY:", data.summary);
-
-        console.log("PROPOSED SCHEDULE:", data.proposed_schedule);
-
-        console.log("========================================");
-
-        setConflicts(Array.isArray(data.conflicts) ? data.conflicts : []);
-
-        throw new Error(
-          data.message ||
-            data.error ||
-            "The offering could not be updated because of a conflict.",
-        );
-      }
 
       if (response.status === 401) {
         onUnauthorized();
@@ -479,20 +567,25 @@ export default function EditOfferingModal({
         throw new Error(
           data.message ||
             data.error ||
-            "The class offering could not be found.",
+            "The class offering, faculty, or room could not be found.",
         );
       }
 
       // ===============================================
-      // CONFLICT
+      // CONFLICT / BUSINESS RULE
       //
-      // Backend remains authoritative.
+      // One 409 branch only.
       //
-      // This includes:
-      // - SECTION schedule conflict
-      // - FACULTY schedule conflict
-      // - capacity protection
-      // - invalid status transitions/configuration
+      // Structured schedule conflicts are preserved for
+      // ConflictAlert.
+      //
+      // Other 409 cases such as:
+      // - Cancelled offering
+      // - Capacity below assignments
+      // - Room capacity
+      // - Open offering becoming incomplete
+      //
+      // still display the backend message.
       // ===============================================
 
       if (response.status === 409) {
@@ -501,7 +594,19 @@ export default function EditOfferingModal({
         throw new Error(
           data.message ||
             data.error ||
-            "The offering could not be updated because of a conflict.",
+            "The offering could not be updated because of a conflict or business rule.",
+        );
+      }
+
+      // ===============================================
+      // BAD REQUEST / VALIDATION
+      // ===============================================
+
+      if (response.status === 400) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "The class offering configuration is invalid.",
         );
       }
 
@@ -518,8 +623,6 @@ export default function EditOfferingModal({
       // ===============================================
       // SUCCESS
       // ===============================================
-
-      console.log("UPDATE OFFERING SUCCESS:", data);
 
       onSuccess();
 
@@ -633,17 +736,33 @@ export default function EditOfferingModal({
           {/* =============================================== */}
 
           <div className="class-offering-prepare-notice">
-            <strong>Current status: {currentStatus}</strong>
+            <strong>Current offering status: {currentStatus}</strong>
 
-            {isOpen ? (
+            <p>
+              Section subject status:{" "}
+              <strong>{sectionSubjectStatus || "Unavailable"}</strong>
+            </p>
+
+            {isOpen && (
               <p>
-                This offering is currently Open. It must remain completely
-                configured after editing or the backend will reject the update.
+                This offering is Open. After editing, faculty, schedule,
+                capacity, and the section subject must all remain valid or the
+                backend will reject the update.
               </p>
-            ) : (
+            )}
+
+            {isClosed && (
               <p>
-                This offering is currently Closed. You may complete its
-                configuration here, then manage its status separately if needed.
+                This offering is Closed. Editing can complete its configuration,
+                but saving here does not open it. Use Offering Status separately
+                when you are ready to open enrollment.
+              </p>
+            )}
+
+            {isCancelled && (
+              <p>
+                This offering is Cancelled. Cancellation is terminal, so the
+                configuration can no longer be edited.
               </p>
             )}
           </div>
@@ -663,19 +782,17 @@ export default function EditOfferingModal({
               <select
                 id="edit-offering-faculty"
                 value={facultyId}
-                disabled={loading}
+                disabled={loading || isCancelled}
                 onChange={(event) => {
                   setFacultyId(event.target.value);
 
-                  setError("");
-
-                  setConflicts([]);
+                  clearFeedback();
                 }}
               >
                 <option value="">Not Assigned</option>
 
                 {faculty.map((item) => (
-                  <option key={item.faculty_id} value={item.faculty_id}>
+                  <option key={item.faculty_id} value={String(item.faculty_id)}>
                     {getFacultyName(item)}
                   </option>
                 ))}
@@ -694,28 +811,27 @@ export default function EditOfferingModal({
               <select
                 id="edit-offering-room"
                 value={roomId}
-                disabled={loading}
+                disabled={loading || isCancelled}
                 onChange={(event) => {
                   setRoomId(event.target.value);
 
-                  setError("");
+                  clearFeedback();
                 }}
               >
                 <option value="">No Room Assigned</option>
 
                 {rooms.map((room) => (
-                  <option key={room.room_id} value={room.room_id}>
+                  <option key={room.room_id} value={String(room.room_id)}>
                     {room.room_code ? `${room.room_code} — ` : ""}
-
                     {room.room_name}
-
                     {room.capacity ? ` (${room.capacity})` : ""}
                   </option>
                 ))}
               </select>
 
               <small>
-                Optional. Room is not used for schedule conflict checking.
+                Optional. When assigned, room capacity and overlapping room
+                schedules are validated.
               </small>
             </div>
 
@@ -730,14 +846,12 @@ export default function EditOfferingModal({
                 id="edit-offering-days"
                 type="text"
                 value={scheduleDays}
-                disabled={loading}
+                disabled={loading || isCancelled}
                 placeholder="Example: Monday, Wednesday"
                 onChange={(event) => {
                   setScheduleDays(event.target.value);
 
-                  setError("");
-
-                  setConflicts([]);
+                  clearFeedback();
                 }}
               />
 
@@ -755,19 +869,18 @@ export default function EditOfferingModal({
                 id="edit-offering-time"
                 type="text"
                 value={scheduleTime}
-                disabled={loading}
+                disabled={loading || isCancelled}
                 placeholder="Example: 8:00 AM - 10:00 AM"
                 onChange={(event) => {
                   setScheduleTime(event.target.value);
 
-                  setError("");
-
-                  setConflicts([]);
+                  clearFeedback();
                 }}
               />
 
               <small>
-                Overlapping section or faculty schedules will be rejected.
+                Section, faculty, and assigned-room overlaps are rejected by the
+                backend.
               </small>
             </div>
 
@@ -784,22 +897,36 @@ export default function EditOfferingModal({
                 min={Math.max(1, enrolledCount)}
                 step={1}
                 value={maxStudents}
-                disabled={loading}
+                disabled={loading || isCancelled}
                 onChange={(event) => {
                   setMaxStudents(event.target.value);
 
-                  setError("");
+                  clearFeedback();
                 }}
               />
 
-              {enrolledCount > 0 && (
-                <small>Current assigned students: {enrolledCount}</small>
-              )}
-
-              {selectedRoom?.capacity ? (
+              {belowAssignedStudents ? (
+                <small>
+                  Capacity cannot be lower than the {enrolledCount} currently
+                  assigned student
+                  {enrolledCount !== 1 ? "s" : ""}.
+                </small>
+              ) : roomCapacityExceeded ? (
+                <small>
+                  Capacity exceeds the selected room capacity of{" "}
+                  {selectedRoom?.capacity}.
+                </small>
+              ) : enrolledCount > 0 ? (
+                <small>
+                  Current assigned students: {enrolledCount}
+                  {selectedRoom?.capacity
+                    ? ` • Room capacity: ${selectedRoom.capacity}`
+                    : ""}
+                </small>
+              ) : selectedRoom?.capacity ? (
                 <small>Selected room capacity: {selectedRoom.capacity}</small>
               ) : (
-                <small>Capacity cannot be lower than assigned students.</small>
+                <small>Capacity must be a positive whole number.</small>
               )}
             </div>
 
@@ -813,14 +940,77 @@ export default function EditOfferingModal({
               <input type="text" value={currentStatus} disabled />
 
               <small>
-                Status is managed separately from editing the class
-                configuration.
+                Status is managed separately from editing class configuration.
               </small>
             </div>
           </div>
 
           {/* =============================================== */}
-          {/* VALIDATION INFORMATION */}
+          {/* CONFIGURATION PREVIEW */}
+          {/* =============================================== */}
+
+          <div className="class-offering-open-requirements">
+            <h3>Configuration Check</h3>
+
+            <ul>
+              <li>
+                Section Subject:{" "}
+                {sectionSubjectOpen
+                  ? "Open"
+                  : sectionSubjectStatus || "Unavailable"}
+              </li>
+
+              <li>Faculty: {facultyId ? "Ready" : "Missing"}</li>
+
+              <li>Schedule Days: {hasDays ? "Ready" : "Missing"}</li>
+
+              <li>Schedule Time: {hasTime ? "Ready" : "Missing"}</li>
+
+              <li>
+                Schedule Pair:{" "}
+                {schedulePairValid ? "Valid" : "Days and time must be paired"}
+              </li>
+
+              <li>
+                Capacity:{" "}
+                {!validCapacity
+                  ? "Invalid"
+                  : belowAssignedStudents
+                    ? "Below assigned students"
+                    : roomCapacityExceeded
+                      ? "Above room capacity"
+                      : "Ready"}
+              </li>
+
+              <li>
+                Room: {roomId ? "Assigned — conflict checked" : "Optional"}
+              </li>
+            </ul>
+
+            <p>
+              <strong>
+                {configurationComplete
+                  ? "Configuration Complete"
+                  : "Configuration Incomplete"}
+              </strong>
+            </p>
+
+            {isClosed && configurationComplete && (
+              <small>
+                Saving these changes keeps the offering Closed. Open it
+                separately through Offering Status after this edit is saved.
+              </small>
+            )}
+
+            {isOpen && !configurationComplete && (
+              <small>
+                This Open offering cannot be saved in an incomplete state.
+              </small>
+            )}
+          </div>
+
+          {/* =============================================== */}
+          {/* SCHEDULE VALIDATION */}
           {/* =============================================== */}
 
           <div className="class-offering-open-requirements">
@@ -831,9 +1021,9 @@ export default function EditOfferingModal({
 
               <li>Same faculty + overlapping schedule = conflict</li>
 
-              <li>Room is not included in schedule conflict checking</li>
+              <li>Same assigned room + overlapping schedule = conflict</li>
 
-              <li>Adjacent schedules are allowed</li>
+              <li>Adjacent non-overlapping schedules are allowed</li>
             </ul>
           </div>
         </div>
@@ -850,7 +1040,7 @@ export default function EditOfferingModal({
           <button
             type="button"
             className="class-offering-primary-button"
-            disabled={loading || !validCapacity}
+            disabled={!canSave}
             onClick={handleSave}
           >
             {loading ? "Saving..." : "Save Changes"}

@@ -2,7 +2,7 @@
 // TYPES
 // =====================================================
 
-export type OfferingConflictType = "SECTION" | "FACULTY" | string;
+export type OfferingConflictType = "SECTION" | "FACULTY" | "ROOM" | string;
 
 // =====================================================
 // BACKEND CONFLICT SHAPE
@@ -58,8 +58,8 @@ export interface OfferingConflict {
   // ===================================================
   // OPTIONAL LEGACY / CREATE-ENDPOINT SUPPORT
   //
-  // Keeps the component compatible if another backend
-  // endpoint still returns:
+  // Keeps the component compatible if another endpoint
+  // returns:
   //
   // {
   //   type: "FACULTY",
@@ -92,6 +92,14 @@ export interface OfferingConflict {
       faculty_id?: number;
 
       faculty_name?: string;
+    } | null;
+
+    room?: {
+      room_id?: number;
+
+      room_code?: string;
+
+      room_name?: string;
     } | null;
 
     schedule?: {
@@ -137,6 +145,14 @@ interface NormalizedConflict {
     faculty_name?: string;
   } | null;
 
+  room: {
+    room_id?: number;
+
+    room_code?: string;
+
+    room_name?: string;
+  } | null;
+
   schedule: {
     days?: string | null;
 
@@ -159,35 +175,61 @@ interface ConflictAlertProps {
 }
 
 // =====================================================
+// NORMALIZE CONFLICT TYPES
+// =====================================================
+
+function normalizeConflictTypes(
+  conflictTypes: OfferingConflictType[] | undefined,
+  fallbackType?: OfferingConflictType,
+) {
+  const normalized = Array.isArray(conflictTypes)
+    ? conflictTypes
+        .map((type) => String(type).trim().toUpperCase())
+        .filter(Boolean)
+    : [];
+
+  if (normalized.length > 0) {
+    return [...new Set(normalized)];
+  }
+
+  if (fallbackType) {
+    const type = String(fallbackType).trim().toUpperCase();
+
+    if (type) {
+      return [type];
+    }
+  }
+
+  return ["CONFLICT"];
+}
+
+// =====================================================
 // NORMALIZE BACKEND RESPONSE
 // =====================================================
 
 function normalizeConflict(conflict: OfferingConflict): NormalizedConflict {
   // ===================================================
-  // CURRENT PUT RESPONSE
+  // CURRENT RESPONSE
   // ===================================================
 
   if (
     conflict.subject ||
     conflict.section ||
     conflict.faculty ||
-    conflict.schedule
+    conflict.room ||
+    conflict.schedule ||
+    conflict.conflict_types
   ) {
-    const conflictTypes =
-      Array.isArray(conflict.conflict_types) &&
-      conflict.conflict_types.length > 0
-        ? conflict.conflict_types.map((type) => String(type).toUpperCase())
-        : conflict.type
-          ? [String(conflict.type).toUpperCase()]
-          : ["CONFLICT"];
-
     return {
       offering_id: conflict.offering_id,
 
-      conflictTypes,
+      conflictTypes: normalizeConflictTypes(
+        conflict.conflict_types,
+        conflict.type,
+      ),
 
       commonDays: Array.isArray(conflict.common_days)
-        ? conflict.common_days
+        ? conflict.common_days.map((day) => String(day).trim()).filter(Boolean)
         : [],
 
       message: conflict.message,
@@ -198,6 +240,8 @@ function normalizeConflict(conflict: OfferingConflict): NormalizedConflict {
 
       faculty: conflict.faculty || null,
 
+      room: conflict.room || null,
+
       schedule: conflict.schedule || null,
 
       status: conflict.status,
@@ -205,7 +249,7 @@ function normalizeConflict(conflict: OfferingConflict): NormalizedConflict {
   }
 
   // ===================================================
-  // LEGACY / CREATE RESPONSE
+  // LEGACY RESPONSE
   // ===================================================
 
   const legacy = conflict.conflicting_offering;
@@ -213,9 +257,7 @@ function normalizeConflict(conflict: OfferingConflict): NormalizedConflict {
   return {
     offering_id: legacy?.offering_id,
 
-    conflictTypes: conflict.type
-      ? [String(conflict.type).toUpperCase()]
-      : ["CONFLICT"],
+    conflictTypes: normalizeConflictTypes(undefined, conflict.type),
 
     commonDays: [],
 
@@ -226,6 +268,8 @@ function normalizeConflict(conflict: OfferingConflict): NormalizedConflict {
     section: legacy?.section || null,
 
     faculty: legacy?.faculty || null,
+
+    room: legacy?.room || null,
 
     schedule: legacy?.schedule || null,
 
@@ -245,6 +289,9 @@ function getConflictLabel(type: string) {
     case "FACULTY":
       return "Faculty Schedule Conflict";
 
+    case "ROOM":
+      return "Room Schedule Conflict";
+
     default:
       return "Schedule Conflict";
   }
@@ -258,20 +305,24 @@ function getConflictExplanation(type: string) {
   switch (String(type).trim().toUpperCase()) {
     case "SECTION":
       return (
-        "The selected section already has another " +
-        "subject scheduled during this time."
+        "The selected section already has another subject " +
+        "scheduled during this time."
       );
 
     case "FACULTY":
       return (
-        "The selected faculty member is already " +
-        "assigned to another class during this time."
+        "The selected faculty member is already assigned " +
+        "to another class during this time."
+      );
+
+    case "ROOM":
+      return (
+        "The selected room is already assigned to another " +
+        "class during this time."
       );
 
     default:
-      return (
-        "This schedule overlaps with another " + "existing class offering."
-      );
+      return "This schedule overlaps with another existing class offering.";
   }
 }
 
@@ -287,7 +338,7 @@ function getSubjectText(conflict: NormalizedConflict) {
   }
 
   if (subject.subject_code && subject.subject_name) {
-    return `${subject.subject_code} — ` + `${subject.subject_name}`;
+    return `${subject.subject_code} — ${subject.subject_name}`;
   }
 
   if (subject.subject_code) {
@@ -306,29 +357,50 @@ function getSubjectText(conflict: NormalizedConflict) {
 // =====================================================
 
 function getScheduleText(conflict: NormalizedConflict) {
-  const days = conflict.schedule?.days;
+  const days = conflict.schedule?.days?.trim();
 
-  const time = conflict.schedule?.time;
+  const time = conflict.schedule?.time?.trim();
 
   if (days && time) {
     return `${days} • ${time}`;
   }
 
   if (days) {
-    return days;
+    return `${days} • Time not available`;
   }
 
   if (time) {
-    return time;
+    return `Days not available • ${time}`;
   }
 
   return "Schedule not available";
 }
 
 // =====================================================
+// ROOM TEXT
+// =====================================================
+
+function getRoomText(conflict: NormalizedConflict) {
+  const room = conflict.room;
+
+  if (!room) {
+    return "No room assigned";
+  }
+
+  if (room.room_code && room.room_name) {
+    return `${room.room_code} — ${room.room_name}`;
+  }
+
+  return room.room_code || room.room_name || "Assigned room";
+}
+
+// =====================================================
 // MAIN CONFLICT TYPE
 //
 // Used only for CSS accent.
+//
+// Existing CSS may only have section/faculty/conflict.
+// ROOM safely falls back to the generic conflict accent.
 // =====================================================
 
 function getPrimaryConflictType(conflict: NormalizedConflict) {
@@ -341,6 +413,46 @@ function getPrimaryConflictType(conflict: NormalizedConflict) {
   }
 
   return "conflict";
+}
+
+// =====================================================
+// RESOLUTION TEXT
+// =====================================================
+
+function getResolutionText(conflicts: NormalizedConflict[]) {
+  const types = new Set(
+    conflicts.flatMap((conflict) => conflict.conflictTypes),
+  );
+
+  const resolutions: string[] = [];
+
+  if (types.has("SECTION")) {
+    resolutions.push("choose another non-overlapping schedule for the section");
+  }
+
+  if (types.has("FACULTY")) {
+    resolutions.push(
+      "choose another faculty member or a non-overlapping schedule",
+    );
+  }
+
+  if (types.has("ROOM")) {
+    resolutions.push("choose another room or a non-overlapping schedule");
+  }
+
+  if (resolutions.length === 0) {
+    return "Choose a schedule that does not overlap with the conflicting offering.";
+  }
+
+  if (resolutions.length === 1) {
+    return `To resolve this conflict, ${resolutions[0]}.`;
+  }
+
+  const finalResolution = resolutions.pop();
+
+  return `To resolve these conflicts, ${resolutions.join(
+    ", ",
+  )}, and ${finalResolution}.`;
 }
 
 // =====================================================
@@ -368,6 +480,8 @@ export default function ConflictAlert({
 
   const normalizedConflicts = conflicts.map(normalizeConflict);
 
+  const resolutionText = getResolutionText(normalizedConflicts);
+
   // =====================================================
   // RENDER
   // =====================================================
@@ -383,7 +497,9 @@ export default function ConflictAlert({
       {/* ================================================= */}
 
       <div className="class-offering-conflict-header">
-        <div className="class-offering-conflict-icon">!</div>
+        <div className="class-offering-conflict-icon" aria-hidden="true">
+          !
+        </div>
 
         <div>
           <h3>{title}</h3>
@@ -406,8 +522,8 @@ export default function ConflictAlert({
         </strong>
 
         <p>
-          Review each conflict below before choosing another schedule or faculty
-          member.
+          Review each conflict below before changing the schedule, faculty
+          member, or room.
         </p>
       </div>
 
@@ -424,6 +540,8 @@ export default function ConflictAlert({
 
           const facultyName =
             conflict.faculty?.faculty_name || "No faculty assigned";
+
+          const roomName = getRoomText(conflict);
 
           const status = conflict.status || "Unknown";
 
@@ -470,7 +588,7 @@ export default function ConflictAlert({
                 {/* OFFERING */}
                 {/* ===================================== */}
 
-                {conflict.offering_id && (
+                {conflict.offering_id !== undefined && (
                   <div className="class-offering-conflict-detail">
                     <span>Offering</span>
 
@@ -509,6 +627,16 @@ export default function ConflictAlert({
                 </div>
 
                 {/* ===================================== */}
+                {/* ROOM */}
+                {/* ===================================== */}
+
+                <div className="class-offering-conflict-detail">
+                  <span>Room</span>
+
+                  <strong>{roomName}</strong>
+                </div>
+
+                {/* ===================================== */}
                 {/* SCHEDULE */}
                 {/* ===================================== */}
 
@@ -524,7 +652,10 @@ export default function ConflictAlert({
 
                 {conflict.commonDays.length > 0 && (
                   <div className="class-offering-conflict-detail">
-                    <span>Overlapping Day</span>
+                    <span>
+                      Overlapping Day
+                      {conflict.commonDays.length !== 1 ? "s" : ""}
+                    </span>
 
                     <strong>{conflict.commonDays.join(", ")}</strong>
                   </div>
@@ -565,10 +696,7 @@ export default function ConflictAlert({
       <div className="class-offering-conflict-help">
         <strong>How to resolve</strong>
 
-        <p>
-          Change the faculty member or select a schedule that does not overlap
-          with the conflicting offerings shown above.
-        </p>
+        <p>{resolutionText}</p>
       </div>
     </div>
   );

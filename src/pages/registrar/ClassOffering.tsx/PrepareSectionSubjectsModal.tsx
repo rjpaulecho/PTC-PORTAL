@@ -21,15 +21,51 @@ interface PrepareSectionSubjectsResponse {
 
   error?: string;
 
-  created?: number;
+  mode?: "curriculum" | "special";
 
-  skipped?: number;
+  summary?: {
+    requested?: number;
 
-  created_count?: number;
+    created?: number;
 
-  skipped_count?: number;
+    already_existing?: number;
 
-  section_subjects?: unknown[];
+    max_students?: number | null;
+  };
+
+  created?: Array<{
+    section_subject_id?: number;
+
+    section_id?: number;
+
+    subject_id?: number;
+
+    subject_code?: string;
+
+    subject_name?: string;
+
+    max_students?: number | null;
+
+    status?: "Open" | "Closed" | "Cancelled";
+
+    mode?: "curriculum" | "special";
+  }>;
+
+  skipped?: Array<{
+    section_subject_id?: number;
+
+    subject_id?: number;
+
+    subject_code?: string;
+
+    subject_name?: string;
+
+    max_students?: number | null;
+
+    status?: "Open" | "Closed" | "Cancelled";
+
+    reason?: string;
+  }>;
 }
 
 // =====================================================
@@ -102,10 +138,6 @@ export default function PrepareSectionSubjectsModal({
 
   semesterId,
 
-  courseId,
-
-  yearLevel,
-
   curriculumId,
 
   sectionId,
@@ -166,15 +198,27 @@ export default function PrepareSectionSubjectsModal({
 
   // =====================================================
   // VALID CONTEXT
+  //
+  // Curriculum-mode backend contract requires:
+  // - academic_year_id
+  // - semester_id
+  // - curriculum_id
+  // - section_id
+  // - subject_ids
+  //
+  // course_id and year_level are deliberately NOT sent.
+  // The backend derives those constraints from the selected
+  // section and validates the curriculum subjects against
+  // section.year_level + selected semester.
   // =====================================================
 
-  const hasValidContext =
-    Boolean(academicYearId) &&
-    Boolean(semesterId) &&
-    Boolean(courseId) &&
-    Boolean(yearLevel) &&
-    Boolean(curriculumId) &&
-    Boolean(sectionId);
+  const hasValidContext = useMemo(() => {
+    const ids = [academicYearId, semesterId, curriculumId, sectionId].map(
+      Number,
+    );
+
+    return ids.every((value) => Number.isInteger(value) && value > 0);
+  }, [academicYearId, semesterId, curriculumId, sectionId]);
 
   // =====================================================
   // CLOSE
@@ -237,15 +281,11 @@ export default function PrepareSectionSubjectsModal({
       // =================================================
 
       const payload = {
-        mode: "curriculum",
+        mode: "curriculum" as const,
 
         academic_year_id: Number(academicYearId),
 
         semester_id: Number(semesterId),
-
-        course_id: Number(courseId),
-
-        year_level: Number(yearLevel),
 
         curriculum_id: Number(curriculumId),
 
@@ -257,8 +297,6 @@ export default function PrepareSectionSubjectsModal({
 
         subject_ids: subjectIds,
       };
-
-      console.log("PREPARE CURRICULUM SECTION SUBJECTS:", payload);
 
       // =================================================
       // REQUEST
@@ -305,6 +343,30 @@ export default function PrepareSectionSubjectsModal({
       }
 
       // =================================================
+      // VALIDATION
+      // =================================================
+
+      if (response.status === 400) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "The curriculum section-subject request is invalid.",
+        );
+      }
+
+      // =================================================
+      // NOT FOUND
+      // =================================================
+
+      if (response.status === 404) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "The academic period, curriculum, section, or subject could not be found.",
+        );
+      }
+
+      // =================================================
       // CONFLICT
       // =================================================
 
@@ -330,8 +392,9 @@ export default function PrepareSectionSubjectsModal({
       // SUCCESS
       // =================================================
 
-      console.log("PREPARE SECTION SUBJECTS SUCCESS:", data);
-
+      // The backend may create some rows and skip rows that
+      // already exist. Refresh from readiness/setup-data so
+      // the table reflects the authoritative result.
       onSuccess();
 
       onClose();
@@ -365,7 +428,7 @@ export default function PrepareSectionSubjectsModal({
       className="class-offering-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !loading) {
           handleClose();
         }
       }}
@@ -460,8 +523,10 @@ export default function PrepareSectionSubjectsModal({
             </strong>
 
             <p>
-              This creates the section-subject records only. Faculty, schedule,
-              room, and class offering configuration happen afterwards.
+              This creates the missing normal curriculum section-subject records
+              as Open. It does not create subject offerings yet; faculty,
+              schedule, optional room, and offering capacity are configured
+              afterwards.
             </p>
           </div>
 
@@ -545,9 +610,10 @@ export default function PrepareSectionSubjectsModal({
             <strong>What happens next?</strong>
 
             <p>
-              After preparation, these subjects will change from{" "}
+              After preparation, these subjects change from{" "}
               <b>NO SECTION SUBJECT</b> to <b>NO OFFERING</b>. The Registrar can
-              then create faculty, schedule, room, and capacity configuration.
+              then create each class offering with faculty, schedule, optional
+              room, and capacity configuration.
             </p>
           </div>
         </div>

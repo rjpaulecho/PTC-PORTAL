@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { authService } from "../../../services/auth.service";
 
@@ -110,17 +110,53 @@ interface CreateSpecialSectionSubjectResponse {
 
   error?: string;
 
-  created?: number;
+  mode?: "curriculum" | "special";
 
-  skipped?: number;
+  special_reason?: string | null;
 
-  created_count?: number;
+  summary?: {
+    requested?: number;
 
-  skipped_count?: number;
+    created?: number;
 
-  section_subjects?: unknown[];
+    already_existing?: number;
 
-  section_subject?: unknown;
+    max_students?: number | null;
+  };
+
+  created?: Array<{
+    section_subject_id?: number;
+
+    section_id?: number;
+
+    subject_id?: number;
+
+    subject_code?: string;
+
+    subject_name?: string;
+
+    max_students?: number | null;
+
+    status?: "Open" | "Closed" | "Cancelled";
+
+    mode?: "curriculum" | "special";
+  }>;
+
+  skipped?: Array<{
+    section_subject_id?: number;
+
+    subject_id?: number;
+
+    subject_code?: string;
+
+    subject_name?: string;
+
+    max_students?: number | null;
+
+    status?: "Open" | "Closed" | "Cancelled";
+
+    reason?: string;
+  }>;
 }
 
 // =====================================================
@@ -232,8 +268,6 @@ export default function AddSpecialOfferingModal({
 
   semesterId,
 
-  courseId,
-
   yearLevel,
 
   curriculumId,
@@ -287,28 +321,54 @@ export default function AddSpecialOfferingModal({
   const [error, setError] = useState("");
 
   // =====================================================
-  // SETUP VALIDATION
+  // CREATION CONTEXT VALIDATION
+  //
+  // SPECIAL mode requires:
+  // - academic_year_id
+  // - semester_id
+  // - section_id
+  //
+  // curriculum_id and year_level are used only for safely
+  // identifying retake/special candidates in the picker.
   // =====================================================
 
-  const setupValid = useMemo(() => {
-    const ids = [
-      academicYearId,
-      semesterId,
-      courseId,
-      yearLevel,
-      curriculumId,
-      sectionId,
-    ].map(Number);
+  const creationContextValid = useMemo(() => {
+    const ids = [academicYearId, semesterId, sectionId].map(Number);
 
     return ids.every((value) => Number.isInteger(value) && value > 0);
-  }, [
-    academicYearId,
-    semesterId,
-    courseId,
-    yearLevel,
-    curriculumId,
-    sectionId,
-  ]);
+  }, [academicYearId, semesterId, sectionId]);
+
+  // =====================================================
+  // SUBJECT PICKER CONTEXT
+  // =====================================================
+
+  const candidateLookupValid = useMemo(() => {
+    const numericCurriculumId = Number(curriculumId);
+
+    const numericYearLevel = Number(yearLevel);
+
+    return (
+      creationContextValid &&
+      Number.isInteger(numericCurriculumId) &&
+      numericCurriculumId > 0 &&
+      Number.isInteger(numericYearLevel) &&
+      numericYearLevel > 0
+    );
+  }, [creationContextValid, curriculumId, yearLevel]);
+
+  // =====================================================
+  // STABLE EXISTING SUBJECT KEY
+  // =====================================================
+
+  const existingSubjectKey = useMemo(
+    () =>
+      existingSubjectIds
+        .map(Number)
+        .filter((value) => Number.isInteger(value) && value > 0)
+        .sort((a, b) => a - b)
+        .join(","),
+    [existingSubjectIds],
+  );
 
   // =====================================================
   // RESET FORM
@@ -322,8 +382,8 @@ export default function AddSpecialOfferingModal({
     setSubjectId("");
 
     setMaxStudents(
-      Number.isFinite(Number(defaultCapacity)) && Number(defaultCapacity) > 0
-        ? String(defaultCapacity)
+      Number.isInteger(Number(defaultCapacity)) && Number(defaultCapacity) > 0
+        ? String(Number(defaultCapacity))
         : "50",
     );
 
@@ -337,18 +397,33 @@ export default function AddSpecialOfferingModal({
   // =====================================================
   // LOAD SPECIAL SUBJECT CANDIDATES
   //
-  // We merge:
-  // 1. all subjects already mapped to the selected curriculum
-  //    across its year levels / semesters (supports retakes)
-  // 2. catalog subjects not yet mapped to this curriculum
+  // Eligible special candidates:
   //
-  // Current-term section subjects are filtered out so the
-  // Registrar cannot intentionally create a duplicate through
-  // this modal.
+  // - curriculum subjects from OTHER year/semester terms
+  //   (retake / irregular cases)
+  //
+  // - catalog subjects not mapped to the curriculum
+  //   (approved special classes)
+  //
+  // Excluded:
+  //
+  // - subjects already prepared for this section + term
+  //
+  // - normal subjects that belong to the CURRENT selected
+  //   curriculum year + semester. Those must be prepared
+  //   through normal curriculum mode, not special mode.
   // =====================================================
 
   useEffect(() => {
-    if (!open || !setupValid) {
+    if (!open) {
+      return;
+    }
+
+    if (!candidateLookupValid) {
+      setSubjectOptions([]);
+
+      setLoadingSubjects(false);
+
       return;
     }
 
@@ -360,14 +435,13 @@ export default function AddSpecialOfferingModal({
 
         setError("");
 
-        const curriculumUrl = `${CURRICULUM_API_BASE_URL}/${Number(curriculumId)}`;
+        const curriculumUrl = `${CURRICULUM_API_BASE_URL}/${Number(
+          curriculumId,
+        )}`;
 
-        const availableUrl = `${CURRICULUM_API_BASE_URL}/${Number(curriculumId)}/available-subjects`;
-
-        console.log("LOAD SPECIAL OFFERING SUBJECTS:", {
-          curriculumUrl,
-          availableUrl,
-        });
+        const availableUrl = `${CURRICULUM_API_BASE_URL}/${Number(
+          curriculumId,
+        )}/available-subjects`;
 
         const [curriculumResponse, availableResponse] = await Promise.all([
           authService.authFetch(curriculumUrl, {
@@ -391,10 +465,6 @@ export default function AddSpecialOfferingModal({
           }),
         ]);
 
-        // ===============================================
-        // AUTH
-        // ===============================================
-
         if (
           curriculumResponse.status === 401 ||
           availableResponse.status === 401
@@ -410,9 +480,18 @@ export default function AddSpecialOfferingModal({
         const availableData =
           await readJsonResponse<AvailableSubjectsResponse>(availableResponse);
 
-        // ===============================================
-        // ERRORS
-        // ===============================================
+        if (
+          curriculumResponse.status === 403 ||
+          availableResponse.status === 403
+        ) {
+          throw new Error(
+            curriculumData.message ||
+              curriculumData.error ||
+              availableData.message ||
+              availableData.error ||
+              "You are not authorized to load special-subject candidates.",
+          );
+        }
 
         if (!curriculumResponse.ok || !curriculumData.success) {
           throw new Error(
@@ -429,10 +508,6 @@ export default function AddSpecialOfferingModal({
               "Failed to load subject catalog options.",
           );
         }
-
-        // ===============================================
-        // MERGE / DEDUPE
-        // ===============================================
 
         const map = new Map<number, SpecialSubjectOption>();
 
@@ -460,13 +535,29 @@ export default function AddSpecialOfferingModal({
         }
 
         const existingSet = new Set(
-          existingSubjectIds
-            .map(Number)
-            .filter((value) => Number.isInteger(value) && value > 0),
+          existingSubjectKey ? existingSubjectKey.split(",").map(Number) : [],
         );
 
+        const selectedYearLevel = Number(yearLevel);
+
+        const selectedSemesterId = Number(semesterId);
+
         const filtered = Array.from(map.values())
-          .filter((item) => !existingSet.has(item.subject_id))
+          .filter((item) => {
+            if (existingSet.has(item.subject_id)) {
+              return false;
+            }
+
+            if (
+              item.source === "curriculum" &&
+              item.year_level === selectedYearLevel &&
+              item.semester_id === selectedSemesterId
+            ) {
+              return false;
+            }
+
+            return true;
+          })
           .sort((a, b) => a.subject_code.localeCompare(b.subject_code));
 
         setSubjectOptions(filtered);
@@ -499,7 +590,15 @@ export default function AddSpecialOfferingModal({
     return () => {
       controller.abort();
     };
-  }, [open, setupValid, curriculumId, existingSubjectIds, onUnauthorized]);
+  }, [
+    open,
+    candidateLookupValid,
+    curriculumId,
+    yearLevel,
+    semesterId,
+    existingSubjectKey,
+    onUnauthorized,
+  ]);
 
   // =====================================================
   // SELECTED SUBJECT
@@ -511,6 +610,28 @@ export default function AddSpecialOfferingModal({
       null,
     [subjectOptions, subjectId],
   );
+
+  // =====================================================
+  // CAPACITY
+  // =====================================================
+
+  const numericCapacity = Number(maxStudents);
+
+  const capacityValid =
+    Number.isInteger(numericCapacity) && numericCapacity > 0;
+
+  // =====================================================
+  // SUBMIT ELIGIBILITY
+  // =====================================================
+
+  const canSubmit =
+    !loading &&
+    !loadingSubjects &&
+    creationContextValid &&
+    candidateLookupValid &&
+    Boolean(selectedSubject) &&
+    capacityValid &&
+    Boolean(reason.trim());
 
   // =====================================================
   // CLOSE
@@ -530,7 +651,7 @@ export default function AddSpecialOfferingModal({
   // SUBMIT
   // =====================================================
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (loading) {
@@ -543,9 +664,15 @@ export default function AddSpecialOfferingModal({
     // SETUP
     // ===============================================
 
-    if (!setupValid) {
+    if (!creationContextValid) {
+      setError("Complete Academic Year, Semester, and Section first.");
+
+      return;
+    }
+
+    if (!candidateLookupValid) {
       setError(
-        "Complete Academic Year, Semester, Course, Year Level, Curriculum, and Section first.",
+        "Select a valid Curriculum and Year Level first so special / retake candidates can be identified safely.",
       );
 
       return;
@@ -571,9 +698,7 @@ export default function AddSpecialOfferingModal({
     // CAPACITY
     // ===============================================
 
-    const numericCapacity = Number(maxStudents);
-
-    if (!Number.isInteger(numericCapacity) || numericCapacity <= 0) {
+    if (!capacityValid) {
       setError("Maximum students must be a positive whole number.");
 
       return;
@@ -605,17 +730,11 @@ export default function AddSpecialOfferingModal({
       const payload = {
         mode: "special" as const,
 
+        section_id: Number(sectionId),
+
         academic_year_id: Number(academicYearId),
 
         semester_id: Number(semesterId),
-
-        course_id: Number(courseId),
-
-        year_level: Number(yearLevel),
-
-        curriculum_id: Number(curriculumId),
-
-        section_id: Number(sectionId),
 
         subject_ids: [numericSubjectId],
 
@@ -664,15 +783,21 @@ export default function AddSpecialOfferingModal({
         return;
       }
 
+      if (response.status === 404) {
+        setError(
+          data.message ||
+            data.error ||
+            "The selected academic period, section, or subject could not be found.",
+        );
+
+        return;
+      }
+
       // ===============================================
       // BUSINESS RULE
       // ===============================================
 
-      if (
-        response.status === 400 ||
-        response.status === 409 ||
-        response.status === 422
-      ) {
+      if (response.status === 400 || response.status === 409) {
         setError(
           data.message ||
             data.error ||
@@ -705,6 +830,8 @@ export default function AddSpecialOfferingModal({
       console.log("CREATE SPECIAL SECTION SUBJECT SUCCESS:", data);
 
       onSuccess();
+
+      onClose();
     } catch (requestError) {
       console.error("CREATE SPECIAL SECTION SUBJECT ERROR:", requestError);
 
@@ -824,7 +951,7 @@ export default function AddSpecialOfferingModal({
               <select
                 id="special-offering-subject"
                 value={subjectId}
-                disabled={loading || loadingSubjects || !setupValid}
+                disabled={loading || loadingSubjects || !candidateLookupValid}
                 onChange={(event) => {
                   setSubjectId(event.target.value);
 
@@ -838,7 +965,7 @@ export default function AddSpecialOfferingModal({
                 </option>
 
                 {subjectOptions.map((item) => (
-                  <option key={item.subject_id} value={item.subject_id}>
+                  <option key={item.subject_id} value={String(item.subject_id)}>
                     {item.subject_code} — {item.subject_name}
                     {item.semester_name ? ` (${item.semester_name})` : ""}
                   </option>
@@ -846,9 +973,19 @@ export default function AddSpecialOfferingModal({
               </select>
 
               <small>
-                Subjects already prepared for the current section and term are
-                excluded.
+                Already-prepared subjects and normal subjects from the current
+                curriculum term are excluded. Use special mode only for
+                legitimate retake, irregular, or approved special-class cases.
               </small>
+
+              {!loadingSubjects &&
+                candidateLookupValid &&
+                subjectOptions.length === 0 && (
+                  <small>
+                    No eligible special / retake candidates are available for
+                    this section context.
+                  </small>
+                )}
             </div>
 
             {/* ============================================= */}
@@ -893,19 +1030,28 @@ export default function AddSpecialOfferingModal({
                 {selectedSubject.units !== 1 ? "s" : ""} · Lecture{" "}
                 {selectedSubject.lecture_hours} hr · Laboratory{" "}
                 {selectedSubject.laboratory_hours} hr
-                {selectedSubject.semester_name
-                  ? ` · Curriculum term: ${selectedSubject.semester_name}`
-                  : ""}
+                {selectedSubject.source === "curriculum" &&
+                selectedSubject.semester_name
+                  ? ` · Original curriculum term: ${selectedSubject.semester_name}`
+                  : selectedSubject.source === "catalog"
+                    ? " · Catalog special subject"
+                    : ""}
               </p>
 
-              {selectedSubject.semester_id &&
-                Number(selectedSubject.semester_id) !== Number(semesterId) && (
-                  <p>
-                    This subject normally belongs to a different curriculum
-                    semester. Special mode is required to offer it in the
-                    selected term.
-                  </p>
-                )}
+              {selectedSubject.source === "curriculum" && (
+                <p>
+                  This subject belongs to another curriculum term. Use special
+                  mode only for a legitimate retake, irregular, or approved
+                  exception in the selected term.
+                </p>
+              )}
+
+              {selectedSubject.source === "catalog" && (
+                <p>
+                  This subject is outside the selected curriculum mapping.
+                  Confirm the academic exception is approved before creating it.
+                </p>
+              )}
             </div>
           )}
 
@@ -944,18 +1090,17 @@ export default function AddSpecialOfferingModal({
             <h3>After Creation</h3>
 
             <ul>
+              <li>The backend creates the special section subject as Open.</li>
+
               <li>
                 The special subject appears in Special / Retake Offerings.
               </li>
 
-              <li>
-                It is still a section-level class plan, not a student
-                assignment.
-              </li>
+              <li>No subject offering or student assignment is created yet.</li>
 
               <li>
-                Use Create Offering to assign faculty, schedule, optional room,
-                and offering capacity.
+                Use Create Offering next to assign faculty, schedule, optional
+                room, and offering capacity.
               </li>
 
               <li>
@@ -978,14 +1123,7 @@ export default function AddSpecialOfferingModal({
           <button
             type="submit"
             className="class-offering-primary-button"
-            disabled={
-              loading ||
-              loadingSubjects ||
-              !setupValid ||
-              !subjectId ||
-              !maxStudents ||
-              !reason.trim()
-            }
+            disabled={!canSubmit}
           >
             {loading ? "Creating..." : "Create Special Subject"}
           </button>

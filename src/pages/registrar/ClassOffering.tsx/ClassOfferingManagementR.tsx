@@ -24,7 +24,7 @@ import OfferingTable, {
   type OfferingTableSubject,
 } from "./components/OfferingTable";
 
-import AddOfferingModal from "./AddOfferingModal";
+import AddOfferingModal from "./components/AddOfferingModal";
 
 import EditOfferingModal from "./EditOfferingModal";
 
@@ -1160,6 +1160,9 @@ export default function ClassOfferingManagementR() {
 
       // -------------------------------------------------
       // READINESS FLAGS
+      //
+      // Keep Special / Retake rows aligned with the exact
+      // readiness contract returned by GET /readiness.
       // -------------------------------------------------
 
       const hasSectionSubject = Boolean(canonicalSectionSubject);
@@ -1174,47 +1177,53 @@ export default function ClassOfferingManagementR() {
         canonicalOffering.capacity.max_students > 0,
       );
 
+      // Match backend GET /readiness exactly.
+      // Capacity fullness is handled by enrollment placement;
+      // it does not make the offering configuration incomplete.
       const readyForEnrollment = Boolean(
-        canonicalSectionSubject?.status === "Open" &&
-        canonicalOffering?.status === "Open" &&
         configurationComplete &&
-        !canonicalOffering.capacity.is_full,
+        canonicalSectionSubject?.status === "Open" &&
+        canonicalOffering?.status === "Open",
       );
 
       const missingConfiguration: string[] = [];
 
+      // -------------------------------------------------
+      // SECTION SUBJECT
+      // -------------------------------------------------
+
       if (!hasSectionSubject) {
         missingConfiguration.push("section_subject");
+      } else if (canonicalSectionSubject?.status !== "Open") {
+        missingConfiguration.push("section_subject_open");
       }
 
-      if (hasSectionSubject && !hasOffering) {
+      // -------------------------------------------------
+      // SUBJECT OFFERING
+      // -------------------------------------------------
+
+      if (!hasOffering) {
         missingConfiguration.push("offering");
-      }
+      } else {
+        if (!canonicalOffering?.faculty) {
+          missingConfiguration.push("faculty_id");
+        }
 
-      if (hasOffering && !canonicalOffering?.faculty) {
-        missingConfiguration.push("faculty");
-      }
+        if (!canonicalOffering?.schedule.days) {
+          missingConfiguration.push("schedule_days");
+        }
 
-      if (hasOffering && !canonicalOffering?.schedule.days) {
-        missingConfiguration.push("schedule_days");
-      }
+        if (!canonicalOffering?.schedule.time) {
+          missingConfiguration.push("schedule_time");
+        }
 
-      if (hasOffering && !canonicalOffering?.schedule.time) {
-        missingConfiguration.push("schedule_time");
-      }
+        if (Number(canonicalOffering?.capacity.max_students || 0) <= 0) {
+          missingConfiguration.push("max_students");
+        }
 
-      if (
-        hasOffering &&
-        Number(canonicalOffering?.capacity.max_students || 0) <= 0
-      ) {
-        missingConfiguration.push("capacity");
-      }
-
-      // Match the canonical readiness contract:
-      // a configured-but-Closed offering is still not ready
-      // until Registrar explicitly opens it.
-      if (hasOffering && canonicalOffering?.status === "Closed") {
-        missingConfiguration.push("offering_open");
+        if (canonicalOffering?.status !== "Open") {
+          missingConfiguration.push("offering_open");
+        }
       }
 
       if (!hasSectionSubject) {
@@ -1589,14 +1598,6 @@ export default function ClassOfferingManagementR() {
               and enrollment availability.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={openAddSpecialOffering}
-            disabled={!selectionComplete}
-          >
-            Add Special Offering
-          </button>
         </div>
 
         {/* ================================================= */}
