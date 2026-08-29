@@ -11,6 +11,509 @@ import {
 } from "../../services/academicEvaluation.service.js";
 
 const router = express.Router();
+
+// =====================================================
+// STUDENT YEAR-LEVEL PROGRESSION
+//
+// RULES:
+//
+// First Semester
+//   - May advance year level.
+//
+// Second Semester
+//   - Keeps the same year level.
+//
+// Progression requires:
+//   - A previous Approved Second Semester enrollment.
+//   - Every active subject in that enrollment must have
+//     an Approved grade with final_rating.
+//
+// IMPORTANT:
+//
+// 4.00 / 5.00 are RESOLVED academic results.
+// They do NOT stop year progression.
+// They remain Retake candidates.
+//
+// Draft / Submitted / Returned / missing grade
+// DO stop progression.
+//
+// Maximum supported year level = 4.
+// There is no Year 5.
+// =====================================================
+
+async function resolveStudentProgression({
+  executor,
+  studentId,
+  currentYearLevel,
+  profileAcademicYearId,
+  profileSemesterId,
+  currentAcademicYearId,
+  currentSemesterId,
+}) {
+  const normalizedYearLevel = Number(currentYearLevel);
+
+  const normalizedProfileAcademicYearId =
+    profileAcademicYearId !== null && profileAcademicYearId !== undefined
+      ? Number(profileAcademicYearId)
+      : null;
+
+  const normalizedProfileSemesterId =
+    profileSemesterId !== null && profileSemesterId !== undefined
+      ? Number(profileSemesterId)
+      : null;
+
+  const academicYearId = Number(currentAcademicYearId);
+
+  const semesterId = Number(currentSemesterId);
+
+  // ===================================================
+  // VALIDATION
+  // ===================================================
+
+  if (
+    !Number.isInteger(normalizedYearLevel) ||
+    normalizedYearLevel < 1 ||
+    normalizedYearLevel > 4
+  ) {
+    throw new Error(`Invalid Student year level: ${currentYearLevel}.`);
+  }
+
+  if (!Number.isInteger(academicYearId) || academicYearId <= 0) {
+    throw new Error("Current academic year ID is invalid.");
+  }
+
+  if (![1, 2].includes(semesterId)) {
+    return {
+      can_enroll: false,
+
+      blocked: true,
+
+      code: "UNSUPPORTED_ENROLLMENT_SEMESTER",
+
+      reason: "Only First Semester and Second Semester are supported.",
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: null,
+
+      resolution: {
+        active_subjects: 0,
+        resolved_subjects: 0,
+        unresolved_subjects: 0,
+      },
+    };
+  }
+
+  // ===================================================
+  // SECOND SEMESTER
+  //
+  // Same academic year = same year level.
+  // ===================================================
+
+  if (semesterId === 2) {
+    return {
+      can_enroll: true,
+
+      blocked: false,
+
+      code: "SAME_YEAR_SECOND_SEMESTER",
+
+      reason: "Second Semester continues the Student's current year level.",
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: null,
+
+      resolution: {
+        active_subjects: 0,
+        resolved_subjects: 0,
+        unresolved_subjects: 0,
+      },
+    };
+  }
+
+  // ===================================================
+  // FIRST SEMESTER — ALREADY SYNCED
+  //
+  // This prevents:
+  //
+  // Year 1 → Year 2
+  // then another prepare attempt incorrectly doing
+  // Year 2 → Year 3 in the SAME academic year.
+  // ===================================================
+
+  if (normalizedProfileAcademicYearId === academicYearId) {
+    return {
+      can_enroll: true,
+
+      blocked: false,
+
+      code: "PROFILE_ALREADY_SYNCED",
+
+      reason:
+        "Student profile is already aligned with the current academic year.",
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: null,
+
+      resolution: {
+        active_subjects: 0,
+        resolved_subjects: 0,
+        unresolved_subjects: 0,
+      },
+    };
+  }
+  if (normalizedProfileAcademicYearId === null) {
+    return {
+      can_enroll: true,
+
+      blocked: false,
+
+      code: "NO_PREVIOUS_ACADEMIC_YEAR",
+
+      reason: "No previous academic year requires year-level progression.",
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: null,
+
+      resolution: {
+        active_subjects: 0,
+        resolved_subjects: 0,
+        unresolved_subjects: 0,
+      },
+    };
+  }
+  // ===================================================
+  // FIND MOST RECENT APPROVED SECOND SEMESTER
+  //
+  // It must be before the current AY.
+  // Summer is not considered.
+  // ===================================================
+
+  const [previousEnrollmentRows] = await executor.execute(
+    `
+        SELECT
+            e.enrollment_id,
+            e.student_id,
+
+            e.academic_year_id,
+            ay.academic_year,
+
+            e.semester_id,
+            sem.semester_name,
+
+            e.enrollment_status,
+            e.approved_at
+
+        FROM enrollments e
+
+        INNER JOIN academic_years ay
+            ON ay.academic_year_id =
+               e.academic_year_id
+
+        INNER JOIN semesters sem
+            ON sem.semester_id =
+               e.semester_id
+
+        WHERE e.student_id = ?
+
+          AND e.enrollment_status = 'Approved'
+
+          AND e.semester_id = 2
+
+          AND e.academic_year_id = ?
+
+        ORDER BY
+            e.academic_year_id DESC,
+            e.enrollment_id DESC
+
+        LIMIT 1
+      `,
+    [studentId, normalizedProfileAcademicYearId],
+  );
+
+  // ===================================================
+  // NO PREVIOUS SECOND SEMESTER
+  //
+  // Freshmen / newly admitted Student.
+  //
+  // Do NOT automatically increment.
+  // ===================================================
+
+  if (previousEnrollmentRows.length === 0) {
+    return {
+      can_enroll: true,
+
+      blocked: false,
+
+      code: "NO_PREVIOUS_SECOND_SEMESTER",
+
+      reason:
+        "No previous Approved Second Semester enrollment requires year-level advancement.",
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: null,
+
+      resolution: {
+        active_subjects: 0,
+        resolved_subjects: 0,
+        unresolved_subjects: 0,
+      },
+    };
+  }
+
+  const previousEnrollment = previousEnrollmentRows[0];
+
+  const previousEnrollmentId = Number(previousEnrollment.enrollment_id);
+
+  // ===================================================
+  // CHECK PREVIOUS SECOND SEMESTER RESULTS
+  //
+  // Every active enrollment_subject must have:
+  //
+  // grade_status = Approved
+  // final_rating IS NOT NULL
+  //
+  // final_rating:
+  // 1.00–3.00 = Passed
+  // 4.00      = Incomplete
+  // 5.00      = Failed
+  //
+  // ALL THREE are academically RESOLVED.
+  // ===================================================
+
+  const [resolutionRows] = await executor.execute(
+    `
+        SELECT
+            COUNT(*) AS active_subjects,
+
+            SUM(
+              CASE
+                WHEN EXISTS (
+                  SELECT 1
+
+                  FROM grades g
+
+                  WHERE g.enrollment_subject_id =
+                        es.enrollment_subject_id
+
+                    AND g.grade_status = 'Approved'
+
+                    AND g.final_rating IS NOT NULL
+                )
+                THEN 1
+                ELSE 0
+              END
+            ) AS resolved_subjects,
+
+            SUM(
+              CASE
+                WHEN EXISTS (
+                  SELECT 1
+
+                  FROM grades g
+
+                  WHERE g.enrollment_subject_id =
+                        es.enrollment_subject_id
+
+                    AND g.grade_status = 'Approved'
+
+                    AND g.final_rating IS NOT NULL
+                )
+                THEN 0
+                ELSE 1
+              END
+            ) AS unresolved_subjects
+
+        FROM enrollment_subjects es
+
+        WHERE es.enrollment_id = ?
+
+          AND es.status NOT IN (
+            'Dropped',
+            'Withdrawn'
+          )
+      `,
+    [previousEnrollmentId],
+  );
+
+  const resolutionRow = resolutionRows[0] || {};
+
+  const activeSubjects = Number(resolutionRow.active_subjects || 0);
+
+  const resolvedSubjects = Number(resolutionRow.resolved_subjects || 0);
+
+  const unresolvedSubjects = Number(resolutionRow.unresolved_subjects || 0);
+
+  // ===================================================
+  // DEFENSIVE — PREVIOUS ENROLLMENT HAS NO SUBJECTS
+  // ===================================================
+
+  if (activeSubjects === 0) {
+    return {
+      can_enroll: false,
+
+      blocked: true,
+
+      code: "PREVIOUS_TERM_HAS_NO_ACTIVE_SUBJECTS",
+
+      reason:
+        "The previous Approved Second Semester enrollment has no active subjects to evaluate.",
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: {
+        enrollment_id: previousEnrollmentId,
+
+        academic_year_id: Number(previousEnrollment.academic_year_id),
+
+        academic_year: previousEnrollment.academic_year,
+
+        semester_id: 2,
+
+        semester_name: previousEnrollment.semester_name,
+
+        approved_at: previousEnrollment.approved_at,
+      },
+
+      resolution: {
+        active_subjects: activeSubjects,
+
+        resolved_subjects: resolvedSubjects,
+
+        unresolved_subjects: unresolvedSubjects,
+      },
+    };
+  }
+
+  // ===================================================
+  // UNRESOLVED GRADES
+  //
+  // Prevent next-year progression until Faculty / PH
+  // completes the grade lifecycle.
+  // ===================================================
+
+  if (unresolvedSubjects > 0) {
+    return {
+      can_enroll: false,
+
+      blocked: true,
+
+      code: "PREVIOUS_TERM_GRADES_UNRESOLVED",
+
+      reason: `${unresolvedSubjects} subject(s) from the previous Second Semester do not yet have an Approved final rating.`,
+
+      previous_year_level: normalizedYearLevel,
+
+      effective_year_level: normalizedYearLevel,
+
+      advanced: false,
+
+      previous_second_semester_enrollment: {
+        enrollment_id: previousEnrollmentId,
+
+        academic_year_id: Number(previousEnrollment.academic_year_id),
+
+        academic_year: previousEnrollment.academic_year,
+
+        semester_id: 2,
+
+        semester_name: previousEnrollment.semester_name,
+
+        approved_at: previousEnrollment.approved_at,
+      },
+
+      resolution: {
+        active_subjects: activeSubjects,
+
+        resolved_subjects: resolvedSubjects,
+
+        unresolved_subjects: unresolvedSubjects,
+      },
+    };
+  }
+
+  // ===================================================
+  // ADVANCE YEAR
+  //
+  // Maximum = Year 4.
+  //
+  // Year 4 remains Year 4 even when entering another AY.
+  // Retakes / unfinished requirements remain available.
+  // ===================================================
+
+  const effectiveYearLevel = Math.min(normalizedYearLevel + 1, 4);
+
+  const advanced = effectiveYearLevel > normalizedYearLevel;
+
+  return {
+    can_enroll: true,
+
+    blocked: false,
+
+    code: advanced ? "YEAR_LEVEL_ADVANCED" : "MAX_YEAR_LEVEL_RETAINED",
+
+    reason: advanced
+      ? `Student advances from Year ${normalizedYearLevel} to Year ${effectiveYearLevel}.`
+      : "Student remains Year 4 because the program has no Year 5.",
+
+    previous_year_level: normalizedYearLevel,
+
+    effective_year_level: effectiveYearLevel,
+
+    advanced,
+
+    previous_second_semester_enrollment: {
+      enrollment_id: previousEnrollmentId,
+
+      academic_year_id: Number(previousEnrollment.academic_year_id),
+
+      academic_year: previousEnrollment.academic_year,
+
+      semester_id: 2,
+
+      semester_name: previousEnrollment.semester_name,
+
+      approved_at: previousEnrollment.approved_at,
+    },
+
+    resolution: {
+      active_subjects: activeSubjects,
+
+      resolved_subjects: resolvedSubjects,
+
+      unresolved_subjects: unresolvedSubjects,
+    },
+  };
+}
+
 // =====================================================
 // GET CURRENT STUDENT ENROLLMENT
 //
@@ -20,22 +523,34 @@ const router = express.Router();
 // Student JWT required.
 //
 // IMPORTANT:
-// - No user_id query parameter.
-// - No student_id query parameter.
+// - No user_id from frontend.
+// - No student_id from frontend.
 // - Student identity comes ONLY from req.user.
-// - Student can only see their own enrollment.
+// - Student can only view their own enrollment.
+// - Approved enrollment is the authoritative source
+//   of current-semester class membership.
+// - Section / offering placement comes from
+//   enrollment_subjects, NOT students.section_id.
+// - Summer is excluded.
 // =====================================================
 
 router.get("/current", async (req, res) => {
   try {
     // =================================================
-    // 1. AUTHENTICATED USER
+    // 1. AUTHENTICATION
     // =================================================
 
     if (!req.user) {
       return res.status(401).json({
         success: false,
         message: "Authentication is required.",
+      });
+    }
+
+    if (req.user.role_name !== "Student") {
+      return res.status(403).json({
+        success: false,
+        message: "Student access is required.",
       });
     }
 
@@ -49,67 +564,65 @@ router.get("/current", async (req, res) => {
     }
 
     // =================================================
-    // 2. STUDENT ROLE
-    // =================================================
-
-    if (req.user.role_name !== "Student") {
-      return res.status(403).json({
-        success: false,
-        message: "Student access is required.",
-      });
-    }
-
-    // =================================================
-    // 3. GET AUTHENTICATED STUDENT
-    //
-    // Do NOT accept student_id from frontend.
+    // 2. GET AUTHENTICATED STUDENT
     // =================================================
 
     const [studentRows] = await db.execute(
       `
-      SELECT
-          s.student_id,
-          s.user_id,
-          s.student_number,
+        SELECT
+            s.student_id,
+            s.user_id,
+            s.student_number,
 
-          s.first_name,
-          s.middle_name,
-          s.last_name,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
 
-          s.course_id,
-          c.course_code,
-          c.course_name,
+            s.course_id,
 
-          s.year_level,
+            c.course_code,
+            c.course_name,
 
-          s.section_id,
-          sec.section_name,
+            s.year_level,
 
-          s.academic_year_id,
-          student_ay.academic_year AS student_academic_year,
+            -- Profile values only.
+            -- These are NOT authoritative enrollment placement.
+            s.section_id AS profile_section_id,
+            profile_section.section_name
+                AS profile_section_name,
 
-          s.semester_id,
-          student_sem.semester_name AS student_semester_name
+            s.academic_year_id
+                AS profile_academic_year_id,
 
-      FROM students s
+            profile_ay.academic_year
+                AS profile_academic_year,
 
-      INNER JOIN courses c
-          ON c.course_id = s.course_id
+            s.semester_id
+                AS profile_semester_id,
 
-      LEFT JOIN sections sec
-          ON sec.section_id = s.section_id
+            profile_sem.semester_name
+                AS profile_semester_name
 
-      LEFT JOIN academic_years student_ay
-          ON student_ay.academic_year_id =
-             s.academic_year_id
+        FROM students s
 
-      LEFT JOIN semesters student_sem
-          ON student_sem.semester_id =
-             s.semester_id
+        INNER JOIN courses c
+            ON c.course_id = s.course_id
 
-      WHERE s.user_id = ?
+        LEFT JOIN sections profile_section
+            ON profile_section.section_id =
+               s.section_id
 
-      LIMIT 1
+        LEFT JOIN academic_years profile_ay
+            ON profile_ay.academic_year_id =
+               s.academic_year_id
+
+        LEFT JOIN semesters profile_sem
+            ON profile_sem.semester_id =
+               s.semester_id
+
+        WHERE s.user_id = ?
+
+        LIMIT 1
       `,
       [userId],
     );
@@ -127,54 +640,53 @@ router.get("/current", async (req, res) => {
 
     const studentCourseId = Number(student.course_id);
 
+    const yearLevel = Number(student.year_level);
+
     // =================================================
-    // 4. GET ACTIVE ASSIGNED CURRICULUM
-    //
-    // Curriculum must:
-    // - belong to this Student
-    // - have status Active
-    // - itself be active
-    // - belong to Student's current Course
-    //
-    // We DO NOT guess a curriculum.
+    // 3. GET ACTIVE CURRICULUM
     // =================================================
 
     const [curriculumRows] = await db.execute(
       `
-      SELECT
-          sc.student_curriculum_id,
-          sc.student_id,
-          sc.curriculum_id,
-          sc.assigned_date,
-          sc.status AS assignment_status,
-          sc.remarks,
+        SELECT
+            sc.student_curriculum_id,
+            sc.student_id,
+            sc.curriculum_id,
 
-          cur.curriculum_name,
-          cur.effective_year,
-          cur.total_units,
-          cur.is_active,
+            sc.assigned_date,
+            sc.status AS assignment_status,
+            sc.remarks,
 
-          cur.course_id AS curriculum_course_id,
+            cur.curriculum_name,
+            cur.effective_year,
+            cur.total_units,
+            cur.is_active,
 
-          c.course_code,
-          c.course_name
+            cur.course_id
+                AS curriculum_course_id,
 
-      FROM student_curriculum sc
+            c.course_code,
+            c.course_name
 
-      INNER JOIN curriculum cur
-          ON cur.curriculum_id =
-             sc.curriculum_id
+        FROM student_curriculum sc
 
-      INNER JOIN courses c
-          ON c.course_id =
-             cur.course_id
+        INNER JOIN curriculum cur
+            ON cur.curriculum_id =
+               sc.curriculum_id
 
-      WHERE sc.student_id = ?
-        AND sc.status = 'Active'
-        AND cur.is_active = 1
-        AND cur.course_id = ?
+        INNER JOIN courses c
+            ON c.course_id =
+               cur.course_id
 
-      LIMIT 1
+        WHERE sc.student_id = ?
+
+          AND sc.status = 'Active'
+
+          AND cur.is_active = 1
+
+          AND cur.course_id = ?
+
+        LIMIT 1
       `,
       [studentId, studentCourseId],
     );
@@ -213,15 +725,7 @@ router.get("/current", async (req, res) => {
     }
 
     // =================================================
-    // 5. CHECK IF STUDENT HAS A BAD CURRICULUM RECORD
-    //
-    // This lets us distinguish:
-    //
-    // NO CURRICULUM
-    // vs
-    // COURSE / CURRICULUM MISMATCH
-    // vs
-    // INACTIVE ASSIGNMENT
+    // 4. CURRICULUM ISSUE
     // =================================================
 
     let curriculumIssue = null;
@@ -229,24 +733,24 @@ router.get("/current", async (req, res) => {
     if (!curriculum) {
       const [assignmentRows] = await db.execute(
         `
-          SELECT
-              sc.student_curriculum_id,
-              sc.curriculum_id,
-              sc.status,
+            SELECT
+                sc.student_curriculum_id,
+                sc.curriculum_id,
+                sc.status,
 
-              cur.course_id,
-              cur.curriculum_name,
-              cur.is_active
+                cur.course_id,
+                cur.curriculum_name,
+                cur.is_active
 
-          FROM student_curriculum sc
+            FROM student_curriculum sc
 
-          LEFT JOIN curriculum cur
-              ON cur.curriculum_id =
-                 sc.curriculum_id
+            LEFT JOIN curriculum cur
+                ON cur.curriculum_id =
+                   sc.curriculum_id
 
-          WHERE sc.student_id = ?
+            WHERE sc.student_id = ?
 
-          LIMIT 1
+            LIMIT 1
           `,
         [studentId],
       );
@@ -269,10 +773,13 @@ router.get("/current", async (req, res) => {
     }
 
     // =================================================
-    // 6. GET CURRENT OPEN ENROLLMENT PERIOD
+    // 5. CURRENT SUPPORTED ENROLLMENT PERIOD
     //
-    // Registrar owns opening/closing enrollment.
-    // Student only reads it.
+    // Summer is excluded.
+    //
+    // Supported:
+    // 1 = First Semester
+    // 2 = Second Semester
     // =================================================
 
     const [periodRows] = await db.execute(
@@ -287,9 +794,7 @@ router.get("/current", async (req, res) => {
             sem.semester_name,
 
             ep.status,
-
             ep.opened_at,
-
             ep.remarks
 
         FROM enrollment_periods ep
@@ -304,15 +809,23 @@ router.get("/current", async (req, res) => {
 
         WHERE ep.status = 'Open'
 
+          AND ep.semester_id
+              IN (1, 2)
+
         ORDER BY
             ep.enrollment_period_id DESC
 
         LIMIT 1
-        `,
+      `,
     );
 
     // =================================================
-    // STUDENT RESPONSE
+    // 6. STUDENT RESPONSE
+    //
+    // Profile section/term is retained only as profile
+    // information.
+    //
+    // Enrollment placement below is authoritative.
     // =================================================
 
     const studentResponse = {
@@ -338,37 +851,36 @@ router.get("/current", async (req, res) => {
         course_name: student.course_name,
       },
 
-      year_level: Number(student.year_level),
+      year_level: yearLevel,
 
-      current_section: {
+      profile_section: {
         section_id:
-          student.section_id !== null ? Number(student.section_id) : null,
+          student.profile_section_id !== null
+            ? Number(student.profile_section_id)
+            : null,
 
-        section_name: student.section_name || null,
+        section_name: student.profile_section_name || null,
       },
 
       profile_academic_period: {
         academic_year_id:
-          student.academic_year_id !== null
-            ? Number(student.academic_year_id)
+          student.profile_academic_year_id !== null
+            ? Number(student.profile_academic_year_id)
             : null,
 
-        academic_year: student.student_academic_year || null,
+        academic_year: student.profile_academic_year || null,
 
         semester_id:
-          student.semester_id !== null ? Number(student.semester_id) : null,
+          student.profile_semester_id !== null
+            ? Number(student.profile_semester_id)
+            : null,
 
-        semester_name: student.student_semester_name || null,
+        semester_name: student.profile_semester_name || null,
       },
     };
 
     // =================================================
-    // 7. NO OPEN ENROLLMENT PERIOD
-    //
-    // This is NOT an error.
-    //
-    // Student should still be able to open the page
-    // and see that enrollment is closed.
+    // 7. NO OPEN PERIOD
     // =================================================
 
     if (periodRows.length === 0) {
@@ -387,6 +899,16 @@ router.get("/current", async (req, res) => {
 
         enrollment: null,
 
+        subjects: [],
+
+        summary: {
+          total_subjects: 0,
+          total_units: 0,
+          placed_subjects: 0,
+          unplaced_subjects: 0,
+          placement_complete: false,
+        },
+
         can_prepare: false,
       });
     }
@@ -396,56 +918,6 @@ router.get("/current", async (req, res) => {
     const academicYearId = Number(period.academic_year_id);
 
     const semesterId = Number(period.semester_id);
-
-    // =================================================
-    // 8. GET CURRENT STUDENT ENROLLMENT
-    //
-    // Student ownership is enforced using studentId
-    // derived from req.user.
-    // =================================================
-
-    const [enrollmentRows] = await db.execute(
-      `
-        SELECT
-            e.enrollment_id,
-            e.student_id,
-
-            e.academic_year_id,
-            ay.academic_year,
-
-            e.semester_id,
-            sem.semester_name,
-
-            e.enrollment_status,
-            e.remarks,
-
-            e.approved_by,
-            e.approved_at,
-
-            e.created_at
-
-        FROM enrollments e
-
-        INNER JOIN academic_years ay
-            ON ay.academic_year_id =
-               e.academic_year_id
-
-        INNER JOIN semesters sem
-            ON sem.semester_id =
-               e.semester_id
-
-        WHERE e.student_id = ?
-          AND e.academic_year_id = ?
-          AND e.semester_id = ?
-
-        ORDER BY
-            e.created_at DESC,
-            e.enrollment_id DESC
-
-        LIMIT 1
-        `,
-      [studentId, academicYearId, semesterId],
-    );
 
     const enrollmentPeriod = {
       enrollment_period_id: Number(period.enrollment_period_id),
@@ -464,6 +936,55 @@ router.get("/current", async (req, res) => {
 
       remarks: period.remarks || null,
     };
+
+    // =================================================
+    // 8. GET STUDENT ENROLLMENT FOR PERIOD
+    // =================================================
+
+    const [enrollmentRows] = await db.execute(
+      `
+          SELECT
+              e.enrollment_id,
+              e.student_id,
+
+              e.academic_year_id,
+              ay.academic_year,
+
+              e.semester_id,
+              sem.semester_name,
+
+              e.enrollment_status,
+              e.remarks,
+
+              e.approved_by,
+              e.approved_at,
+
+              e.created_at
+
+          FROM enrollments e
+
+          INNER JOIN academic_years ay
+              ON ay.academic_year_id =
+                 e.academic_year_id
+
+          INNER JOIN semesters sem
+              ON sem.semester_id =
+                 e.semester_id
+
+          WHERE e.student_id = ?
+
+            AND e.academic_year_id = ?
+
+            AND e.semester_id = ?
+
+          ORDER BY
+              e.created_at DESC,
+              e.enrollment_id DESC
+
+          LIMIT 1
+        `,
+      [studentId, academicYearId, semesterId],
+    );
 
     // =================================================
     // 9. NO ENROLLMENT YET
@@ -487,20 +1008,276 @@ router.get("/current", async (req, res) => {
 
         enrollment: null,
 
+        subjects: [],
+
+        summary: {
+          total_subjects: 0,
+          total_units: 0,
+          placed_subjects: 0,
+          unplaced_subjects: 0,
+          placement_complete: false,
+        },
+
         can_prepare: Boolean(curriculum),
       });
     }
 
     const enrollment = enrollmentRows[0];
 
+    const enrollmentId = Number(enrollment.enrollment_id);
+
     const enrollmentStatus = String(enrollment.enrollment_status);
 
     // =================================================
-    // 10. CURRENT ENROLLMENT RESPONSE
+    // 10. GET OFFICIAL ENROLLMENT SUBJECTS
+    //
+    // IMPORTANT:
+    //
+    // enrollment_subjects is authoritative.
+    //
+    // Do NOT use students.section_id here.
+    //
+    // Placement:
+    //
+    // enrollment_subjects
+    //   ↓
+    // section
+    //   ↓
+    // subject_offering
+    //   ↓
+    // faculty / room / schedule
+    //
+    // Room is OPTIONAL.
+    // =================================================
+
+    const [subjectRows] = await db.execute(
+      `
+          SELECT
+              -- =======================================
+              -- ENROLLMENT SUBJECT
+              -- =======================================
+
+              es.enrollment_subject_id,
+              es.enrollment_id,
+              es.subject_id,
+
+              es.status
+                  AS subject_status,
+
+              -- =======================================
+              -- SUBJECT
+              -- =======================================
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+
+              sub.lecture_hours,
+              sub.laboratory_hours,
+
+              -- =======================================
+              -- AUTHORITATIVE SECTION PLACEMENT
+              -- =======================================
+
+              es.section_id,
+              sec.section_name,
+
+              sec.year_level
+                  AS section_year_level,
+
+              -- =======================================
+              -- SECTION SUBJECT
+              -- =======================================
+
+              es.section_subject_id,
+
+              ss.status
+                  AS section_subject_status,
+
+              -- =======================================
+              -- OFFERING
+              -- =======================================
+
+              es.offering_id,
+
+              so.status
+                  AS offering_status,
+
+              so.schedule_days,
+              so.schedule_time,
+
+              so.max_students,
+
+              -- =======================================
+              -- FACULTY
+              -- =======================================
+
+              so.faculty_id,
+
+              TRIM(
+                CONCAT_WS(
+                  ' ',
+                  f.first_name,
+                  NULLIF(
+                    f.middle_name,
+                    ''
+                  ),
+                  f.last_name
+                )
+              ) AS faculty_name,
+
+              -- =======================================
+              -- ROOM
+              -- =======================================
+
+              so.room_id,
+              r.room_name
+
+          FROM enrollment_subjects es
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 es.subject_id
+
+          LEFT JOIN sections sec
+              ON sec.section_id =
+                 es.section_id
+
+          LEFT JOIN section_subjects ss
+              ON ss.section_subject_id =
+                 es.section_subject_id
+
+          LEFT JOIN subject_offerings so
+              ON so.offering_id =
+                 es.offering_id
+
+          LEFT JOIN faculty f
+              ON f.faculty_id =
+                 so.faculty_id
+
+          LEFT JOIN rooms r
+              ON r.room_id =
+                 so.room_id
+
+          WHERE es.enrollment_id = ?
+
+            AND es.status
+                NOT IN (
+                  'Dropped',
+                  'Withdrawn'
+                )
+
+          ORDER BY
+              sub.subject_code ASC
+        `,
+      [enrollmentId],
+    );
+
+    // =================================================
+    // 11. NORMALIZE SUBJECT RESPONSE
+    // =================================================
+
+    const subjects = subjectRows.map((row) => ({
+      enrollment_subject_id: Number(row.enrollment_subject_id),
+
+      enrollment_id: Number(row.enrollment_id),
+
+      subject_id: Number(row.subject_id),
+
+      subject_code: row.subject_code,
+
+      subject_name: row.subject_name,
+
+      units: Number(row.units || 0),
+
+      lecture_hours: Number(row.lecture_hours || 0),
+
+      laboratory_hours: Number(row.laboratory_hours || 0),
+
+      subject_status: row.subject_status,
+
+      // ===========================================
+      // PLACEMENT
+      // ===========================================
+
+      section_id: row.section_id !== null ? Number(row.section_id) : null,
+
+      section_name: row.section_name || null,
+
+      section_year_level:
+        row.section_year_level !== null ? Number(row.section_year_level) : null,
+
+      section_subject_id:
+        row.section_subject_id !== null ? Number(row.section_subject_id) : null,
+
+      section_subject_status: row.section_subject_status || null,
+
+      offering_id: row.offering_id !== null ? Number(row.offering_id) : null,
+
+      offering_status: row.offering_status || null,
+
+      // ===========================================
+      // FACULTY
+      // ===========================================
+
+      faculty_id: row.faculty_id !== null ? Number(row.faculty_id) : null,
+
+      faculty_name: row.faculty_name || null,
+
+      // ===========================================
+      // ROOM
+      //
+      // Room may legitimately be NULL.
+      // ===========================================
+
+      room_id: row.room_id !== null ? Number(row.room_id) : null,
+
+      room_name: row.room_name || null,
+
+      // ===========================================
+      // SCHEDULE
+      // ===========================================
+
+      schedule_days: row.schedule_days || null,
+
+      schedule_time: row.schedule_time || null,
+
+      max_students: row.max_students !== null ? Number(row.max_students) : null,
+
+      placement_complete:
+        row.section_id !== null &&
+        row.section_subject_id !== null &&
+        row.offering_id !== null,
+    }));
+
+    // =================================================
+    // 12. OFFICIAL SUMMARY
+    // =================================================
+
+    const totalUnits = subjects.reduce(
+      (total, subject) => total + Number(subject.units || 0),
+      0,
+    );
+
+    const placedSubjects = subjects.filter(
+      (subject) => subject.placement_complete,
+    ).length;
+
+    const unplacedSubjects = subjects.length - placedSubjects;
+
+    const placementComplete = subjects.length > 0 && unplacedSubjects === 0;
+
+    // =================================================
+    // 13. RESPONSE
     // =================================================
 
     return res.status(200).json({
       success: true,
+
+      message:
+        enrollmentStatus === "Approved"
+          ? "Official enrollment loaded successfully."
+          : "Current enrollment loaded successfully.",
 
       student: studentResponse,
 
@@ -511,7 +1288,7 @@ router.get("/current", async (req, res) => {
       enrollment_period: enrollmentPeriod,
 
       enrollment: {
-        enrollment_id: Number(enrollment.enrollment_id),
+        enrollment_id: enrollmentId,
 
         student_id: Number(enrollment.student_id),
 
@@ -537,8 +1314,20 @@ router.get("/current", async (req, res) => {
         created_at: enrollment.created_at,
       },
 
-      // Existing Draft/Pending/Approved means
-      // do not prepare another enrollment.
+      subjects,
+
+      summary: {
+        total_subjects: subjects.length,
+
+        total_units: totalUnits,
+
+        placed_subjects: placedSubjects,
+
+        unplaced_subjects: unplacedSubjects,
+
+        placement_complete: placementComplete,
+      },
+
       can_prepare:
         Boolean(curriculum) &&
         !["Draft", "Pending", "Approved"].includes(enrollmentStatus),
@@ -549,7 +1338,7 @@ router.get("/current", async (req, res) => {
     return res.status(500).json({
       success: false,
 
-      message: "Failed to load current student enrollment.",
+      message: "Failed to load current Student enrollment.",
 
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
@@ -637,10 +1426,15 @@ router.get("/subjects", async (req, res) => {
             c.course_code,
             c.course_name,
 
-            s.year_level
+           s.year_level,
 
-        FROM students s
+s.academic_year_id
+    AS profile_academic_year_id,
 
+s.semester_id
+    AS profile_semester_id
+
+FROM students s
         INNER JOIN courses c
             ON c.course_id = s.course_id
 
@@ -663,7 +1457,15 @@ router.get("/subjects", async (req, res) => {
     const studentId = Number(student.student_id);
     const studentCourseId = Number(student.course_id);
     const yearLevel = Number(student.year_level);
+    const profileAcademicYearId =
+      student.profile_academic_year_id !== null
+        ? Number(student.profile_academic_year_id)
+        : null;
 
+    const profileSemesterId =
+      student.profile_semester_id !== null
+        ? Number(student.profile_semester_id)
+        : null;
     // =================================================
     // 3. ACTIVE ASSIGNED CURRICULUM
     //
@@ -752,10 +1554,12 @@ router.get("/subjects", async (req, res) => {
             ON sem.semester_id =
                ep.semester_id
 
-        WHERE ep.status = 'Open'
+      WHERE ep.status = 'Open'
 
-        ORDER BY
-            ep.enrollment_period_id DESC
+  AND ep.semester_id IN (1, 2)
+
+ORDER BY
+    ep.enrollment_period_id DESC
 
         LIMIT 1
       `,
@@ -843,6 +1647,23 @@ router.get("/subjects", async (req, res) => {
     const academicYearId = Number(period.academic_year_id);
     const semesterId = Number(period.semester_id);
 
+    const progression = await resolveStudentProgression({
+      executor: db,
+
+      studentId,
+
+      currentYearLevel: yearLevel,
+
+      profileAcademicYearId,
+
+      profileSemesterId,
+
+      currentAcademicYearId: academicYearId,
+
+      currentSemesterId: semesterId,
+    });
+
+    const effectiveYearLevel = Number(progression.effective_year_level);
     // =================================================
     // 6. CURRENT ENROLLMENT
     // =================================================
@@ -916,6 +1737,113 @@ router.get("/subjects", async (req, res) => {
       }
     }
 
+    if (!progression.can_enroll) {
+      return res.status(200).json({
+        success: true,
+
+        message: progression.reason,
+
+        student: {
+          student_id: studentId,
+
+          student_number: student.student_number,
+
+          student_name: [
+            student.first_name,
+            student.middle_name,
+            student.last_name,
+          ]
+            .filter(Boolean)
+            .join(" "),
+
+          course: {
+            course_id: studentCourseId,
+
+            course_code: student.course_code,
+
+            course_name: student.course_name,
+          },
+
+          year_level: yearLevel,
+
+          effective_year_level: effectiveYearLevel,
+        },
+
+        curriculum: {
+          student_curriculum_id: Number(curriculum.student_curriculum_id),
+
+          curriculum_id: curriculumId,
+
+          curriculum_name: curriculum.curriculum_name,
+
+          effective_year:
+            curriculum.effective_year !== null
+              ? Number(curriculum.effective_year)
+              : null,
+
+          total_units:
+            curriculum.total_units !== null
+              ? Number(curriculum.total_units)
+              : null,
+
+          status: curriculum.assignment_status,
+        },
+
+        enrollment_period: {
+          enrollment_period_id: Number(period.enrollment_period_id),
+
+          academic_year_id: academicYearId,
+
+          academic_year: period.academic_year,
+
+          semester_id: semesterId,
+
+          semester_name: period.semester_name,
+
+          status: period.status,
+
+          opened_at: period.opened_at,
+
+          remarks: period.remarks || null,
+        },
+
+        enrollment: currentEnrollment
+          ? {
+              enrollment_id: Number(currentEnrollment.enrollment_id),
+
+              enrollment_status: String(currentEnrollment.enrollment_status),
+            }
+          : null,
+
+        progression,
+
+        regular_subjects: [],
+
+        retake_candidates: [],
+
+        blocked_subjects: [],
+
+        completed_subjects: [],
+
+        summary: {
+          regular_subjects: 0,
+
+          retake_candidates: 0,
+
+          blocked_subjects: 0,
+
+          completed_subjects: 0,
+
+          eligible_units: 0,
+        },
+
+        can_prepare: false,
+
+        can_modify_draft: false,
+
+        can_submit: false,
+      });
+    }
     // =================================================
     // 8. EVALUATE CURRENT CURRICULUM TERM
     //
@@ -932,8 +1860,11 @@ router.get("/subjects", async (req, res) => {
     const termEvaluation = await evaluateCurriculumTerm(
       {
         studentId,
+
         curriculumId,
-        yearLevel,
+
+        yearLevel: effectiveYearLevel,
+
         semesterId,
       },
       db,
@@ -1354,6 +2285,8 @@ router.get("/subjects", async (req, res) => {
         },
 
         year_level: yearLevel,
+
+        effective_year_level: effectiveYearLevel,
       },
 
       curriculum: {
@@ -1407,7 +2340,7 @@ router.get("/subjects", async (req, res) => {
             created_at: currentEnrollment.created_at,
           }
         : null,
-
+      progression,
       regular_subjects: finalRegularSubjects,
 
       retake_candidates: finalRetakeCandidates,
@@ -1563,9 +2496,15 @@ router.post("/prepare", async (req, res) => {
               c.course_code,
               c.course_name,
 
-              s.year_level
+          s.year_level,
 
-          FROM students s
+s.academic_year_id
+    AS profile_academic_year_id,
+
+s.semester_id
+    AS profile_semester_id
+
+FROM students s
 
           INNER JOIN courses c
               ON c.course_id =
@@ -1596,6 +2535,16 @@ router.post("/prepare", async (req, res) => {
     const courseId = Number(student.course_id);
 
     const yearLevel = Number(student.year_level);
+
+    const profileAcademicYearId =
+      student.profile_academic_year_id !== null
+        ? Number(student.profile_academic_year_id)
+        : null;
+
+    const profileSemesterId =
+      student.profile_semester_id !== null
+        ? Number(student.profile_semester_id)
+        : null;
 
     // =================================================
     // 5. ACTIVE ASSIGNED CURRICULUM
@@ -1685,10 +2634,12 @@ router.post("/prepare", async (req, res) => {
               ON sem.semester_id =
                  ep.semester_id
 
-          WHERE ep.status = 'Open'
+         WHERE ep.status = 'Open'
 
-          ORDER BY
-              ep.enrollment_period_id DESC
+  AND ep.semester_id IN (1, 2)
+
+ORDER BY
+    ep.enrollment_period_id DESC
 
           LIMIT 1
 
@@ -1710,6 +2661,38 @@ router.post("/prepare", async (req, res) => {
     const academicYearId = Number(period.academic_year_id);
 
     const semesterId = Number(period.semester_id);
+
+    const progression = await resolveStudentProgression({
+      executor: connection,
+
+      studentId,
+
+      currentYearLevel: yearLevel,
+
+      profileAcademicYearId,
+
+      profileSemesterId,
+
+      currentAcademicYearId: academicYearId,
+
+      currentSemesterId: semesterId,
+    });
+
+    if (!progression.can_enroll) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: progression.code,
+
+        message: progression.reason,
+
+        progression,
+      });
+    }
+
+    const effectiveYearLevel = Number(progression.effective_year_level);
 
     // =================================================
     // 7. PREVENT DUPLICATE CURRENT ENROLLMENT
@@ -1795,8 +2778,11 @@ router.post("/prepare", async (req, res) => {
     const termEvaluation = await evaluateCurriculumTerm(
       {
         studentId,
+
         curriculumId,
-        yearLevel,
+
+        yearLevel: effectiveYearLevel,
+
         semesterId,
       },
       connection,
@@ -1997,7 +2983,31 @@ router.post("/prepare", async (req, res) => {
           "There are no eligible subjects to prepare for this enrollment period.",
       });
     }
+    // =================================================
+    // SYNC STUDENT ACADEMIC PROFILE
+    //
+    // This happens inside the SAME transaction.
+    //
+    // If Draft creation fails:
+    // → this UPDATE is rolled back.
+    //
+    // section_id is intentionally NOT changed here.
+    // Registrar controls official section placement.
+    // =================================================
 
+    await connection.execute(
+      `
+    UPDATE students
+
+    SET
+        year_level = ?,
+        academic_year_id = ?,
+        semester_id = ?
+
+    WHERE student_id = ?
+  `,
+      [effectiveYearLevel, academicYearId, semesterId, studentId],
+    );
     // =================================================
     // 16. CREATE DRAFT ENROLLMENT
     // =================================================
@@ -2109,7 +3119,9 @@ router.post("/prepare", async (req, res) => {
           course_name: student.course_name,
         },
 
-        year_level: yearLevel,
+        year_level: effectiveYearLevel,
+
+        previous_year_level: yearLevel,
       },
 
       curriculum: {
@@ -2144,7 +3156,7 @@ router.post("/prepare", async (req, res) => {
 
         enrollment_status: "Draft",
       },
-
+      progression,
       summary: {
         total_subjects: draftSubjects.length,
 
@@ -2498,6 +3510,18 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     }
 
     const semesterId = Number(enrollment.semester_id);
+    if (![1, 2].includes(semesterId)) {
+      await connection.rollback();
+
+      transactionActive = false;
+
+      return res.status(409).json({
+        success: false,
+        code: "UNSUPPORTED_ENROLLMENT_SEMESTER",
+        message:
+          "This enrollment cannot be submitted because Summer enrollment is not supported.",
+      });
+    }
 
     // =================================================
     // 8. ACTIVE ASSIGNED CURRICULUM

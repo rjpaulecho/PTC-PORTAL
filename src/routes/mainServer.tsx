@@ -137,7 +137,7 @@ import AnnouncementEditR from "../pages/registrar/Announcement/EditAnnouncementR
 import StudentDetailsR from "../pages/registrar/StudentRecord/StudentDetailsR";
 import RStudentlist from "../pages/registrar/StudentRecord/StudentlistR";
 import AcademicRecordsR from "../pages/registrar/StudentRecord/AcademicRecordsR";
-import StudentDocumentsR from "../pages/registrar/StudentRecord/StudentDocumentsR";
+import StudentDocumentsR from "../pages/registrar/StudentRecord/StudentCOGR";
 import TranscriptPreviewR from "../pages/registrar/StudentRecord/TranscriptPreviewR";
 
 //This is the last one

@@ -29,10 +29,11 @@ interface Enrollment {
     middle_name: string | null;
     last_name: string;
     username: string | null;
+    year_level: number | null;
   };
 
   course: {
-    course_id: number;
+    course_id: number | null;
     course_code: string;
     course_name: string;
   };
@@ -41,6 +42,15 @@ interface Enrollment {
     section_id: number | null;
     section_name: string | null;
     year_level: number | null;
+  };
+
+  placement: {
+    assigned_section_count: number;
+    section_ids: number[];
+    section_names: string[];
+    placed_subjects: number;
+    unplaced_subjects: number;
+    placement_complete: boolean;
   };
 
   academic_period: {
@@ -56,6 +66,7 @@ interface Enrollment {
 
   approval: {
     approved_by: number | null;
+    approved_by_username: string | null;
     approved_at: string | null;
   };
 
@@ -215,7 +226,11 @@ export default function EnrollmentManagementR() {
         }
 
         if (semester !== "All") {
-          params.set("semester", semester);
+          const semesterId = Number(semester);
+
+          if ([1, 2].includes(semesterId)) {
+            params.set("semester", semester);
+          }
         }
 
         const requestUrl = `${API_BASE_URL}?${params.toString()}`;
@@ -368,66 +383,98 @@ export default function EnrollmentManagementR() {
 
   // =====================================================
   // FILTER OPTIONS
+  //
+  // IDs are sent to the API, while readable labels are shown.
+  // Summer is excluded defensively.
   // =====================================================
 
   const courseOptions = useMemo(() => {
-    return [
-      "All",
+    const map = new Map<number, string>();
 
-      ...new Set(
-        enrollments
-          .map((item) => item.course.course_id.toString())
-          .filter(Boolean),
-      ),
-    ];
+    enrollments.forEach((item) => {
+      if (item.course.course_id && item.course.course_code) {
+        map.set(item.course.course_id, item.course.course_code);
+      }
+    });
+
+    return Array.from(map.entries())
+      .map(([id, label]) => ({
+        id: String(id),
+        label,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [enrollments]);
 
   const yearOptions = useMemo(() => {
-    return [
-      "All",
-
-      ...new Set(
+    return Array.from(
+      new Set(
         enrollments
-          .map((item) => item.section.year_level?.toString())
-          .filter(Boolean) as string[],
+          .map((item) => item.student.year_level)
+          .filter(
+            (value): value is number => value !== null && value !== undefined,
+          ),
       ),
-    ];
+    )
+      .sort((a, b) => a - b)
+      .map((value) => String(value));
   }, [enrollments]);
 
   const sectionOptions = useMemo(() => {
-    return [
-      "All",
+    const map = new Map<number, string>();
 
-      ...new Set(
-        enrollments
-          .map((item) => item.section.section_id?.toString())
-          .filter(Boolean) as string[],
-      ),
-    ];
+    enrollments.forEach((item) => {
+      if (
+        item.section.section_id &&
+        item.section.section_name &&
+        item.placement.assigned_section_count === 1
+      ) {
+        map.set(item.section.section_id, item.section.section_name);
+      }
+    });
+
+    return Array.from(map.entries())
+      .map(([id, label]) => ({
+        id: String(id),
+        label,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [enrollments]);
 
   const academicYearOptions = useMemo(() => {
-    return [
-      "All",
+    const map = new Map<number, string>();
 
-      ...new Set(
-        enrollments
-          .map((item) => item.academic_period.academic_year_id.toString())
-          .filter(Boolean),
-      ),
-    ];
+    enrollments.forEach((item) => {
+      map.set(
+        item.academic_period.academic_year_id,
+        item.academic_period.academic_year,
+      );
+    });
+
+    return Array.from(map.entries())
+      .map(([id, label]) => ({
+        id: String(id),
+        label,
+      }))
+      .sort((a, b) => b.label.localeCompare(a.label));
   }, [enrollments]);
 
   const semesterOptions = useMemo(() => {
-    return [
-      "All",
+    const map = new Map<number, string>();
 
-      ...new Set(
-        enrollments
-          .map((item) => item.academic_period.semester_id.toString())
-          .filter(Boolean),
-      ),
-    ];
+    enrollments.forEach((item) => {
+      const semesterId = Number(item.academic_period.semester_id);
+
+      if ([1, 2].includes(semesterId)) {
+        map.set(semesterId, item.academic_period.semester_name);
+      }
+    });
+
+    return Array.from(map.entries())
+      .map(([id, label]) => ({
+        id: String(id),
+        label,
+      }))
+      .sort((a, b) => Number(a.id) - Number(b.id));
   }, [enrollments]);
 
   // =====================================================
@@ -466,6 +513,28 @@ export default function EnrollmentManagementR() {
     return `status ${value.toLowerCase().replace(/\s+/g, "-")}`;
   };
 
+  const pageSubjectCount = enrollments.reduce(
+    (total, enrollment) => total + Number(enrollment.total_subjects || 0),
+    0,
+  );
+
+  const pageUnitCount = enrollments.reduce(
+    (total, enrollment) => total + Number(enrollment.total_units || 0),
+    0,
+  );
+
+  const getPlacementLabel = (enrollment: Enrollment) => {
+    if (enrollment.placement.placement_complete) {
+      return "Placement Complete";
+    }
+
+    if (enrollment.placement.placed_subjects > 0) {
+      return `${enrollment.placement.placed_subjects}/${enrollment.total_subjects} Placed`;
+    }
+
+    return "Not Assigned";
+  };
+
   // =====================================================
   // DON'T RENDER IF NOT AUTHORIZED
   // =====================================================
@@ -489,7 +558,10 @@ export default function EnrollmentManagementR() {
           <div>
             <h1>Enrollment Management</h1>
 
-            <p>Review and manage student enrollment records.</p>
+            <p>
+              Review submitted enrollment records, Registrar-controlled
+              placement, validation, and approval status.
+            </p>
           </div>
         </div>
 
@@ -499,45 +571,27 @@ export default function EnrollmentManagementR() {
 
         <div className="registrar-enrollment-statistics">
           <div className="registrar-enrollment-card">
-            <span>Total Enrollments</span>
+            <span>Matching Enrollments</span>
 
             <h2>{totalEnrollments}</h2>
           </div>
 
           <div className="registrar-enrollment-card">
-            <span>Pending</span>
+            <span>On This Page</span>
 
-            <h2>
-              {status === "Pending"
-                ? enrollments.length
-                : enrollments.filter(
-                    (item) => item.enrollment_status === "Pending",
-                  ).length}
-            </h2>
+            <h2>{enrollments.length}</h2>
           </div>
 
           <div className="registrar-enrollment-card">
-            <span>Approved</span>
+            <span>Subjects on Page</span>
 
-            <h2>
-              {
-                enrollments.filter(
-                  (item) => item.enrollment_status === "Approved",
-                ).length
-              }
-            </h2>
+            <h2>{pageSubjectCount}</h2>
           </div>
 
           <div className="registrar-enrollment-card">
-            <span>Rejected</span>
+            <span>Units on Page</span>
 
-            <h2>
-              {
-                enrollments.filter(
-                  (item) => item.enrollment_status === "Rejected",
-                ).length
-              }
-            </h2>
+            <h2>{pageUnitCount}</h2>
           </div>
         </div>
 
@@ -566,6 +620,8 @@ export default function EnrollmentManagementR() {
             >
               <option value="All">All Status</option>
 
+              <option value="Draft">Draft</option>
+
               <option value="Pending">Pending</option>
 
               <option value="Approved">Approved</option>
@@ -583,9 +639,11 @@ export default function EnrollmentManagementR() {
                 handleFilterChange(setCourse, event.target.value)
               }
             >
+              <option value="All">All Courses</option>
+
               {courseOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item === "All" ? "All Courses" : `Course ${item}`}
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -598,9 +656,11 @@ export default function EnrollmentManagementR() {
                 handleFilterChange(setYear, event.target.value)
               }
             >
+              <option value="All">All Years</option>
+
               {yearOptions.map((item) => (
                 <option key={item} value={item}>
-                  {item === "All" ? "All Years" : `Year ${item}`}
+                  Year {item}
                 </option>
               ))}
             </select>
@@ -613,9 +673,11 @@ export default function EnrollmentManagementR() {
                 handleFilterChange(setSection, event.target.value)
               }
             >
+              <option value="All">All Sections</option>
+
               {sectionOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item === "All" ? "All Sections" : `Section ${item}`}
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -628,11 +690,11 @@ export default function EnrollmentManagementR() {
                 handleFilterChange(setAcademicYear, event.target.value)
               }
             >
+              <option value="All">All Academic Years</option>
+
               {academicYearOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item === "All"
-                    ? "All Academic Years"
-                    : `Academic Year ${item}`}
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -640,14 +702,27 @@ export default function EnrollmentManagementR() {
             {/* SEMESTER */}
 
             <select
-              value={semester}
-              onChange={(event) =>
-                handleFilterChange(setSemester, event.target.value)
+              value={
+                semester === "All" || [1, 2].includes(Number(semester))
+                  ? semester
+                  : "All"
               }
+              onChange={(event) => {
+                const value = event.target.value;
+
+                handleFilterChange(
+                  setSemester,
+                  value === "All" || [1, 2].includes(Number(value))
+                    ? value
+                    : "All",
+                );
+              }}
             >
+              <option value="All">All Semesters</option>
+
               {semesterOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item === "All" ? "All Semesters" : `Semester ${item}`}
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -757,13 +832,19 @@ export default function EnrollmentManagementR() {
                       <td>{enrollment.course.course_code}</td>
 
                       <td>
-                        {enrollment.section.year_level
-                          ? `Year ${enrollment.section.year_level}`
+                        {enrollment.student.year_level
+                          ? `Year ${enrollment.student.year_level}`
                           : "—"}
                       </td>
 
                       <td>
-                        {enrollment.section.section_name || "Not Assigned"}
+                        <div className="enrollment-period">
+                          <strong>
+                            {enrollment.section.section_name || "Not Assigned"}
+                          </strong>
+
+                          <small>{getPlacementLabel(enrollment)}</small>
+                        </div>
                       </td>
 
                       <td>

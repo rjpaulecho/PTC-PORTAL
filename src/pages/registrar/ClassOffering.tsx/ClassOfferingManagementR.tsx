@@ -469,7 +469,9 @@ export default function ClassOfferingManagementR() {
       params.set("academic_year_id", academicYearId);
     }
 
-    if (semesterId) {
+    const semesterIsSupported = [1, 2].includes(Number(semesterId));
+
+    if (semesterIsSupported) {
       params.set("semester_id", semesterId);
     }
 
@@ -570,9 +572,24 @@ export default function ClassOfferingManagementR() {
 
         // ===============================================
         // SUCCESS
+        //
+        // PTC Portal supports only:
+        // 1 = First Semester
+        // 2 = Second Semester
+        //
+        // Summer is intentionally excluded.
+        // Backend remains authoritative, but the parent
+        // sanitizes setup data before it reaches children.
         // ===============================================
 
-        setSetupData(data);
+        const supportedSemesters = (data.semesters || []).filter((semester) =>
+          [1, 2].includes(Number(semester.semester_id)),
+        );
+
+        setSetupData({
+          ...data,
+          semesters: supportedSemesters,
+        });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -623,9 +640,11 @@ export default function ClassOfferingManagementR() {
   // SELECTION COMPLETE
   // =====================================================
 
+  const semesterIsSupported = [1, 2].includes(Number(semesterId));
+
   const selectionComplete =
     Boolean(academicYearId) &&
-    Boolean(semesterId) &&
+    semesterIsSupported &&
     Boolean(courseId) &&
     Boolean(yearLevel) &&
     Boolean(curriculumId) &&
@@ -783,7 +802,9 @@ export default function ClassOfferingManagementR() {
 
   const academicYears = setupData?.academic_years || [];
 
-  const semesters = setupData?.semesters || [];
+  const semesters = (setupData?.semesters || []).filter((semester) =>
+    [1, 2].includes(Number(semester.semester_id)),
+  );
 
   const courses = setupData?.courses || [];
 
@@ -803,9 +824,9 @@ export default function ClassOfferingManagementR() {
     (item) => String(item.academic_year_id) === academicYearId,
   );
 
-  const selectedSemester = semesters.find(
-    (item) => String(item.semester_id) === semesterId,
-  );
+  const selectedSemester = semesterIsSupported
+    ? semesters.find((item) => String(item.semester_id) === semesterId)
+    : undefined;
 
   const selectedCourse = courses.find(
     (item) => String(item.course_id) === courseId,
@@ -1345,7 +1366,9 @@ export default function ClassOfferingManagementR() {
   // =====================================================
 
   const handleSemesterChange = (value: string) => {
-    setSemesterId(value);
+    const normalizedSemesterId = [1, 2].includes(Number(value)) ? value : "";
+
+    setSemesterId(normalizedSemesterId);
 
     setCourseId("");
 

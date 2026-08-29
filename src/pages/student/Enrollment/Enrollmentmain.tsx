@@ -11,71 +11,55 @@ const API_BASE_URL = "http://localhost:3000/api/student/enrollments";
 // TYPES
 // ============================================================
 
-interface StudentSession {
-  id?: number;
-  user_id?: number;
-  student_id?: number;
-  username?: string;
-  role: string;
-  email?: string;
-  role_id?: number;
-}
-
 interface Student {
-  user_id?: number;
-  username?: string;
-
   student_id: number;
   student_number: string;
   student_name: string;
 
-  first_name?: string;
-  middle_name?: string;
-  last_name?: string;
+  course: {
+    course_id: number;
+    course_code: string;
+    course_name: string;
+  };
 
-  course_id: number;
   year_level: number;
-
-  enrollment_type: string;
 }
 
 interface Curriculum {
   student_curriculum_id: number;
   curriculum_id: number;
   curriculum_name: string;
-  effective_year: number;
-  total_units: number;
-  is_active: boolean;
-
-  assigned_date?: string | null;
-  status?: string | null;
-  remarks?: string | null;
-
-  course?: {
-    course_id: number;
-    course_code: string;
-    course_name: string;
-  };
+  effective_year: number | null;
+  total_units: number | null;
+  status: string;
 }
 
 interface EnrollmentPeriod {
   enrollment_period_id: number;
+
   academic_year_id: number;
   academic_year: string;
+
   semester_id: number;
   semester_name: string;
+
   status: string;
 
-  opened_by?: number | null;
   opened_at?: string | null;
-
-  closed_by?: number | null;
-  closed_at?: string | null;
-
   remarks?: string | null;
 }
 
 interface Enrollment {
+  enrollment_id: number;
+  student_id: number;
+
+  enrollment_status: string;
+
+  remarks: string | null;
+  created_at: string;
+}
+
+interface OfficialEnrollment {
   enrollment_id: number;
   student_id: number;
 
@@ -95,30 +79,84 @@ interface Enrollment {
   created_at: string;
 }
 
-interface Section {
-  section_subject_id: number;
-  section_id: number;
+interface OfficialEnrollmentSubject {
+  enrollment_subject_id: number;
+  enrollment_id: number;
+
   subject_id: number;
+  subject_code: string;
+  subject_name: string;
 
-  subject_code?: string;
-  subject_name?: string;
+  units: number;
+  lecture_hours: number;
+  laboratory_hours: number;
 
-  section_name: string;
+  subject_status: string;
 
-  course_id: number;
-  year_level: number;
+  section_id: number | null;
+  section_name: string | null;
+  section_year_level: number | null;
 
-  academic_year_id: number;
-  semester_id: number;
+  section_subject_id: number | null;
+  section_subject_status: string | null;
+
+  offering_id: number | null;
+  offering_status: string | null;
+
+  faculty_id: number | null;
+  faculty_name: string | null;
+
+  room_id: number | null;
+  room_name: string | null;
+
+  schedule_days: string | null;
+  schedule_time: string | null;
 
   max_students: number | null;
-  enrolled_students?: number;
-  available_slots?: number;
 
-  status: string;
+  placement_complete: boolean;
 }
 
-interface Subject {
+interface CurrentEnrollmentResponse {
+  success: boolean;
+  message?: string;
+
+  student: Student;
+
+  curriculum: Curriculum | null;
+
+  curriculum_issue?: string | null;
+
+  enrollment_period: EnrollmentPeriod | null;
+
+  enrollment: OfficialEnrollment | null;
+
+  subjects: OfficialEnrollmentSubject[];
+
+  summary: {
+    total_subjects: number;
+    total_units: number;
+    placed_subjects: number;
+    unplaced_subjects: number;
+    placement_complete: boolean;
+  };
+
+  can_prepare: boolean;
+}
+
+interface Prerequisite {
+  prerequisite_id: number;
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+
+  passed: boolean;
+
+  final_grade: number | null;
+  academic_status: string;
+}
+
+interface RegularSubject {
   subject_id: number;
 
   subject_code: string;
@@ -129,32 +167,90 @@ interface Subject {
   lecture_hours: number;
   laboratory_hours: number;
 
-  year_level: number | null;
-  semester_id: number | null;
+  year_level: number;
+  semester_id: number;
 
   is_required: boolean;
   display_order: number;
 
-  enrollment_type: "Regular" | "Retake";
+  curriculum_subject_id: number;
+
+  enrollment_type: "Regular";
 
   academic_status: string;
 
-  previous_grade: number | null;
+  eligible: boolean;
 
-  remarks: string | null;
+  prerequisites: Prerequisite[];
 
-  curriculum_subject_id: number | null;
+  selected_in_draft: boolean;
 
   enrollment_subject_id: number | null;
   enrollment_subject_status: string | null;
-
-  assigned_section: Section | null;
-
-  has_available_sections?: boolean;
-  available_sections?: Section[];
 }
 
-interface EnrollmentResponse {
+interface RetakeCandidate {
+  subject_id: number;
+
+  subject_code: string;
+  subject_name: string;
+
+  units: number;
+
+  lecture_hours: number;
+  laboratory_hours: number;
+
+  previous_final_grade: number | null;
+  previous_status: string;
+
+  curriculum_subject_id: number;
+
+  original_year_level: number;
+  original_semester_id: number;
+
+  eligible_for_retake: boolean;
+
+  selected_in_draft: boolean;
+
+  enrollment_subject_id: number | null;
+  enrollment_subject_status: string | null;
+}
+
+interface BlockedSubject {
+  subject_id: number;
+
+  subject_code: string;
+  subject_name: string;
+
+  units: number;
+
+  year_level: number;
+  semester_id: number;
+
+  curriculum_subject_id: number;
+
+  reason: string;
+
+  prerequisites: Prerequisite[];
+  missing_prerequisites: Prerequisite[];
+}
+
+interface CompletedSubject {
+  subject_id: number;
+
+  subject_code: string;
+  subject_name: string;
+
+  units: number;
+
+  // Compatibility key returned by the backend.
+  // The backend sources this value from grades.final_rating.
+  final_grade: number | null;
+
+  academic_status: string;
+}
+
+interface EnrollmentEligibilityResponse {
   success: boolean;
 
   message?: string;
@@ -167,21 +263,64 @@ interface EnrollmentResponse {
 
   enrollment: Enrollment | null;
 
+  regular_subjects: RegularSubject[];
+
+  retake_candidates: RetakeCandidate[];
+
+  blocked_subjects: BlockedSubject[];
+
+  completed_subjects: CompletedSubject[];
+
   summary: {
-    total_subjects: number;
     regular_subjects: number;
-    retake_subjects: number;
-    total_units: number;
-    enrollment_type: string;
+    retake_candidates: number;
+    blocked_subjects: number;
+    completed_subjects: number;
+    eligible_units: number;
   };
 
-  subjects: Subject[];
+  can_prepare: boolean;
+  can_modify_draft: boolean;
+  can_submit: boolean;
+}
+
+interface ActionResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+
+  enrollment?: {
+    enrollment_id: number;
+    enrollment_status: string;
+  };
 }
 
 interface ApiErrorResponse {
   success?: boolean;
   message?: string;
   error?: string;
+  code?: string;
+}
+
+// ============================================================
+// SAFE JSON
+// ============================================================
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+
+    throw new Error(
+      `Server returned a non-JSON response (${response.status}): ${text.slice(
+        0,
+        200,
+      )}`,
+    );
+  }
+
+  return response.json() as Promise<T>;
 }
 
 // ============================================================
@@ -195,23 +334,37 @@ export default function Enrollmentmain() {
   // AUTH
   // ============================================================
 
-  const session = authService.getSession();
-
+  const authSession = authService.getSession();
   const token = authService.getToken();
 
-  const userRole = session?.role;
+  const userRole = authSession?.role;
 
-  const authenticated = Boolean(session && token);
+  const authenticated = Boolean(authSession && token);
 
   // ============================================================
-  // STATE
+  // DATA
   // ============================================================
 
-  const [user, setUser] = useState<StudentSession | null>(null);
+  const [data, setData] = useState<EnrollmentEligibilityResponse | null>(null);
 
-  const [data, setData] = useState<EnrollmentResponse | null>(null);
+  const [officialData, setOfficialData] =
+    useState<CurrentEnrollmentResponse | null>(null);
+
+  // ============================================================
+  // RETAKE SELECTION
+  // ============================================================
+
+  const [selectedRetakeSubjectIds, setSelectedRetakeSubjectIds] = useState<
+    number[]
+  >([]);
+
+  // ============================================================
+  // UI STATES
+  // ============================================================
 
   const [loading, setLoading] = useState(true);
+
+  const [preparing, setPreparing] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -247,20 +400,192 @@ export default function Enrollmentmain() {
 
       return;
     }
-
-    setUser(session as StudentSession);
-  }, [authenticated, userRole, session, navigate]);
+  }, [authenticated, userRole, authSession, navigate]);
 
   // ============================================================
-  // LOAD ENROLLMENT
+  // AUTH RESPONSE
+  // ============================================================
+
+  const handleAuthenticationResponse = (
+    response: Response,
+    responseData: ApiErrorResponse,
+  ) => {
+    if (response.status === 401) {
+      authService.logout();
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      return false;
+    }
+
+    if (response.status === 403) {
+      throw new Error(
+        responseData.message ||
+          responseData.error ||
+          "You are not authorized to access Student enrollment.",
+      );
+    }
+
+    return true;
+  };
+
+  // ============================================================
+  // APPLY ELIGIBILITY RESPONSE
+  // ============================================================
+
+  const applyEnrollmentData = (responseData: EnrollmentEligibilityResponse) => {
+    setData(responseData);
+
+    const draftRetakeIds = (responseData.retake_candidates || [])
+      .filter((subject) => subject.selected_in_draft)
+      .map((subject) => Number(subject.subject_id));
+
+    // Existing Draft:
+    // restore the retakes that actually belong to the Draft.
+    //
+    // No active enrollment:
+    // start with no optional retakes selected.
+    setSelectedRetakeSubjectIds(
+      responseData.enrollment?.enrollment_status === "Draft"
+        ? draftRetakeIds
+        : [],
+    );
+  };
+
+  // ============================================================
+  // LOAD ELIGIBILITY
   //
-  // IMPORTANT:
+  // GET /api/student/enrollments/subjects
   //
-  // No user_id query parameter.
-  //
-  // Backend identifies the student from:
-  //
-  // req.user.user_id
+  // No user_id.
+  // Student identity comes from req.user.user_id.
+  // ============================================================
+
+  const loadEnrollment = async (signal?: AbortSignal) => {
+    if (!authenticated || userRole !== "Student") {
+      return;
+    }
+
+    const response = await authService.authFetch(`${API_BASE_URL}/subjects`, {
+      method: "GET",
+
+      signal,
+
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    const responseData = await readJsonResponse<
+      EnrollmentEligibilityResponse | ApiErrorResponse
+    >(response);
+
+    const canContinue = handleAuthenticationResponse(
+      response,
+      responseData as ApiErrorResponse,
+    );
+
+    if (!canContinue) {
+      return;
+    }
+
+    if (!response.ok) {
+      const apiError = responseData as ApiErrorResponse;
+
+      throw new Error(
+        apiError.message ||
+          apiError.error ||
+          `Enrollment request failed (${response.status}).`,
+      );
+    }
+
+    if (!("student" in responseData)) {
+      throw new Error(
+        responseData.message || "Invalid Student enrollment response.",
+      );
+    }
+
+    if (!responseData.success) {
+      throw new Error(
+        responseData.message || "Failed to load Student enrollment.",
+      );
+    }
+
+    applyEnrollmentData(responseData);
+
+    // ======================================================
+    // LOAD OFFICIAL / CURRENT ENROLLMENT
+    //
+    // This endpoint is authoritative for the actual
+    // enrollment_subject rows and Registrar placement.
+    //
+    // It gives us:
+    // - official total units
+    // - section
+    // - offering
+    // - faculty
+    // - optional room
+    // - schedule
+    //
+    // No user_id or student_id is sent.
+    // JWT identity is resolved by the backend through req.user.
+    // ======================================================
+
+    const currentResponse = await authService.authFetch(
+      `${API_BASE_URL}/current`,
+      {
+        method: "GET",
+
+        signal,
+
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+
+    const currentData = await readJsonResponse<
+      CurrentEnrollmentResponse | ApiErrorResponse
+    >(currentResponse);
+
+    const canContinueCurrent = handleAuthenticationResponse(
+      currentResponse,
+      currentData as ApiErrorResponse,
+    );
+
+    if (!canContinueCurrent) {
+      return;
+    }
+
+    if (!currentResponse.ok) {
+      const apiError = currentData as ApiErrorResponse;
+
+      throw new Error(
+        apiError.message ||
+          apiError.error ||
+          `Current enrollment request failed (${currentResponse.status}).`,
+      );
+    }
+
+    if (!("subjects" in currentData)) {
+      throw new Error(
+        currentData.message || "Invalid current enrollment response.",
+      );
+    }
+
+    if (!currentData.success) {
+      throw new Error(
+        currentData.message || "Failed to load current enrollment.",
+      );
+    }
+
+    setOfficialData(currentData);
+  };
+
+  // ============================================================
+  // INITIAL LOAD
   // ============================================================
 
   useEffect(() => {
@@ -270,95 +595,13 @@ export default function Enrollmentmain() {
 
     const controller = new AbortController();
 
-    const loadEnrollment = async () => {
+    const run = async () => {
       try {
         setLoading(true);
 
         setError("");
 
-        const response = await authService.authFetch(
-          `${API_BASE_URL}/subjects`,
-          {
-            method: "GET",
-
-            signal: controller.signal,
-
-            headers: {
-              Accept: "application/json",
-            },
-          },
-        );
-
-        const contentType = response.headers.get("content-type") || "";
-
-        let responseData: EnrollmentResponse | ApiErrorResponse | null = null;
-
-        if (contentType.includes("application/json")) {
-          responseData = await response.json();
-        } else {
-          const text = await response.text();
-
-          throw new Error(
-            `Server returned a non-JSON response (${response.status}): ${text.slice(
-              0,
-              200,
-            )}`,
-          );
-        }
-
-        // ======================================================
-        // 401
-        // ======================================================
-
-        if (response.status === 401) {
-          authService.logout();
-
-          navigate("/login", {
-            replace: true,
-          });
-
-          return;
-        }
-
-        // ======================================================
-        // 403
-        // ======================================================
-
-        if (response.status === 403) {
-          throw new Error(
-            responseData?.message ||
-              responseData?.error ||
-              "You are not authorized to access student enrollment.",
-          );
-        }
-
-        // ======================================================
-        // HTTP ERROR
-        // ======================================================
-
-        if (!response.ok) {
-          throw new Error(
-            responseData?.message ||
-              responseData?.error ||
-              `Enrollment request failed (${response.status}).`,
-          );
-        }
-
-        // ======================================================
-        // VALIDATE RESPONSE
-        // ======================================================
-
-        if (!("student" in responseData)) {
-          throw new Error(
-            responseData?.message || "Invalid enrollment response.",
-          );
-        }
-
-        if (!responseData.success) {
-          throw new Error(responseData.message || "Failed to load enrollment.");
-        }
-
-        setData(responseData);
+        await loadEnrollment(controller.signal);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
@@ -384,89 +627,24 @@ export default function Enrollmentmain() {
       }
     };
 
-    void loadEnrollment();
+    void run();
 
     return () => {
       controller.abort();
     };
-  }, [authenticated, userRole, navigate]);
+  }, [authenticated, userRole]);
 
   // ============================================================
-  // RELOAD ENROLLMENT
+  // RELOAD
   // ============================================================
 
   const reloadEnrollment = async () => {
-    if (!authenticated || userRole !== "Student") {
-      return;
-    }
-
     try {
       setLoading(true);
 
       setError("");
 
-      const response = await authService.authFetch(`${API_BASE_URL}/subjects`, {
-        method: "GET",
-
-        headers: {
-          Accept: "application/json",
-        },
-      });
-
-      const contentType = response.headers.get("content-type") || "";
-
-      let responseData: EnrollmentResponse | ApiErrorResponse | null = null;
-
-      if (contentType.includes("application/json")) {
-        responseData = await response.json();
-      } else {
-        const text = await response.text();
-
-        throw new Error(
-          `Server returned a non-JSON response (${response.status}): ${text.slice(
-            0,
-            200,
-          )}`,
-        );
-      }
-
-      if (response.status === 401) {
-        authService.logout();
-
-        navigate("/login", {
-          replace: true,
-        });
-
-        return;
-      }
-
-      if (response.status === 403) {
-        throw new Error(
-          responseData?.message ||
-            responseData?.error ||
-            "You are not authorized to access student enrollment.",
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          responseData?.message ||
-            responseData?.error ||
-            `Enrollment request failed (${response.status}).`,
-        );
-      }
-
-      if (!("student" in responseData)) {
-        throw new Error(
-          responseData?.message || "Invalid enrollment response.",
-        );
-      }
-
-      if (!responseData.success) {
-        throw new Error(responseData.message || "Failed to load enrollment.");
-      }
-
-      setData(responseData);
+      await loadEnrollment();
     } catch (err) {
       console.error("RELOAD STUDENT ENROLLMENT ERROR:", err);
 
@@ -479,7 +657,7 @@ export default function Enrollmentmain() {
   };
 
   // ============================================================
-  // DATE FORMAT
+  // FORMAT DATE
   // ============================================================
 
   const formatDate = (date: string | null | undefined) => {
@@ -501,31 +679,7 @@ export default function Enrollmentmain() {
   };
 
   // ============================================================
-  // DATE + TIME
-  // ============================================================
-
-  const formatDateTime = (date: string | null | undefined) => {
-    if (!date) {
-      return "—";
-    }
-
-    const parsedDate = new Date(date);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return "—";
-    }
-
-    return parsedDate.toLocaleString("en-PH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  // ============================================================
-  // YEAR LEVEL
+  // YEAR LABEL
   // ============================================================
 
   const getYearLabel = (year: number) => {
@@ -557,10 +711,292 @@ export default function Enrollmentmain() {
   };
 
   // ============================================================
-  // AUTH GUARD
+  // RETAKE TOGGLE
+  //
+  // Student can select ONLY backend-approved retake candidates.
+  // Student never selects section/offering/faculty/room/schedule.
   // ============================================================
 
-  if (!authenticated || !session || userRole !== "Student") {
+  const toggleRetakeSubject = (subjectId: number) => {
+    if (!data?.can_prepare || data.enrollment) {
+      return;
+    }
+
+    setSelectedRetakeSubjectIds((current) => {
+      if (current.includes(subjectId)) {
+        return current.filter((id) => id !== subjectId);
+      }
+
+      return [...current, subjectId];
+    });
+
+    setError("");
+    setSuccessMessage("");
+  };
+
+  // ============================================================
+  // PREPARE DRAFT
+  //
+  // POST /api/student/enrollments/prepare
+  //
+  // Regular eligible subjects are automatic.
+  // Student sends ONLY selected valid retake subject IDs.
+  // Placement remains NULL.
+  // ============================================================
+
+  const prepareEnrollment = async () => {
+    if (!authenticated || userRole !== "Student") {
+      setError(
+        "Your session has expired or you are not authorized to prepare enrollment.",
+      );
+
+      return;
+    }
+
+    if (!data) {
+      setError("Enrollment information is not available.");
+
+      return;
+    }
+
+    if (!data.enrollment_period) {
+      setError("Enrollment is currently closed.");
+
+      return;
+    }
+
+    if (data.enrollment_period.status.trim().toLowerCase() !== "open") {
+      setError("The enrollment period is no longer open.");
+
+      return;
+    }
+
+    if (![1, 2].includes(Number(data.enrollment_period.semester_id))) {
+      setError(
+        "Only First Semester and Second Semester are supported for enrollment.",
+      );
+
+      return;
+    }
+
+    if (!data.can_prepare) {
+      setError(
+        data.enrollment
+          ? `A ${data.enrollment.enrollment_status} enrollment already exists for this period.`
+          : "This enrollment cannot currently be prepared.",
+      );
+
+      return;
+    }
+
+    const validRetakeIds = new Set(
+      data.retake_candidates
+        .filter((subject) => subject.eligible_for_retake)
+        .map((subject) => Number(subject.subject_id)),
+    );
+
+    const invalidSelectedRetakes = selectedRetakeSubjectIds.filter(
+      (subjectId) => !validRetakeIds.has(Number(subjectId)),
+    );
+
+    if (invalidSelectedRetakes.length > 0) {
+      setError(
+        "One or more selected retakes are no longer academically eligible. Reload the page and try again.",
+      );
+
+      return;
+    }
+
+    const totalSubjectsToPrepare =
+      data.regular_subjects.length + selectedRetakeSubjectIds.length;
+
+    if (totalSubjectsToPrepare === 0) {
+      setError(
+        "There are no eligible Regular subjects or selected Retake subjects to prepare.",
+      );
+
+      return;
+    }
+
+    try {
+      setPreparing(true);
+
+      setError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(`${API_BASE_URL}/prepare`, {
+        method: "POST",
+
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          selected_retake_subject_ids: selectedRetakeSubjectIds,
+        }),
+      });
+
+      const responseData = await readJsonResponse<ActionResponse>(response);
+
+      const canContinue = handleAuthenticationResponse(response, responseData);
+
+      if (!canContinue) {
+        return;
+      }
+
+      if (!response.ok || responseData.success === false) {
+        throw new Error(
+          responseData.message ||
+            responseData.error ||
+            `Unable to prepare enrollment (${response.status}).`,
+        );
+      }
+
+      setSuccessMessage(
+        responseData.message || "Draft enrollment prepared successfully.",
+      );
+
+      await reloadEnrollment();
+    } catch (err) {
+      console.error("PREPARE STUDENT ENROLLMENT ERROR:", err);
+
+      setError(
+        err instanceof Error ? err.message : "Unable to prepare enrollment.",
+      );
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  // ============================================================
+  // SUBMIT DRAFT
+  //
+  // POST /api/student/enrollments/:id/submit
+  //
+  // No user_id body.
+  // Backend gets Student identity from req.user.user_id.
+  //
+  // Draft -> Pending
+  //
+  // Registrar assigns section/offering AFTER submission.
+  // ============================================================
+
+  const submitEnrollment = async () => {
+    if (!authenticated || userRole !== "Student") {
+      setError(
+        "Your session has expired or you are not authorized to submit enrollment.",
+      );
+
+      return;
+    }
+
+    if (!data?.enrollment?.enrollment_id) {
+      setError("No Draft enrollment is available for submission.");
+
+      return;
+    }
+
+    if (!data.enrollment_period) {
+      setError("Enrollment is currently closed.");
+
+      return;
+    }
+
+    if (data.enrollment_period.status.trim().toLowerCase() !== "open") {
+      setError("The enrollment period is no longer open.");
+
+      return;
+    }
+
+    if (![1, 2].includes(Number(data.enrollment_period.semester_id))) {
+      setError(
+        "Only First Semester and Second Semester are supported for enrollment.",
+      );
+
+      return;
+    }
+
+    if (
+      data.enrollment.enrollment_status.trim().toLowerCase() !== "draft" ||
+      !data.can_submit
+    ) {
+      setError(
+        `This enrollment cannot be submitted because its current status is "${data.enrollment.enrollment_status}".`,
+      );
+
+      return;
+    }
+
+    const preparedRegularSubjects = data.regular_subjects.filter(
+      (subject) => subject.selected_in_draft,
+    );
+
+    const preparedRetakeSubjects = data.retake_candidates.filter(
+      (subject) => subject.selected_in_draft,
+    );
+
+    if (preparedRegularSubjects.length + preparedRetakeSubjects.length === 0) {
+      setError("There are no prepared subjects to submit.");
+
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      setError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${data.enrollment.enrollment_id}/submit`,
+        {
+          method: "POST",
+
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+
+      const responseData = await readJsonResponse<ActionResponse>(response);
+
+      const canContinue = handleAuthenticationResponse(response, responseData);
+
+      if (!canContinue) {
+        return;
+      }
+
+      if (!response.ok || responseData.success === false) {
+        throw new Error(
+          responseData.message ||
+            responseData.error ||
+            `Enrollment submission failed (${response.status}).`,
+        );
+      }
+
+      setSuccessMessage(
+        responseData.message ||
+          "Your enrollment has been submitted and is now pending Registrar review.",
+      );
+
+      await reloadEnrollment();
+    } catch (err) {
+      console.error("SUBMIT STUDENT ENROLLMENT ERROR:", err);
+
+      setError(
+        err instanceof Error ? err.message : "Unable to submit enrollment.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ============================================================
+  // AUTH RENDER GUARD
+  // ============================================================
+
+  if (!authenticated || !authSession || userRole !== "Student") {
     return null;
   }
 
@@ -583,7 +1019,7 @@ export default function Enrollmentmain() {
   }
 
   // ============================================================
-  // ERROR
+  // ERROR PAGE
   // ============================================================
 
   if (error && !data) {
@@ -647,24 +1083,15 @@ export default function Enrollmentmain() {
     curriculum,
     enrollment_period,
     enrollment,
+    regular_subjects,
+    retake_candidates,
+    blocked_subjects,
+    completed_subjects,
     summary,
-    subjects,
   } = data;
 
   // ============================================================
-  // SUBJECT GROUPS
-  // ============================================================
-
-  const regularSubjects = subjects.filter(
-    (subject) => subject.enrollment_type === "Regular",
-  );
-
-  const retakeSubjects = subjects.filter(
-    (subject) => subject.enrollment_type === "Retake",
-  );
-
-  // ============================================================
-  // ENROLLMENT STATUS
+  // CURRENT STATUS
   // ============================================================
 
   const enrollmentStatus =
@@ -672,27 +1099,533 @@ export default function Enrollmentmain() {
 
   const enrollmentIsDraft = enrollmentStatus === "draft";
 
-  const enrollmentIsSubmitted = enrollmentStatus === "pending";
+  const enrollmentIsPending = enrollmentStatus === "pending";
 
   const enrollmentIsApproved = enrollmentStatus === "approved";
 
   const enrollmentIsRejected = enrollmentStatus === "rejected";
 
-  const enrollmentIsDropped = enrollmentStatus === "dropped";
-
   const enrollmentPeriodIsOpen =
     enrollment_period?.status?.trim().toLowerCase() === "open";
+
+  const semesterIsSupported =
+    !enrollment_period ||
+    [1, 2].includes(Number(enrollment_period.semester_id));
+
+  // ============================================================
+  // DRAFT SUBJECTS
+  // ============================================================
+
+  const draftRegularSubjects = regular_subjects.filter(
+    (subject) => subject.selected_in_draft,
+  );
+
+  const draftRetakeSubjects = retake_candidates.filter(
+    (subject) => subject.selected_in_draft,
+  );
+
+  const draftSubjectsCount =
+    draftRegularSubjects.length + draftRetakeSubjects.length;
+
+  const draftUnits = [...draftRegularSubjects, ...draftRetakeSubjects].reduce(
+    (total, subject) => total + Number(subject.units || 0),
+    0,
+  );
+
+  // ============================================================
+  // PLANNED PREPARE SUMMARY
+  // ============================================================
+
+  const selectedRetakeSubjects = retake_candidates.filter((subject) =>
+    selectedRetakeSubjectIds.includes(Number(subject.subject_id)),
+  );
+
+  const selectedRetakeUnits = selectedRetakeSubjects.reduce(
+    (total, subject) => total + Number(subject.units || 0),
+    0,
+  );
+
+  const plannedSubjectCount =
+    regular_subjects.length + selectedRetakeSubjects.length;
+
+  const plannedUnits = summary.eligible_units + selectedRetakeUnits;
+
+  // ============================================================
+  // OFFICIAL ENROLLMENT SUMMARY
+  //
+  // Once an enrollment exists, the official/current endpoint is
+  // the source for the real subject load. This prevents an
+  // Approved retake from being omitted from the unit total.
+  // ============================================================
+
+  const officialSubjects = officialData?.subjects || [];
+
+  const officialSummary = officialData?.summary;
+
+  const officialUnits = officialSummary?.total_units ?? 0;
+
+  const displayedUnits = enrollment ? officialUnits : plannedUnits;
+
+  const displayedUnitsLabel = enrollmentIsApproved
+    ? "Official Units"
+    : enrollmentIsPending
+      ? "Submitted Units"
+      : enrollmentIsDraft
+        ? "Draft Units"
+        : "Planned Units";
+
+  const retakeCandidateIds = new Set(
+    retake_candidates.map((subject) => Number(subject.subject_id)),
+  );
+
+  const canPrepareEnrollment =
+    Boolean(enrollment_period) &&
+    enrollmentPeriodIsOpen &&
+    semesterIsSupported &&
+    data.can_prepare &&
+    !enrollment &&
+    plannedSubjectCount > 0;
 
   const canSubmitEnrollment =
     Boolean(enrollment?.enrollment_id) &&
     Boolean(enrollment_period) &&
     enrollmentPeriodIsOpen &&
+    semesterIsSupported &&
     enrollmentIsDraft &&
-    subjects.length > 0;
+    data.can_submit &&
+    draftSubjectsCount > 0;
 
-  const assignedSectionCount = subjects.filter(
-    (subject) => subject.assigned_section !== null,
-  ).length;
+  // ============================================================
+  // RENDER OFFICIAL ENROLLMENT SUBJECT
+  //
+  // Placement shown here comes from enrollment_subjects and the
+  // Registrar-selected offering. Student cannot modify it.
+  // ============================================================
+
+  const renderOfficialSubject = (subject: OfficialEnrollmentSubject) => {
+    const isRetake = retakeCandidateIds.has(Number(subject.subject_id));
+
+    return (
+      <div
+        key={subject.enrollment_subject_id}
+        className={`subject-card ${isRetake ? "retake-subject" : ""}`}
+      >
+        <div className="subject-header">
+          <div className="subject-number">{isRetake ? "R" : "✓"}</div>
+
+          <div className="subject-main">
+            <div className="subject-code-row">
+              <span className="subject-code">{subject.subject_code}</span>
+
+              <span
+                className={`subject-badge ${isRetake ? "retake" : "regular"}`}
+              >
+                {isRetake ? "Retake" : "Regular"}
+              </span>
+            </div>
+
+            <h3>{subject.subject_name}</h3>
+
+            <div className="subject-details">
+              <span>{subject.units} Units</span>
+
+              <span>Lecture: {subject.lecture_hours}h</span>
+
+              <span>Laboratory: {subject.laboratory_hours}h</span>
+            </div>
+          </div>
+
+          <div className="academic-status">
+            <span
+              className={`status-badge ${
+                subject.placement_complete ? "approved" : "pending"
+              }`}
+            >
+              {subject.subject_status}
+            </span>
+
+            <small>
+              {subject.placement_complete
+                ? "Official placement assigned"
+                : "Awaiting Registrar placement"}
+            </small>
+          </div>
+        </div>
+
+        <div className="section-area">
+          <div className="section-area-header">
+            <div>
+              <strong>Official Class Placement</strong>
+
+              <span>
+                {subject.placement_complete
+                  ? "Assigned by Registrar"
+                  : "Placement is still pending"}
+              </span>
+            </div>
+
+            {subject.offering_id !== null && (
+              <span className="section-count">
+                Offering #{subject.offering_id}
+              </span>
+            )}
+          </div>
+
+          {subject.placement_complete ? (
+            <div className="assigned-section-card">
+              <div className="assigned-section-main">
+                <span className="section-radio" aria-label="Assigned section">
+                  ✓
+                </span>
+
+                <div className="section-information">
+                  <strong>{subject.section_name || "Assigned Section"}</strong>
+
+                  <small>
+                    {subject.schedule_days || "Schedule day unavailable"}
+                    {" • "}
+                    {subject.schedule_time || "Schedule time unavailable"}
+                  </small>
+
+                  <small>
+                    Faculty: {subject.faculty_name || "Not assigned"}
+                  </small>
+
+                  <small>
+                    Room:{" "}
+                    {subject.room_name || "No room assigned / not required"}
+                  </small>
+                </div>
+              </div>
+
+              <div className="section-capacity">
+                <strong>{subject.max_students ?? "—"}</strong>
+
+                <small>Capacity</small>
+              </div>
+
+              <span
+                className={`section-status ${
+                  subject.offering_status?.toLowerCase() === "open"
+                    ? "open"
+                    : ""
+                }`}
+              >
+                {subject.offering_status || "Assigned"}
+              </span>
+            </div>
+          ) : (
+            <div className="no-sections">
+              <span className="no-section-icon">—</span>
+
+              <div>
+                <strong>Awaiting Registrar placement</strong>
+
+                <p>
+                  Your subject is part of the enrollment, but its official
+                  section/offering has not been assigned yet.
+                </p>
+
+                <small>
+                  Students cannot select or change section, offering, faculty,
+                  room, or schedule.
+                </small>
+              </div>
+            </div>
+          )}
+
+          <div className="selected-section-message">
+            <span>{subject.placement_complete ? "✓" : "i"}</span>
+
+            <p>
+              <strong>
+                {subject.placement_complete
+                  ? "Registrar-controlled placement."
+                  : "Placement pending."}
+              </strong>
+              <br />
+              <small>
+                This information comes from your official enrollment record.
+                Room may be blank because room assignment is optional.
+              </small>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
+  // RENDER REGULAR SUBJECT
+  // ============================================================
+
+  const renderRegularSubject = (subject: RegularSubject) => {
+    const isPrepared = Boolean(subject.selected_in_draft);
+
+    return (
+      <div key={subject.subject_id} className="subject-card">
+        <div className="subject-header">
+          <div className="subject-number">{subject.display_order || "—"}</div>
+
+          <div className="subject-main">
+            <div className="subject-code-row">
+              <span className="subject-code">{subject.subject_code}</span>
+
+              <span className="subject-badge regular">Regular</span>
+            </div>
+
+            <h3>{subject.subject_name}</h3>
+
+            <div className="subject-details">
+              <span>{subject.units} Units</span>
+
+              <span>Lecture: {subject.lecture_hours}h</span>
+
+              <span>Laboratory: {subject.laboratory_hours}h</span>
+            </div>
+          </div>
+
+          <div className="academic-status">
+            <span className="status-badge approved">Eligible</span>
+
+            {isPrepared && (
+              <small>
+                {subject.enrollment_subject_status || "Included in Draft"}
+              </small>
+            )}
+          </div>
+        </div>
+
+        <div className="section-area">
+          <div className="selected-section-message">
+            <span>✓</span>
+
+            <p>
+              <strong>Automatically included.</strong> This is a valid Regular
+              subject for the current curriculum term.
+              <br />
+              <small>
+                You do not choose a section, faculty, room, schedule, or class
+                offering. Registrar placement happens after submission.
+              </small>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
+  // RENDER RETAKE CANDIDATE
+  // ============================================================
+
+  const renderRetakeCandidate = (subject: RetakeCandidate) => {
+    const selectedBeforePrepare = selectedRetakeSubjectIds.includes(
+      Number(subject.subject_id),
+    );
+
+    const selectedInDraft = Boolean(subject.selected_in_draft);
+
+    const selectable = data.can_prepare && !enrollment;
+
+    return (
+      <div key={subject.subject_id} className="subject-card retake-subject">
+        <div className="subject-header">
+          <div className="subject-number">R</div>
+
+          <div className="subject-main">
+            <div className="subject-code-row">
+              <span className="subject-code">{subject.subject_code}</span>
+
+              <span className="subject-badge retake">Retake</span>
+            </div>
+
+            <h3>{subject.subject_name}</h3>
+
+            <div className="subject-details">
+              <span>{subject.units} Units</span>
+
+              <span>Lecture: {subject.lecture_hours}h</span>
+
+              <span>Laboratory: {subject.laboratory_hours}h</span>
+            </div>
+          </div>
+
+          <div className="academic-status">
+            <span className="status-badge failed">
+              Previous Grade: {subject.previous_final_grade ?? "—"}
+            </span>
+
+            <small>{subject.previous_status}</small>
+          </div>
+        </div>
+
+        <div className="section-area">
+          {selectable ? (
+            <label
+              className="selected-section-message"
+              style={{
+                cursor: "pointer",
+                alignItems: "flex-start",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedBeforePrepare}
+                onChange={() => toggleRetakeSubject(subject.subject_id)}
+                disabled={preparing || submitting}
+                style={{
+                  marginTop: "4px",
+                }}
+              />
+
+              <p>
+                <strong>
+                  {selectedBeforePrepare
+                    ? "Selected for this enrollment"
+                    : "Optional valid retake"}
+                </strong>
+                <br />
+                <small>
+                  Select this subject if you want to include this valid retake
+                  in your Draft enrollment.
+                </small>
+              </p>
+            </label>
+          ) : selectedInDraft ? (
+            <div className="selected-section-message">
+              <span>✓</span>
+
+              <p>
+                <strong>Included in Draft.</strong>
+                <br />
+                <small>
+                  Registrar will assign the official section/offering after
+                  submission.
+                </small>
+              </p>
+            </div>
+          ) : (
+            <div className="selected-section-message">
+              <span>i</span>
+
+              <p>
+                <strong>Valid retake candidate.</strong>
+                <br />
+                <small>
+                  Retake selection is locked because this enrollment is already{" "}
+                  {enrollment?.enrollment_status || "active"}.
+                </small>
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
+  // RENDER BLOCKED SUBJECT
+  // ============================================================
+
+  const renderBlockedSubject = (subject: BlockedSubject) => {
+    return (
+      <div key={subject.subject_id} className="subject-card">
+        <div className="subject-header">
+          <div className="subject-number">!</div>
+
+          <div className="subject-main">
+            <div className="subject-code-row">
+              <span className="subject-code">{subject.subject_code}</span>
+
+              <span className="subject-badge retake">Blocked</span>
+            </div>
+
+            <h3>{subject.subject_name}</h3>
+
+            <div className="subject-details">
+              <span>{subject.units} Units</span>
+            </div>
+          </div>
+
+          <div className="academic-status">
+            <span className="status-badge failed">Not Eligible</span>
+          </div>
+        </div>
+
+        <div className="section-area">
+          <div className="no-sections">
+            <span className="no-section-icon">!</span>
+
+            <div>
+              <strong>
+                {subject.reason === "PREREQUISITE_NOT_PASSED"
+                  ? "Prerequisite not yet passed"
+                  : "Academic result requires review"}
+              </strong>
+
+              {subject.missing_prerequisites.length > 0 ? (
+                <>
+                  <p>This subject is blocked by:</p>
+
+                  <small>
+                    {subject.missing_prerequisites
+                      .map(
+                        (prerequisite) =>
+                          `${prerequisite.subject_code} — ${
+                            prerequisite.academic_status || "NOT_TAKEN"
+                          }`,
+                      )
+                      .join(", ")}
+                  </small>
+                </>
+              ) : (
+                <small>
+                  This subject is not currently eligible for enrollment.
+                </small>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
+  // RENDER COMPLETED SUBJECT
+  // ============================================================
+
+  const renderCompletedSubject = (subject: CompletedSubject) => {
+    return (
+      <div key={subject.subject_id} className="subject-card">
+        <div className="subject-header">
+          <div className="subject-number">✓</div>
+
+          <div className="subject-main">
+            <div className="subject-code-row">
+              <span className="subject-code">{subject.subject_code}</span>
+
+              <span className="subject-badge regular">Completed</span>
+            </div>
+
+            <h3>{subject.subject_name}</h3>
+
+            <div className="subject-details">
+              <span>{subject.units} Units</span>
+            </div>
+          </div>
+
+          <div className="academic-status">
+            <span className="status-badge approved">
+              Final Rating: {subject.final_grade ?? "—"}
+            </span>
+
+            <small>{subject.academic_status}</small>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ============================================================
   // PAGE
@@ -712,7 +1645,9 @@ export default function Enrollmentmain() {
             <h1>Enrollment</h1>
 
             <p>
-              Review your Registrar-prepared enrollment and assigned sections.
+              Review your eligible curriculum subjects, select valid retakes,
+              prepare your Draft, and submit it for Registrar placement and
+              approval.
             </p>
           </div>
 
@@ -774,6 +1709,25 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
+            UNSUPPORTED SEMESTER DEFENSE
+        ==================================================== */}
+
+        {enrollment_period && !semesterIsSupported && (
+          <div className="enrollment-alert error">
+            <span className="alert-icon">!</span>
+
+            <div>
+              <strong>Unsupported Enrollment Period</strong>
+
+              <p>
+                Only First Semester and Second Semester are supported. Summer is
+                not part of the PTC Portal enrollment cycle.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================
             STUDENT INFORMATION
         ==================================================== */}
 
@@ -789,9 +1743,9 @@ export default function Enrollmentmain() {
           <div className="enrollment-info-card">
             <span className="info-label">Course</span>
 
-            <strong>{curriculum?.course?.course_code || "—"}</strong>
+            <strong>{student.course.course_code}</strong>
 
-            <small>{curriculum?.course?.course_name || "—"}</small>
+            <small>{student.course.course_name}</small>
           </div>
 
           <div className="enrollment-info-card">
@@ -799,7 +1753,11 @@ export default function Enrollmentmain() {
 
             <strong>{getYearLabel(student.year_level)}</strong>
 
-            <small>{student.enrollment_type}</small>
+            <small>
+              {enrollment
+                ? enrollment.enrollment_status
+                : "No Active Enrollment"}
+            </small>
           </div>
 
           <div className="enrollment-info-card">
@@ -812,38 +1770,38 @@ export default function Enrollmentmain() {
         </div>
 
         {/* ====================================================
-            SUMMARY
+            ELIGIBILITY SUMMARY
         ==================================================== */}
 
         <div className="enrollment-summary">
           <div className="summary-item">
-            <span className="summary-number">{summary.total_subjects}</span>
-
-            <span className="summary-label">Total Subjects</span>
-          </div>
-
-          <div className="summary-item">
             <span className="summary-number">{summary.regular_subjects}</span>
 
-            <span className="summary-label">Regular</span>
+            <span className="summary-label">Regular Eligible</span>
           </div>
 
           <div className="summary-item retake">
-            <span className="summary-number">{summary.retake_subjects}</span>
+            <span className="summary-number">{summary.retake_candidates}</span>
 
-            <span className="summary-label">Retake</span>
+            <span className="summary-label">Retake Candidates</span>
           </div>
 
           <div className="summary-item">
-            <span className="summary-number">{summary.total_units}</span>
+            <span className="summary-number">{summary.blocked_subjects}</span>
 
-            <span className="summary-label">Total Units</span>
+            <span className="summary-label">Blocked</span>
+          </div>
+
+          <div className="summary-item">
+            <span className="summary-number">{summary.completed_subjects}</span>
+
+            <span className="summary-label">Completed</span>
           </div>
 
           <div className="summary-item type">
-            <span className="summary-number">{summary.enrollment_type}</span>
+            <span className="summary-number">{displayedUnits}</span>
 
-            <span className="summary-label">Enrollment Type</span>
+            <span className="summary-label">{displayedUnitsLabel}</span>
           </div>
         </div>
 
@@ -860,7 +1818,7 @@ export default function Enrollmentmain() {
                 enrollment?.enrollment_status,
               )}`}
             >
-              {enrollment?.enrollment_status || "No Enrollment"}
+              {enrollment?.enrollment_status || "Not Prepared"}
             </strong>
 
             {enrollment?.remarks && <p>{enrollment.remarks}</p>}
@@ -870,37 +1828,72 @@ export default function Enrollmentmain() {
             <span>Created</span>
 
             <strong>{formatDate(enrollment?.created_at)}</strong>
-
-            {enrollment?.approved_at && (
-              <>
-                <span>Approved</span>
-
-                <strong>{formatDateTime(enrollment.approved_at)}</strong>
-              </>
-            )}
           </div>
         </div>
+
+        {/* ====================================================
+            CLOSED
+        ==================================================== */}
+
+        {!enrollment_period && (
+          <div className="enrollment-instruction">
+            <div className="instruction-icon">i</div>
+
+            <div>
+              <strong>Enrollment is currently closed</strong>
+
+              <p>
+                There is currently no open enrollment period. You can review
+                this page again when the Registrar opens enrollment.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================
+            READY TO PREPARE
+        ==================================================== */}
+
+        {enrollment_period && !enrollment && data.can_prepare && (
+          <div className="enrollment-instruction">
+            <div className="instruction-icon">i</div>
+
+            <div>
+              <strong>Prepare your enrollment</strong>
+
+              <p>
+                Regular eligible subjects are included automatically. You may
+                also choose any valid retake subjects shown below.
+              </p>
+
+              <small>
+                You do not select a section, faculty, room, schedule, or class
+                offering. Those are assigned by the Registrar after you submit
+                your Draft.
+              </small>
+            </div>
+          </div>
+        )}
 
         {/* ====================================================
             DRAFT
         ==================================================== */}
 
-        {enrollmentIsDraft && enrollment_period && (
+        {enrollmentIsDraft && (
           <div className="enrollment-instruction">
             <div className="instruction-icon">i</div>
 
             <div>
-              <strong>Your enrollment has been prepared</strong>
+              <strong>Your Draft enrollment is ready</strong>
 
               <p>
-                The Registrar has prepared your subjects and assigned sections.
-                Please review your enrollment before submitting it.
+                Review the Regular subjects and selected Retakes included in
+                your Draft, then submit it for Registrar review.
               </p>
 
               <small>
-                You cannot select, replace, transfer, add, or remove subjects or
-                sections. Any enrollment correction must be handled by the
-                Registrar.
+                Placement is intentionally not assigned yet. Section, offering,
+                faculty, room, and schedule are Registrar-controlled.
               </small>
             </div>
           </div>
@@ -910,7 +1903,7 @@ export default function Enrollmentmain() {
             PENDING
         ==================================================== */}
 
-        {enrollmentIsSubmitted && (
+        {enrollmentIsPending && (
           <div className="enrollment-instruction">
             <div className="instruction-icon">✓</div>
 
@@ -918,13 +1911,13 @@ export default function Enrollmentmain() {
               <strong>Enrollment submitted successfully</strong>
 
               <p>
-                Your enrollment has been submitted and is now pending Registrar
-                review.
+                Your Draft has been submitted and is now pending Registrar
+                review and official class placement.
               </p>
 
               <small>
-                Your subjects and assigned sections are locked for student
-                editing. Any corrections are handled by the Registrar.
+                You cannot change subjects, retakes, sections, offerings,
+                faculty, rooms, or schedules while the enrollment is Pending.
               </small>
             </div>
           </div>
@@ -941,9 +1934,16 @@ export default function Enrollmentmain() {
             <div>
               <strong>Your enrollment has been approved</strong>
 
-              <p>Your enrollment has been approved by the Registrar.</p>
+              <p>
+                The Registrar approved your enrollment. It is now the official
+                source of your current-semester class membership.
+              </p>
 
-              <small>Your enrollment is now officially approved.</small>
+              <small>
+                Your official section, offering, schedule, faculty, and optional
+                room assignment are shown below from the Registrar-controlled
+                enrollment record.
+              </small>
             </div>
           </div>
         )}
@@ -959,7 +1959,7 @@ export default function Enrollmentmain() {
             <div>
               <strong>Your enrollment was rejected</strong>
 
-              <p>Please review the remarks provided by the Registrar.</p>
+              <p>Please review the Registrar remarks.</p>
 
               {enrollment?.remarks && (
                 <small>Registrar remarks: {enrollment.remarks}</small>
@@ -969,177 +1969,237 @@ export default function Enrollmentmain() {
         )}
 
         {/* ====================================================
-            DROPPED
+            OFFICIAL / SUBMITTED ENROLLMENT
         ==================================================== */}
 
-        {enrollmentIsDropped && (
-          <div className="enrollment-instruction">
-            <div className="instruction-icon">!</div>
+        {enrollment &&
+          (enrollmentIsPending || enrollmentIsApproved) &&
+          officialData && (
+            <div className="subjects-container">
+              <div className="subjects-header">
+                <div>
+                  <span className="enrollment-eyebrow">
+                    {enrollmentIsApproved
+                      ? "Official Enrollment"
+                      : "Submitted Enrollment"}
+                  </span>
 
-            <div>
-              <strong>Enrollment dropped</strong>
+                  <h2>
+                    {enrollmentIsApproved
+                      ? "Your Official Classes"
+                      : "Registrar Placement"}
+                  </h2>
 
-              <p>This enrollment is no longer active.</p>
+                  <p>
+                    {enrollmentIsApproved
+                      ? "These are the subjects and Registrar-assigned class placements that make up your official current-semester enrollment."
+                      : "These subjects were submitted for Registrar review. Placement appears here as the Registrar assigns each class."}
+                  </p>
+                </div>
 
-              {enrollment?.remarks && (
-                <small>Remarks: {enrollment.remarks}</small>
+                <div className="selection-counter">
+                  {officialSummary?.total_subjects ?? 0} subjects •{" "}
+                  {officialUnits} units
+                </div>
+              </div>
+
+              {officialSummary && (
+                <div className="selected-section-message">
+                  <span>{officialSummary.placement_complete ? "✓" : "i"}</span>
+
+                  <p>
+                    <strong>
+                      {officialSummary.placement_complete
+                        ? "Placement complete."
+                        : "Placement still in progress."}
+                    </strong>{" "}
+                    {officialSummary.placed_subjects} of{" "}
+                    {officialSummary.total_subjects} subject
+                    {officialSummary.total_subjects !== 1 ? "s" : ""} placed.
+                    <br />
+                    <small>
+                      Official load: {officialSummary.total_units} units.
+                    </small>
+                  </p>
+                </div>
+              )}
+
+              {officialSubjects.length === 0 ? (
+                <div className="no-sections">
+                  <span className="no-section-icon">—</span>
+
+                  <div>
+                    <strong>No enrolled subjects found</strong>
+
+                    <p>
+                      The enrollment exists, but no active enrollment subjects
+                      were returned.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="subject-list">
+                  {officialSubjects.map((subject) =>
+                    renderOfficialSubject(subject),
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
         {/* ====================================================
-            CLOSED
-        ==================================================== */}
-
-        {!enrollment_period && (
-          <div className="enrollment-instruction">
-            <div className="instruction-icon">i</div>
-
-            <div>
-              <strong>Enrollment is currently closed</strong>
-
-              <p>
-                There is currently no open enrollment period. Please check again
-                when enrollment opens.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ====================================================
-            NO ENROLLMENT
-        ==================================================== */}
-
-        {enrollment_period && !enrollment && (
-          <div className="enrollment-instruction">
-            <div className="instruction-icon">i</div>
-
-            <div>
-              <strong>Enrollment record not found</strong>
-
-              <p>
-                The enrollment period is open, but no enrollment record has been
-                created for your account yet.
-              </p>
-
-              <small>
-                Please contact the Registrar if you believe your enrollment
-                should already be prepared.
-              </small>
-            </div>
-          </div>
-        )}
-
-        {/* ====================================================
-            SUBJECTS
+            REGULAR SUBJECTS
         ==================================================== */}
 
         <div className="subjects-container">
           <div className="subjects-header">
             <div>
-              <span className="enrollment-eyebrow">Prepared Enrollment</span>
+              <span className="enrollment-eyebrow">Academic Eligibility</span>
 
-              <h2>Your Subjects</h2>
+              <h2>Regular Subjects</h2>
 
               <p>
-                These subjects were prepared by the Registrar/system for your
-                current enrollment.
+                These are the curriculum subjects you are academically eligible
+                to take in the current term.
               </p>
             </div>
 
             <div className="selection-counter">
-              {assignedSectionCount} / {subjects.length} sections assigned
+              {regular_subjects.length} eligible
             </div>
           </div>
 
-          {subjects.length > 0 && (
-            <div className="selected-section-message">
-              <span>i</span>
-
-              <p>
-                <strong>Registrar-prepared enrollment.</strong> Your subjects,
-                retakes, and sections are assigned by the Registrar/system.
-                <br />
-                Students cannot change sections, add subjects, remove subjects,
-                or transfer sections.
-              </p>
-            </div>
-          )}
-
-          {subjects.length === 0 && (
+          {regular_subjects.length === 0 ? (
             <div className="no-sections">
               <span className="no-section-icon">—</span>
 
               <div>
-                <strong>No subjects prepared</strong>
+                <strong>No Regular subjects available</strong>
 
                 <p>
-                  There are currently no subjects prepared for your enrollment.
+                  There are no Regular curriculum subjects currently eligible
+                  for this term.
                 </p>
-
-                <small>
-                  Please contact the Registrar if you believe your enrollment
-                  should already be prepared.
-                </small>
               </div>
             </div>
-          )}
-
-          {regularSubjects.length > 0 && (
-            <>
-              <div className="subject-group-header">
-                <div>
-                  <span className="enrollment-eyebrow">Regular Subjects</span>
-
-                  <h3>Current Curriculum Subjects</h3>
-                </div>
-
-                <span>
-                  {regularSubjects.length} subject
-                  {regularSubjects.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              <div className="subject-list">
-                {[...regularSubjects]
-                  .sort(
-                    (a, b) =>
-                      Number(a.display_order || 999999) -
-                      Number(b.display_order || 999999),
-                  )
-                  .map((subject) => renderSubject(subject))}
-              </div>
-            </>
-          )}
-
-          {retakeSubjects.length > 0 && (
-            <>
-              <div className="subject-group-header retake-group">
-                <div>
-                  <span className="enrollment-eyebrow">Retake Subjects</span>
-
-                  <h3>Subjects Requiring Retake</h3>
-                </div>
-
-                <span>
-                  {retakeSubjects.length} subject
-                  {retakeSubjects.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              <div className="subject-list">
-                {[...retakeSubjects]
-                  .sort(
-                    (a, b) =>
-                      Number(a.display_order || 999999) -
-                      Number(b.display_order || 999999),
-                  )
-                  .map((subject) => renderSubject(subject))}
-              </div>
-            </>
+          ) : (
+            <div className="subject-list">
+              {[...regular_subjects]
+                .sort(
+                  (a, b) =>
+                    Number(a.display_order || 999999) -
+                    Number(b.display_order || 999999),
+                )
+                .map((subject) => renderRegularSubject(subject))}
+            </div>
           )}
         </div>
+
+        {/* ====================================================
+            RETAKE CANDIDATES
+        ==================================================== */}
+
+        <div className="subjects-container">
+          <div className="subjects-header">
+            <div>
+              <span className="enrollment-eyebrow">Retake Eligibility</span>
+
+              <h2>Valid Retake Subjects</h2>
+
+              <p>
+                Failed or Incomplete subjects with an Approved academic result
+                may be selected for retake.
+              </p>
+            </div>
+
+            <div className="selection-counter">
+              {data.can_prepare && !enrollment
+                ? `${selectedRetakeSubjectIds.length} / ${retake_candidates.length} selected`
+                : `${retake_candidates.length} eligible`}
+            </div>
+          </div>
+
+          {retake_candidates.length === 0 ? (
+            <div className="no-sections">
+              <span className="no-section-icon">✓</span>
+
+              <div>
+                <strong>No retakes required</strong>
+
+                <p>
+                  You currently have no valid Failed or Incomplete subjects
+                  available for retake.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="subject-list">
+              {retake_candidates.map((subject) =>
+                renderRetakeCandidate(subject),
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ====================================================
+            BLOCKED SUBJECTS
+        ==================================================== */}
+
+        {blocked_subjects.length > 0 && (
+          <div className="subjects-container">
+            <div className="subjects-header">
+              <div>
+                <span className="enrollment-eyebrow">Not Yet Eligible</span>
+
+                <h2>Blocked Subjects</h2>
+
+                <p>
+                  These subjects are not included because prerequisite or
+                  academic requirements are not yet satisfied.
+                </p>
+              </div>
+
+              <div className="selection-counter">
+                {blocked_subjects.length} blocked
+              </div>
+            </div>
+
+            <div className="subject-list">
+              {blocked_subjects.map((subject) => renderBlockedSubject(subject))}
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================
+            COMPLETED SUBJECTS
+        ==================================================== */}
+
+        {completed_subjects.length > 0 && (
+          <div className="subjects-container">
+            <div className="subjects-header">
+              <div>
+                <span className="enrollment-eyebrow">Academic Record</span>
+
+                <h2>Completed Subjects</h2>
+
+                <p>
+                  These subjects already have an Approved passing result and are
+                  not offered again as Regular enrollment subjects.
+                </p>
+              </div>
+
+              <div className="selection-counter">
+                {completed_subjects.length} completed
+              </div>
+            </div>
+
+            <div className="subject-list">
+              {completed_subjects.map((subject) =>
+                renderCompletedSubject(subject),
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ====================================================
             CURRICULUM
@@ -1156,42 +2216,127 @@ export default function Enrollmentmain() {
             <div>
               <span className="info-label">Effective Year</span>
 
-              <strong>{curriculum.effective_year}</strong>
+              <strong>{curriculum.effective_year ?? "—"}</strong>
             </div>
 
             <div>
               <span className="info-label">Curriculum Units</span>
 
-              <strong>{curriculum.total_units}</strong>
+              <strong>{curriculum.total_units ?? "—"}</strong>
             </div>
           </div>
         )}
 
         {/* ====================================================
-            SUBMIT
+            PREPARE ACTION
         ==================================================== */}
 
-        {canSubmitEnrollment && (
+        {enrollment_period && !enrollment && data.can_prepare && (
+          <div className="enrollment-submit-card">
+            <div className="enrollment-submit-content">
+              <div>
+                <span className="enrollment-eyebrow">
+                  Enrollment Preparation
+                </span>
+
+                <h2>Prepare Draft Enrollment</h2>
+
+                <p>
+                  {regular_subjects.length} Regular subject
+                  {regular_subjects.length !== 1 ? "s" : ""} will be included
+                  automatically
+                  {selectedRetakeSubjectIds.length > 0
+                    ? `, together with ${selectedRetakeSubjectIds.length} selected Retake subject${
+                        selectedRetakeSubjectIds.length !== 1 ? "s" : ""
+                      }`
+                    : ""}
+                  .
+                </p>
+
+                <small>
+                  Planned total: {plannedSubjectCount} subject
+                  {plannedSubjectCount !== 1 ? "s" : ""} • {plannedUnits} units.
+                </small>
+              </div>
+
+              <button
+                type="button"
+                className="enrollment-btn primary enrollment-submit-btn"
+                onClick={() => void prepareEnrollment()}
+                disabled={!canPrepareEnrollment || preparing || submitting}
+              >
+                {preparing ? (
+                  <>
+                    <span className="button-spinner"></span>
+                    Preparing...
+                  </>
+                ) : (
+                  "Prepare Enrollment"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================
+            DRAFT REVIEW
+        ==================================================== */}
+
+        {enrollmentIsDraft && (
+          <div className="subjects-container">
+            <div className="subjects-header">
+              <div>
+                <span className="enrollment-eyebrow">Draft Enrollment</span>
+
+                <h2>Subjects Included in Draft</h2>
+
+                <p>
+                  This is the exact subject set that will be submitted for
+                  Registrar review.
+                </p>
+              </div>
+
+              <div className="selection-counter">
+                {draftSubjectsCount} subjects • {draftUnits} units
+              </div>
+            </div>
+
+            <div className="subject-list">
+              {[...draftRegularSubjects]
+                .sort(
+                  (a, b) =>
+                    Number(a.display_order || 999999) -
+                    Number(b.display_order || 999999),
+                )
+                .map((subject) => renderRegularSubject(subject))}
+
+              {draftRetakeSubjects.map((subject) =>
+                renderRetakeCandidate(subject),
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================
+            SUBMIT ACTION
+        ==================================================== */}
+
+        {enrollmentIsDraft && (
           <div className="enrollment-submit-card">
             <div className="enrollment-submit-content">
               <div>
                 <span className="enrollment-eyebrow">Ready for Submission</span>
 
-                <h2>Submit Enrollment</h2>
+                <h2>Submit Draft Enrollment</h2>
 
                 <p>
-                  Your enrollment has been prepared by the Registrar. Review
-                  your subjects and assigned sections before submitting.
+                  Submit this Draft to the Registrar. After submission, the
+                  Registrar assigns the official section and class offering for
+                  each subject.
                 </p>
 
                 <small>
-                  You are not selecting subjects or sections. The Registrar has
-                  already prepared your enrollment.
-                </small>
-
-                <small>
-                  Once submitted, your enrollment will be sent to the Registrar
-                  for review.
+                  Student placement fields remain read-only and Registrar-owned.
                 </small>
               </div>
 
@@ -1199,7 +2344,7 @@ export default function Enrollmentmain() {
                 type="button"
                 className="enrollment-btn primary enrollment-submit-btn"
                 onClick={() => void submitEnrollment()}
-                disabled={submitting}
+                disabled={!canSubmitEnrollment || submitting || preparing}
               >
                 {submitting ? (
                   <>
@@ -1214,20 +2359,22 @@ export default function Enrollmentmain() {
           </div>
         )}
 
-        {enrollmentIsSubmitted && (
+        {/* ====================================================
+            PENDING / APPROVED LOCKED STATE
+        ==================================================== */}
+
+        {enrollmentIsPending && (
           <div className="enrollment-submit-card">
             <div className="enrollment-submit-content">
               <div>
                 <span className="enrollment-eyebrow">Submission Complete</span>
 
-                <h2>Enrollment Awaiting Review</h2>
+                <h2>Enrollment Awaiting Registrar Review</h2>
 
                 <p>
-                  Your enrollment has already been submitted and is currently
-                  pending Registrar review.
+                  Your enrollment is Pending. No further Student submission or
+                  subject selection is allowed.
                 </p>
-
-                <small>No further submission is required.</small>
               </div>
 
               <div className="status-badge pending">
@@ -1249,8 +2396,6 @@ export default function Enrollmentmain() {
                   Your enrollment has been reviewed and approved by the
                   Registrar.
                 </p>
-
-                <small>No further action is required from you.</small>
               </div>
 
               <div className="status-badge approved">Approved</div>
@@ -1260,289 +2405,4 @@ export default function Enrollmentmain() {
       </div>
     </DashboardLayout>
   );
-
-  // ============================================================
-  // SUBMIT ENROLLMENT
-  //
-  // IMPORTANT:
-  //
-  // No user_id body.
-  // Backend knows student from req.user.user_id.
-  // ============================================================
-
-  async function submitEnrollment() {
-    if (!authenticated || userRole !== "Student") {
-      setError(
-        "Your session has expired or you are not authorized to submit enrollment.",
-      );
-
-      return;
-    }
-
-    if (!enrollment?.enrollment_id) {
-      setError("No enrollment record is available for submission.");
-
-      return;
-    }
-
-    if (!enrollment_period) {
-      setError("Enrollment is currently closed.");
-
-      return;
-    }
-
-    if (!enrollmentPeriodIsOpen) {
-      setError("The enrollment period is no longer open.");
-
-      return;
-    }
-
-    if (!enrollmentIsDraft) {
-      setError(
-        `This enrollment cannot be submitted because its current status is "${enrollment.enrollment_status}".`,
-      );
-
-      return;
-    }
-
-    if (subjects.length === 0) {
-      setError("There are no prepared subjects to submit.");
-
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-
-      setError("");
-
-      setSuccessMessage("");
-
-      const response = await authService.authFetch(
-        `${API_BASE_URL}/${enrollment.enrollment_id}/submit`,
-        {
-          method: "POST",
-
-          headers: {
-            Accept: "application/json",
-          },
-
-          // No body required.
-          //
-          // The backend gets:
-          //
-          // req.user.user_id
-        },
-      );
-
-      const contentType = response.headers.get("content-type") || "";
-
-      let responseData: ApiErrorResponse | null = null;
-
-      if (contentType.includes("application/json")) {
-        responseData = await response.json();
-      } else {
-        const text = await response.text();
-
-        throw new Error(
-          `Server returned a non-JSON response (${response.status}): ${text.slice(
-            0,
-            200,
-          )}`,
-        );
-      }
-
-      if (response.status === 401) {
-        authService.logout();
-
-        navigate("/login", {
-          replace: true,
-        });
-
-        return;
-      }
-
-      if (response.status === 403) {
-        throw new Error(
-          responseData?.message ||
-            responseData?.error ||
-            "You are not authorized to submit this enrollment.",
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          responseData?.message ||
-            responseData?.error ||
-            `Enrollment submission failed (${response.status}).`,
-        );
-      }
-
-      if (responseData?.success === false) {
-        throw new Error(responseData.message || "Unable to submit enrollment.");
-      }
-
-      setSuccessMessage(
-        responseData?.message ||
-          "Your enrollment has been submitted successfully and is now pending Registrar review.",
-      );
-
-      await reloadEnrollment();
-    } catch (err) {
-      console.error("SUBMIT STUDENT ENROLLMENT ERROR:", err);
-
-      setError(
-        err instanceof Error ? err.message : "Unable to submit enrollment.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // ============================================================
-  // SUBJECT RENDERER
-  // ============================================================
-
-  function renderSubject(subject: Subject) {
-    const assignedSection = subject.assigned_section;
-
-    const enrollmentSubjectStatus = subject.enrollment_subject_status;
-
-    const isRetake = subject.enrollment_type === "Retake";
-
-    return (
-      <div
-        key={subject.enrollment_subject_id ?? subject.subject_id}
-        className={`subject-card ${isRetake ? "retake-subject" : ""}`}
-      >
-        <div className="subject-header">
-          <div className="subject-number">
-            {isRetake ? "R" : subject.display_order}
-          </div>
-
-          <div className="subject-main">
-            <div className="subject-code-row">
-              <span className="subject-code">{subject.subject_code}</span>
-
-              {isRetake ? (
-                <span className="subject-badge retake">Retake</span>
-              ) : (
-                <span className="subject-badge regular">Regular</span>
-              )}
-            </div>
-
-            <h3>{subject.subject_name}</h3>
-
-            <div className="subject-details">
-              <span>{subject.units} Units</span>
-
-              <span>Lecture: {subject.lecture_hours}h</span>
-
-              <span>Laboratory: {subject.laboratory_hours}h</span>
-            </div>
-          </div>
-
-          <div className="academic-status">
-            {isRetake ? (
-              <>
-                <span className="status-badge failed">
-                  Previous Grade: {subject.previous_grade ?? "—"}
-                </span>
-
-                {subject.remarks && <small>{subject.remarks}</small>}
-              </>
-            ) : (
-              <span className="status-badge">{subject.academic_status}</span>
-            )}
-          </div>
-        </div>
-
-        <div className="section-area">
-          <div className="section-area-header">
-            <div>
-              <strong>Assigned Section</strong>
-
-              <span>
-                {assignedSection
-                  ? "Prepared by Registrar"
-                  : "No section assigned yet"}
-              </span>
-            </div>
-
-            {enrollmentSubjectStatus && (
-              <span className="section-count">{enrollmentSubjectStatus}</span>
-            )}
-          </div>
-
-          {assignedSection ? (
-            <div className="assigned-section-card">
-              <div className="assigned-section-main">
-                <span className="section-radio" aria-label="Assigned section">
-                  ✓
-                </span>
-
-                <div className="section-information">
-                  <strong>{assignedSection.section_name}</strong>
-
-                  <small>
-                    {assignedSection.subject_code || subject.subject_code}
-                  </small>
-                </div>
-              </div>
-
-              <div className="section-capacity">
-                {assignedSection.max_students &&
-                assignedSection.max_students > 0 ? (
-                  <>
-                    <strong>
-                      {assignedSection.enrolled_students ?? 0} /{" "}
-                      {assignedSection.max_students}
-                    </strong>
-
-                    <small>Students</small>
-                  </>
-                ) : (
-                  <small>Capacity unavailable</small>
-                )}
-              </div>
-
-              <span className="section-status open">
-                {assignedSection.status}
-              </span>
-            </div>
-          ) : (
-            <div className="no-sections">
-              <span className="no-section-icon">—</span>
-
-              <div>
-                <strong>No section assigned</strong>
-
-                <p>A section has not yet been assigned to this subject.</p>
-
-                <small>
-                  Please contact the Registrar if this subject should already
-                  have an assigned section.
-                </small>
-              </div>
-            </div>
-          )}
-
-          {assignedSection && (
-            <div className="selected-section-message">
-              <span>✓</span>
-
-              <p>
-                You are assigned to{" "}
-                <strong>{assignedSection.section_name}</strong> for{" "}
-                <strong>{subject.subject_code}</strong>
-                .
-                <br />
-                <small>Section changes are handled by the Registrar.</small>
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 }

@@ -2218,36 +2218,28 @@ router.get("/pending", async (req, res) => {
     }
   }
 });
-
 // =====================================================
-// ROUTE 5
-// GET ALL REGISTRAR ENROLLMENTS
+// GET REGISTRAR ENROLLMENTS
 //
 // GET /api/registrar/enrollments
 //
-// Optional query parameters:
-//
+// Query:
 // ?page=1
 // ?limit=10
-// ?search=Juan
+// ?search=...
 // ?status=Pending
 // ?course=1
-// ?year=2
-// ?section=1
-// ?academic_year=2
+// ?year=4
+// ?section=18
+// ?academic_year=3
 // ?semester=1
 //
-// Purpose:
-// - Registrar enrollment management list
-// - Search students
-// - Filter enrollments
-// - Pagination
-// - Return active subject count
-// - Return total units
-//
-// JWT:
-// - Registrar authenticated through req.user
-// - No user_id from frontend
+// IMPORTANT:
+// - JWT / Registrar RBAC required.
+// - No frontend user_id.
+// - Enrollment placement comes from enrollment_subjects.
+// - students.section_id is NOT enrollment placement.
+// - Summer is excluded.
 // =====================================================
 
 router.get("/", async (req, res) => {
@@ -2256,10 +2248,6 @@ router.get("/", async (req, res) => {
   if (!actor) {
     return;
   }
-
-  // =================================================
-  // QUERY PARAMETERS
-  // =================================================
 
   const {
     page = "1",
@@ -2278,7 +2266,6 @@ router.get("/", async (req, res) => {
   // =================================================
 
   let currentPage = Number(page);
-
   let perPage = Number(limit);
 
   if (!Number.isInteger(currentPage) || currentPage <= 0) {
@@ -2289,7 +2276,6 @@ router.get("/", async (req, res) => {
     perPage = 10;
   }
 
-  // Prevent huge requests
   if (perPage > 100) {
     perPage = 100;
   }
@@ -2297,21 +2283,18 @@ router.get("/", async (req, res) => {
   const offset = (currentPage - 1) * perPage;
 
   // =================================================
-  // WHERE CONDITIONS
+  // CONDITIONS
   // =================================================
 
-  const conditions = [];
+  const conditions = [
+    // PTC enrollment uses only First and Second Semester.
+    "e.semester_id IN (1, 2)",
+  ];
+
   const params = [];
 
   // =================================================
   // SEARCH
-  //
-  // Search by:
-  // - student number
-  // - first name
-  // - middle name
-  // - last name
-  // - username
   // =================================================
 
   const cleanSearch = String(search).trim();
@@ -2320,14 +2303,14 @@ router.get("/", async (req, res) => {
     const searchValue = `%${cleanSearch}%`;
 
     conditions.push(`
-        (
-          s.student_number LIKE ?
-          OR s.first_name LIKE ?
-          OR s.middle_name LIKE ?
-          OR s.last_name LIKE ?
-          OR u.username LIKE ?
-        )
-      `);
+      (
+        s.student_number LIKE ?
+        OR s.first_name LIKE ?
+        OR s.middle_name LIKE ?
+        OR s.last_name LIKE ?
+        OR u.username LIKE ?
+      )
+    `);
 
     params.push(
       searchValue,
@@ -2339,7 +2322,7 @@ router.get("/", async (req, res) => {
   }
 
   // =================================================
-  // STATUS FILTER
+  // STATUS
   // =================================================
 
   const cleanStatus = String(status).trim();
@@ -2361,15 +2344,12 @@ router.get("/", async (req, res) => {
       });
     }
 
-    conditions.push(`
-        e.enrollment_status = ?
-      `);
-
+    conditions.push("e.enrollment_status = ?");
     params.push(cleanStatus);
   }
 
   // =================================================
-  // COURSE FILTER
+  // COURSE
   // =================================================
 
   if (String(course).trim()) {
@@ -2382,15 +2362,15 @@ router.get("/", async (req, res) => {
       });
     }
 
-    conditions.push(`
-        s.course_id = ?
-      `);
-
+    conditions.push("s.course_id = ?");
     params.push(courseId);
   }
 
   // =================================================
-  // YEAR LEVEL FILTER
+  // YEAR LEVEL
+  //
+  // Student year level is separate from section
+  // placement and semester progression.
   // =================================================
 
   if (String(year).trim()) {
@@ -2403,18 +2383,14 @@ router.get("/", async (req, res) => {
       });
     }
 
-    conditions.push(`
-        COALESCE(
-          sec.year_level,
-          s.year_level
-        ) = ?
-      `);
-
+    conditions.push("s.year_level = ?");
     params.push(yearLevel);
   }
 
   // =================================================
-  // SECTION FILTER
+  // OFFICIAL ENROLLMENT SECTION
+  //
+  // Do NOT filter using students.section_id.
   // =================================================
 
   if (String(section).trim()) {
@@ -2428,14 +2404,25 @@ router.get("/", async (req, res) => {
     }
 
     conditions.push(`
-        sec.section_id = ?
-      `);
+      EXISTS (
+        SELECT 1
+        FROM enrollment_subjects es_filter
+        WHERE es_filter.enrollment_id = e.enrollment_id
+          AND es_filter.section_id = ?
+          AND es_filter.status IN (
+            'Enrolled',
+            'Completed',
+            'Failed',
+            'Incomplete'
+          )
+      )
+    `);
 
     params.push(sectionId);
   }
 
   // =================================================
-  // ACADEMIC YEAR FILTER
+  // ACADEMIC YEAR
   // =================================================
 
   if (String(academic_year).trim()) {
@@ -2448,15 +2435,14 @@ router.get("/", async (req, res) => {
       });
     }
 
-    conditions.push(`
-        e.academic_year_id = ?
-      `);
-
+    conditions.push("e.academic_year_id = ?");
     params.push(academicYearId);
   }
 
   // =================================================
-  // SEMESTER FILTER
+  // SEMESTER
+  //
+  // Summer is explicitly unsupported.
   // =================================================
 
   if (String(semester).trim()) {
@@ -2469,19 +2455,21 @@ router.get("/", async (req, res) => {
       });
     }
 
-    conditions.push(`
-        e.semester_id = ?
-      `);
+    if (![1, 2].includes(semesterId)) {
+      return res.status(400).json({
+        success: false,
+        code: "UNSUPPORTED_ENROLLMENT_SEMESTER",
+        message:
+          "Only First Semester and Second Semester are supported for enrollment.",
+        allowed_semester_ids: [1, 2],
+      });
+    }
 
+    conditions.push("e.semester_id = ?");
     params.push(semesterId);
   }
 
-  // =================================================
-  // WHERE CLAUSE
-  // =================================================
-
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
   let connection;
 
@@ -2489,218 +2477,277 @@ router.get("/", async (req, res) => {
     connection = await db.getConnection();
 
     // =================================================
-    // TOTAL COUNT
+    // TOTAL
     // =================================================
 
     const [countRows] = await connection.execute(
       `
-          SELECT
-              COUNT(
-                DISTINCT
-                e.enrollment_id
-              ) AS total
+        SELECT
+            COUNT(DISTINCT e.enrollment_id) AS total
 
-          FROM enrollments e
+        FROM enrollments e
 
-          INNER JOIN students s
-              ON s.student_id =
-                 e.student_id
+        INNER JOIN students s
+            ON s.student_id = e.student_id
 
-          LEFT JOIN users u
-              ON u.user_id =
-                 s.user_id
+        LEFT JOIN users u
+            ON u.user_id = s.user_id
 
-          LEFT JOIN sections sec
-              ON sec.section_id =
-                 s.section_id
-
-          ${whereClause}
-          `,
+        ${whereClause}
+      `,
       params,
     );
 
     const total = Number(countRows[0]?.total || 0);
 
     // =================================================
-    // GET ENROLLMENTS
+    // ENROLLMENT LIST
+    //
+    // enrollment_subjects is authoritative for:
+    // - enrolled subjects
+    // - section
+    // - placement
+    // - units
     // =================================================
 
     const queryParams = [...params, perPage, offset];
 
     const [enrollmentRows] = await connection.execute(
       `
-          SELECT
-              -- =========================================
-              -- ENROLLMENT
-              -- =========================================
+    SELECT
+        -- =========================================
+        -- ENROLLMENT
+        -- =========================================
 
-              e.enrollment_id,
-              e.student_id,
+        e.enrollment_id,
+        e.student_id,
 
-              e.academic_year_id,
-              e.semester_id,
+        e.academic_year_id,
+        e.semester_id,
 
-              e.enrollment_status,
-              e.remarks,
+        e.enrollment_status,
+        e.remarks,
 
-              e.approved_by,
-              approver.username
-                  AS approved_by_username,
+        e.approved_by,
 
-              e.approved_at,
-              e.created_at,
+        approver.username
+            AS approved_by_username,
 
-              -- =========================================
-              -- STUDENT
-              -- =========================================
+        e.approved_at,
+        e.created_at,
 
-              s.student_number,
+        -- =========================================
+        -- STUDENT
+        -- =========================================
 
-              s.first_name,
-              s.middle_name,
-              s.last_name,
+        s.student_number,
 
-              s.year_level
-                  AS student_year_level,
+        s.first_name,
+        s.middle_name,
+        s.last_name,
 
-              u.username,
+        s.year_level
+            AS student_year_level,
 
-              -- =========================================
-              -- COURSE
-              -- =========================================
+        u.username,
 
-              c.course_id,
-              c.course_code,
-              c.course_name,
+        -- =========================================
+        -- COURSE
+        -- =========================================
 
-              -- =========================================
-              -- STUDENT SECTION
-              -- =========================================
+        c.course_id,
+        c.course_code,
+        c.course_name,
 
-              sec.section_id,
-              sec.section_name,
-              sec.year_level
-                  AS section_year_level,
+        -- =========================================
+        -- PERIOD
+        -- =========================================
 
-              -- =========================================
-              -- ACADEMIC PERIOD
-              -- =========================================
+        ay.academic_year,
+        sem.semester_name,
 
-              ay.academic_year,
-              sem.semester_name,
+        -- =========================================
+        -- SUBJECT COUNT
+        --
+        -- Keep Completed / Failed / Incomplete
+        -- attempts visible in historical enrollments.
+        -- =========================================
 
-              -- =========================================
-              -- ACTIVE SUBJECT COUNT
-              -- =========================================
+        COUNT(
+          DISTINCT
+          CASE
+            WHEN es.status IN (
+              'Enrolled',
+              'Completed',
+              'Failed',
+              'Incomplete'
+            )
+            THEN es.enrollment_subject_id
+          END
+        ) AS total_subjects,
 
-              COUNT(
-                DISTINCT
-                CASE
-                  WHEN es.status =
-                       'Enrolled'
-                  THEN
-                    es.enrollment_subject_id
-                END
-              ) AS total_subjects,
+        -- =========================================
+        -- TOTAL UNITS
+        -- =========================================
 
-              -- =========================================
-              -- TOTAL ACTIVE UNITS
-              -- =========================================
+        COALESCE(
+          SUM(
+            CASE
+              WHEN es.status IN (
+                'Enrolled',
+                'Completed',
+                'Failed',
+                'Incomplete'
+              )
+              THEN sub.units
+              ELSE 0
+            END
+          ),
+          0
+        ) AS total_units,
 
-              COALESCE(
-                SUM(
-                  CASE
-                    WHEN es.status =
-                         'Enrolled'
-                    THEN sub.units
-                    ELSE 0
-                  END
-                ),
-                0
-              ) AS total_units
+        -- =========================================
+        -- ACTUAL ENROLLMENT SECTIONS
+        -- =========================================
 
-          FROM enrollments e
+        COUNT(
+          DISTINCT
+          CASE
+            WHEN es.status IN (
+              'Enrolled',
+              'Completed',
+              'Failed',
+              'Incomplete'
+            )
+            AND es.section_id IS NOT NULL
+            THEN es.section_id
+          END
+        ) AS assigned_section_count,
 
-          INNER JOIN students s
-              ON s.student_id =
-                 e.student_id
+        MIN(
+          CASE
+            WHEN es.status IN (
+              'Enrolled',
+              'Completed',
+              'Failed',
+              'Incomplete'
+            )
+            THEN es.section_id
+          END
+        ) AS representative_section_id,
 
-          LEFT JOIN users u
-              ON u.user_id =
-                 s.user_id
+        GROUP_CONCAT(
+          DISTINCT
+          CASE
+            WHEN es.status IN (
+              'Enrolled',
+              'Completed',
+              'Failed',
+              'Incomplete'
+            )
+            THEN assigned_sec.section_name
+          END
+          ORDER BY assigned_sec.section_name
+          SEPARATOR '|||'
+        ) AS assigned_section_names,
 
-          LEFT JOIN courses c
-              ON c.course_id =
-                 s.course_id
+        -- =========================================
+        -- PLACEMENT COUNT
+        --
+        -- Room is NOT required.
+        -- =========================================
 
-          LEFT JOIN sections sec
-              ON sec.section_id =
-                 s.section_id
+        COUNT(
+          DISTINCT
+          CASE
+            WHEN es.status IN (
+              'Enrolled',
+              'Completed',
+              'Failed',
+              'Incomplete'
+            )
+            AND es.section_id IS NOT NULL
+            AND es.section_subject_id IS NOT NULL
+            AND es.offering_id IS NOT NULL
+            THEN es.enrollment_subject_id
+          END
+        ) AS placed_subjects
 
-          LEFT JOIN academic_years ay
-              ON ay.academic_year_id =
-                 e.academic_year_id
+    FROM enrollments e
 
-          LEFT JOIN semesters sem
-              ON sem.semester_id =
-                 e.semester_id
+    INNER JOIN students s
+        ON s.student_id = e.student_id
 
-          LEFT JOIN users approver
-              ON approver.user_id =
-                 e.approved_by
+    LEFT JOIN users u
+        ON u.user_id = s.user_id
 
-          LEFT JOIN enrollment_subjects es
-              ON es.enrollment_id =
-                 e.enrollment_id
+    LEFT JOIN courses c
+        ON c.course_id = s.course_id
 
-          LEFT JOIN subjects sub
-              ON sub.subject_id =
-                 es.subject_id
+    INNER JOIN academic_years ay
+        ON ay.academic_year_id =
+           e.academic_year_id
 
-          ${whereClause}
+    INNER JOIN semesters sem
+        ON sem.semester_id =
+           e.semester_id
 
-          GROUP BY
-              e.enrollment_id,
-              e.student_id,
+    LEFT JOIN users approver
+        ON approver.user_id =
+           e.approved_by
 
-              e.academic_year_id,
-              e.semester_id,
+    LEFT JOIN enrollment_subjects es
+        ON es.enrollment_id =
+           e.enrollment_id
 
-              e.enrollment_status,
-              e.remarks,
+    LEFT JOIN subjects sub
+        ON sub.subject_id =
+           es.subject_id
 
-              e.approved_by,
-              approver.username,
+    LEFT JOIN sections assigned_sec
+        ON assigned_sec.section_id =
+           es.section_id
 
-              e.approved_at,
-              e.created_at,
+    ${whereClause}
 
-              s.student_number,
-              s.first_name,
-              s.middle_name,
-              s.last_name,
-              s.year_level,
+    GROUP BY
+        e.enrollment_id,
+        e.student_id,
 
-              u.username,
+        e.academic_year_id,
+        e.semester_id,
 
-              c.course_id,
-              c.course_code,
-              c.course_name,
+        e.enrollment_status,
+        e.remarks,
 
-              sec.section_id,
-              sec.section_name,
-              sec.year_level,
+        e.approved_by,
+        approver.username,
 
-              ay.academic_year,
-              sem.semester_name
+        e.approved_at,
+        e.created_at,
 
-          ORDER BY
-              e.created_at DESC,
-              e.enrollment_id DESC
+        s.student_number,
+        s.first_name,
+        s.middle_name,
+        s.last_name,
+        s.year_level,
 
-          LIMIT ?
-          OFFSET ?
-          `,
+        u.username,
+
+        c.course_id,
+        c.course_code,
+        c.course_name,
+
+        ay.academic_year,
+        sem.semester_name
+
+    ORDER BY
+        e.created_at DESC,
+        e.enrollment_id DESC
+
+    LIMIT ?
+    OFFSET ?
+  `,
       queryParams,
     );
 
@@ -2708,91 +2755,128 @@ router.get("/", async (req, res) => {
     // FORMAT
     // =================================================
 
-    const enrollments = enrollmentRows.map((row) => ({
-      enrollment_id: Number(row.enrollment_id),
+    const enrollments = enrollmentRows.map((row) => {
+      const totalSubjects = Number(row.total_subjects || 0);
 
-      student: {
-        student_id: Number(row.student_id),
+      const placedSubjects = Number(row.placed_subjects || 0);
 
-        student_number: row.student_number,
+      const assignedSectionCount = Number(row.assigned_section_count || 0);
 
-        student_name: [row.first_name, row.middle_name, row.last_name]
-          .filter(Boolean)
-          .join(" "),
+      const sectionNames = row.assigned_section_names
+        ? String(row.assigned_section_names).split("|||").filter(Boolean)
+        : [];
 
-        first_name: row.first_name,
+      const singleSectionId =
+        assignedSectionCount === 1 && row.representative_section_id !== null
+          ? Number(row.representative_section_id)
+          : null;
 
-        middle_name: row.middle_name || null,
+      const sectionName =
+        assignedSectionCount === 1
+          ? sectionNames[0] || null
+          : assignedSectionCount > 1
+            ? "Multiple Sections"
+            : null;
 
-        last_name: row.last_name,
+      const placementComplete =
+        totalSubjects > 0 && placedSubjects === totalSubjects;
 
-        username: row.username || null,
+      return {
+        enrollment_id: Number(row.enrollment_id),
 
-        year_level:
-          row.student_year_level !== null &&
-          row.student_year_level !== undefined
-            ? Number(row.student_year_level)
-            : null,
-      },
+        student: {
+          student_id: Number(row.student_id),
 
-      course: {
-        course_id: row.course_id ? Number(row.course_id) : null,
+          student_number: row.student_number,
 
-        course_code: row.course_code || null,
+          student_name: [row.first_name, row.middle_name, row.last_name]
+            .filter(Boolean)
+            .join(" "),
 
-        course_name: row.course_name || null,
-      },
+          first_name: row.first_name,
 
-      section: {
-        section_id: row.section_id ? Number(row.section_id) : null,
+          middle_name: row.middle_name || null,
 
-        section_name: row.section_name || null,
+          last_name: row.last_name,
 
-        year_level:
-          row.section_year_level !== null &&
-          row.section_year_level !== undefined
-            ? Number(row.section_year_level)
-            : null,
-      },
+          username: row.username || null,
 
-      academic_period: {
-        academic_year_id: Number(row.academic_year_id),
+          year_level:
+            row.student_year_level !== null
+              ? Number(row.student_year_level)
+              : null,
+        },
 
-        academic_year: row.academic_year,
+        course: {
+          course_id: row.course_id ? Number(row.course_id) : null,
 
-        semester_id: Number(row.semester_id),
+          course_code: row.course_code || null,
 
-        semester_name: row.semester_name,
-      },
+          course_name: row.course_name || null,
+        },
 
-      enrollment_status: row.enrollment_status,
+        // =============================================
+        // OFFICIAL PLACEMENT SUMMARY
+        //
+        // Never sourced from students.section_id.
+        // =============================================
 
-      remarks: row.remarks || null,
+        section: {
+          section_id: singleSectionId,
 
-      approval: {
-        approved_by: row.approved_by ? Number(row.approved_by) : null,
+          section_name: sectionName,
 
-        approved_by_username: row.approved_by_username || null,
+          year_level:
+            row.student_year_level !== null
+              ? Number(row.student_year_level)
+              : null,
+        },
 
-        approved_at: row.approved_at || null,
-      },
+        placement: {
+          assigned_section_count: assignedSectionCount,
 
-      total_subjects: Number(row.total_subjects || 0),
+          section_ids: singleSectionId !== null ? [singleSectionId] : [],
 
-      total_units: Number(row.total_units || 0),
+          section_names: sectionNames,
 
-      created_at: row.created_at,
-    }));
+          placed_subjects: placedSubjects,
 
-    // =================================================
-    // PAGINATION
-    // =================================================
+          unplaced_subjects: Math.max(totalSubjects - placedSubjects, 0),
+
+          placement_complete: placementComplete,
+        },
+
+        academic_period: {
+          academic_year_id: Number(row.academic_year_id),
+
+          academic_year: row.academic_year,
+
+          semester_id: Number(row.semester_id),
+
+          semester_name: row.semester_name,
+        },
+
+        enrollment_status: row.enrollment_status,
+
+        remarks: row.remarks || null,
+
+        approval: {
+          approved_by: row.approved_by ? Number(row.approved_by) : null,
+
+          approved_by_username: row.approved_by_username || null,
+
+          approved_at: row.approved_at || null,
+        },
+
+        total_subjects: totalSubjects,
+
+        total_units: Number(row.total_units || 0),
+
+        created_at: row.created_at,
+      };
+    });
 
     const totalPages = total > 0 ? Math.ceil(total / perPage) : 0;
-
-    // =================================================
-    // SUCCESS
-    // =================================================
 
     return res.status(200).json({
       success: true,
@@ -3448,137 +3532,137 @@ router.get("/:id", async (req, res) => {
       connection.release();
     }
   }
-});
-// =====================================================
+}); // =====================================================
+// ROUTE 7
 // GET AVAILABLE SUBJECT OFFERINGS
 //
 // GET /api/registrar/enrollments/:id/available-offerings
 //
-// OPTIONAL:
-// ?subject_id=69
+// Optional:
+// ?subject_id=1
 //
-// PURPOSE:
+// Purpose:
+// - Registrar chooses section/offering
+// - Student does NOT choose section
+// - Only Pending / Approved enrollment
+// - Same academic year
+// - Same semester
+// - Same student course
+// - Only subjects already inside enrollment
+// - Only active Enrolled subjects
+// - Only Open section subjects
+// - Only Open subject offerings
+// - Shows capacity
 //
-// Return only offerings that can actually be assigned
-// to subjects already inside this enrollment.
-//
-// IMPORTANT:
-//
-// - Registrar authentication required.
-// - Enrollment must be Pending or Approved.
-// - Subject must already belong to enrollment.
-// - Subject must have status Enrolled.
-// - Subject must belong to active curriculum.
-// - Grade V2 eligibility is revalidated.
-// - Approved subjects with ANY grade row are locked.
-// - Same subject only.
-// - Same course / AY / semester.
-// - Offering must be Open.
-// - Section Subject must be Open.
-// - Regular subject -> matching year-level section.
-// - Retake -> another compatible year-level section allowed.
-// - Room is optional.
-// - Capacity enforced.
+// JWT:
+// - Registrar comes from req.user
 // =====================================================
 
 router.get("/:id/available-offerings", async (req, res) => {
+  const actor = getRegistrarActor(req, res);
+
+  if (!actor) {
+    return;
+  }
+
+  // =================================================
+  // ENROLLMENT ID
+  // =================================================
+
+  const enrollmentId = toPositiveInt(req.params.id);
+
+  if (!enrollmentId) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid enrollment ID.",
+    });
+  }
+
+  // =================================================
+  // OPTIONAL SUBJECT ID
+  // =================================================
+
+  let subjectId = null;
+
+  if (
+    req.query.subject_id !== undefined &&
+    String(req.query.subject_id).trim() !== ""
+  ) {
+    subjectId = toPositiveInt(req.query.subject_id);
+
+    if (!subjectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid subject ID.",
+      });
+    }
+  }
+
   let connection;
 
   try {
-    // =================================================
-    // 1. AUTHENTICATION
-    // =================================================
-
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication is required.",
-      });
-    }
-
-    if (req.user.role_name !== "Registrar") {
-      return res.status(403).json({
-        success: false,
-        message: "Registrar access is required.",
-      });
-    }
-
-    // =================================================
-    // 2. ENROLLMENT ID
-    // =================================================
-
-    const enrollmentId = Number(req.params.id);
-
-    if (!Number.isInteger(enrollmentId) || enrollmentId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid enrollment ID.",
-      });
-    }
-
-    // =================================================
-    // 3. OPTIONAL SUBJECT FILTER
-    // =================================================
-
-    let requestedSubjectId = null;
-
-    if (req.query.subject_id !== undefined) {
-      requestedSubjectId = Number(req.query.subject_id);
-
-      if (!Number.isInteger(requestedSubjectId) || requestedSubjectId <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid subject ID.",
-        });
-      }
-    }
-
-    // =================================================
-    // 4. CONNECTION
-    // =================================================
-
     connection = await db.getConnection();
 
     // =================================================
-    // 5. ENROLLMENT + STUDENT
+    // GET ENROLLMENT
     // =================================================
 
     const [enrollmentRows] = await connection.execute(
       `
-            SELECT
-                e.enrollment_id,
-                e.student_id,
-                e.academic_year_id,
-                e.semester_id,
-                e.enrollment_status,
+        SELECT
+            e.enrollment_id,
+            e.student_id,
 
-                s.student_number,
-                s.first_name,
-                s.middle_name,
-                s.last_name,
+            e.academic_year_id,
+            e.semester_id,
 
-                s.course_id,
-                s.year_level,
+            e.enrollment_status,
 
-                c.course_code,
-                c.course_name
+            s.student_number,
 
-            FROM enrollments e
+            s.first_name,
+            s.middle_name,
+            s.last_name,
 
-            INNER JOIN students s
-                ON s.student_id =
-                   e.student_id
+            s.course_id,
 
-            INNER JOIN courses c
-                ON c.course_id =
-                   s.course_id
+            s.section_id
+                AS student_section_id,
 
-            WHERE e.enrollment_id = ?
+            c.course_code,
+            c.course_name,
 
-            LIMIT 1
-          `,
+            ay.academic_year,
+            sem.semester_name
+
+        FROM enrollments e
+
+        INNER JOIN students s
+            ON s.student_id =
+               e.student_id
+
+        LEFT JOIN courses c
+            ON c.course_id =
+               s.course_id
+
+        INNER JOIN academic_years ay
+            ON ay.academic_year_id =
+               e.academic_year_id
+
+        INNER JOIN semesters sem
+            ON sem.semester_id =
+               e.semester_id
+
+        WHERE e.enrollment_id = ?
+
+        LIMIT 1
+      `,
       [enrollmentId],
     );
+
+    // =================================================
+    // NOT FOUND
+    // =================================================
 
     if (enrollmentRows.length === 0) {
       return res.status(404).json({
@@ -3589,114 +3673,87 @@ router.get("/:id/available-offerings", async (req, res) => {
 
     const enrollment = enrollmentRows[0];
 
-    const studentId = Number(enrollment.student_id);
+    // =================================================
+    // ENROLLMENT STATUS
+    //
+    // Pending:
+    // Registrar may assign offering.
+    //
+    // Approved:
+    // Registrar may view offerings for corrections.
+    // =================================================
 
-    const courseId = Number(enrollment.course_id);
+    if (!["Pending", "Approved"].includes(enrollment.enrollment_status)) {
+      return res.status(409).json({
+        success: false,
 
-    const yearLevel = Number(enrollment.year_level);
+        message:
+          "Available offerings can only be viewed for Pending or Approved enrollments.",
 
-    const academicYearId = Number(enrollment.academic_year_id);
+        enrollment_status: enrollment.enrollment_status,
+      });
+    }
+
+    // =================================================
+    // SUMMER EXCLUSION
+    //
+    // 1 = First Semester
+    // 2 = Second Semester
+    // =================================================
 
     const semesterId = Number(enrollment.semester_id);
 
-    const enrollmentStatus = String(enrollment.enrollment_status);
-
-    // =================================================
-    // 6. ENROLLMENT STATUS
-    // =================================================
-
-    if (!["Pending", "Approved"].includes(enrollmentStatus)) {
+    if (![1, 2].includes(semesterId)) {
       return res.status(409).json({
         success: false,
 
-        message: `Subject offerings cannot be assigned because enrollment status is "${enrollmentStatus}".`,
+        code: "UNSUPPORTED_ENROLLMENT_SEMESTER",
+
+        message:
+          "Only First Semester and Second Semester are supported for enrollment.",
       });
     }
 
     // =================================================
-    // 7. ACTIVE ASSIGNED CURRICULUM
+    // COURSE REQUIRED
     // =================================================
 
-    const [curriculumRows] = await connection.execute(
-      `
-            SELECT
-                sc.student_curriculum_id,
-                sc.curriculum_id,
+    const courseId = toPositiveInt(enrollment.course_id);
 
-                cur.curriculum_name
-
-            FROM student_curriculum sc
-
-            INNER JOIN curriculum cur
-                ON cur.curriculum_id =
-                   sc.curriculum_id
-
-            WHERE sc.student_id = ?
-
-              AND sc.status = 'Active'
-
-              AND cur.is_active = 1
-
-              AND cur.course_id = ?
-
-            ORDER BY
-                sc.assigned_date DESC,
-                sc.student_curriculum_id DESC
-
-            LIMIT 1
-          `,
-      [studentId, courseId],
-    );
-
-    if (curriculumRows.length === 0) {
+    if (!courseId) {
       return res.status(409).json({
         success: false,
 
-        code: "VALID_ACTIVE_CURRICULUM_REQUIRED",
-
-        message: "The Student does not have a valid active curriculum.",
+        message: "Student does not have a valid course assignment.",
       });
     }
 
-    const curriculum = curriculumRows[0];
-
-    const curriculumId = Number(curriculum.curriculum_id);
-
     // =================================================
-    // 8. SUBJECTS ALREADY IN ENROLLMENT
+    // SUBJECT FILTER EXISTS
     //
-    // This endpoint is for placement.
-    // It must NOT discover arbitrary new subjects.
+    // Verify that the requested subject is actually
+    // an ACTIVE Enrolled subject in this enrollment.
+    //
+    // IMPORTANT:
+    // Earlier route used:
+    //
+    //   es.status <> 'Dropped'
+    //
+    // Finalized rule:
+    //
+    //   es.status = 'Enrolled'
     // =================================================
 
-    const subjectFilter =
-      requestedSubjectId !== null ? "AND es.subject_id = ?" : "";
-
-    const subjectParams =
-      requestedSubjectId !== null
-        ? [enrollmentId, requestedSubjectId]
-        : [enrollmentId];
-
-    const [subjectRows] = await connection.execute(
-      `
+    if (subjectId) {
+      const [enrollmentSubjectRows] = await connection.execute(
+        `
             SELECT
                 es.enrollment_subject_id,
                 es.subject_id,
-
-                es.offering_id
-                    AS current_offering_id,
-
-                es.section_id
-                    AS current_section_id,
-
-                es.section_subject_id
-                    AS current_section_subject_id,
-
                 es.status,
 
                 sub.subject_code,
-                sub.subject_name,
-                sub.units
+                sub.subject_name
 
             FROM enrollment_subjects es
 
@@ -3706,585 +3763,439 @@ router.get("/:id/available-offerings", async (req, res) => {
 
             WHERE es.enrollment_id = ?
 
+              AND es.subject_id = ?
+
               AND es.status = 'Enrolled'
 
-              ${subjectFilter}
-
-            ORDER BY
-                sub.subject_code ASC,
-                es.enrollment_subject_id ASC
+            LIMIT 1
           `,
-      subjectParams,
-    );
+        [enrollmentId, subjectId],
+      );
 
-    // =================================================
-    // 9. REQUESTED SUBJECT MUST ACTUALLY BE ENROLLED
-    // =================================================
+      if (enrollmentSubjectRows.length === 0) {
+        return res.status(404).json({
+          success: false,
 
-    if (requestedSubjectId !== null && subjectRows.length === 0) {
-      return res.status(404).json({
-        success: false,
+          message:
+            "The requested subject is not an active Enrolled subject in this enrollment.",
 
-        code: "ENROLLMENT_SUBJECT_NOT_FOUND",
-
-        message:
-          "The requested subject is not an active subject in this enrollment.",
-      });
-    }
-
-    if (subjectRows.length === 0) {
-      return res.status(200).json({
-        success: true,
-
-        enrollment: {
-          enrollment_id: enrollmentId,
-
-          student_id: studentId,
-
-          student_number: enrollment.student_number,
-
-          course_id: courseId,
-
-          course_code: enrollment.course_code,
-
-          course_name: enrollment.course_name,
-
-          year_level: yearLevel,
-
-          academic_year_id: academicYearId,
-
-          semester_id: semesterId,
-
-          enrollment_status: enrollmentStatus,
-        },
-
-        curriculum: {
-          curriculum_id: curriculumId,
-
-          curriculum_name: curriculum.curriculum_name,
-        },
-
-        count: 0,
-
-        offerings: [],
-      });
+          subject_id: subjectId,
+        });
+      }
     }
 
     // =================================================
-    // 10. VALIDATE EACH ENROLLMENT SUBJECT
+    // SUBJECT FILTER
     // =================================================
 
-    const eligibleSubjectMap = new Map();
-
-    for (const enrolledSubject of subjectRows) {
-      const subjectId = Number(enrolledSubject.subject_id);
-
-      const enrollmentSubjectId = Number(enrolledSubject.enrollment_subject_id);
-
-      // ===============================================
-      // SUBJECT MUST BELONG TO ACTIVE CURRICULUM
-      // ===============================================
-
-      const [curriculumSubjectRows] = await connection.execute(
+    const subjectCondition = subjectId
+      ? `
+          AND so.subject_id = ?
         `
-              SELECT
-                  curriculum_subject_id,
-                  subject_id,
-                  year_level,
-                  semester_id,
-                  is_required,
-                  display_order
+      : "";
 
-              FROM curriculum_subjects
+    // =================================================
+    // PARAMETERS
+    // =================================================
 
-              WHERE curriculum_id = ?
+    const queryParams = [
+      enrollment.academic_year_id,
+      enrollment.semester_id,
+      courseId,
+      enrollmentId,
+    ];
 
-                AND subject_id = ?
-
-              LIMIT 1
-            `,
-        [curriculumId, subjectId],
-      );
-
-      if (curriculumSubjectRows.length === 0) {
-        continue;
-      }
-
-      const curriculumSubject = curriculumSubjectRows[0];
-
-      // ===============================================
-      // APPROVED ENROLLMENT GRADE LOCK
-      // ===============================================
-
-      if (enrollmentStatus === "Approved") {
-        const [gradeRows] = await connection.execute(
-          `
-                SELECT
-                    grade_id,
-                    grade_status,
-                    final_rating
-
-                FROM grades
-
-                WHERE enrollment_subject_id = ?
-
-                LIMIT 1
-              `,
-          [enrollmentSubjectId],
-        );
-
-        if (gradeRows.length > 0) {
-          continue;
-        }
-      }
-
-      // ===============================================
-      // GRADE V2 ACADEMIC ELIGIBILITY
-      // ===============================================
-
-      const academicEligibility = await evaluateSubjectEligibility(
-        studentId,
-        subjectId,
-        connection,
-      );
-
-      if (!academicEligibility.eligible) {
-        continue;
-      }
-
-      if (
-        ![ELIGIBILITY_TYPE.REGULAR, ELIGIBILITY_TYPE.RETAKE].includes(
-          academicEligibility.eligibility_type,
-        )
-      ) {
-        continue;
-      }
-
-      // ===============================================
-      // REGULAR SUBJECT MUST BE CURRENT TERM
-      // ===============================================
-
-      if (academicEligibility.eligibility_type === ELIGIBILITY_TYPE.REGULAR) {
-        if (
-          Number(curriculumSubject.year_level) !== yearLevel ||
-          Number(curriculumSubject.semester_id) !== semesterId
-        ) {
-          continue;
-        }
-      }
-
-      eligibleSubjectMap.set(subjectId, {
-        enrollment_subject_id: enrollmentSubjectId,
-
-        subject_id: subjectId,
-
-        subject_code: enrolledSubject.subject_code,
-
-        subject_name: enrolledSubject.subject_name,
-
-        units: Number(enrolledSubject.units || 0),
-
-        current_offering_id:
-          enrolledSubject.current_offering_id !== null
-            ? Number(enrolledSubject.current_offering_id)
-            : null,
-
-        current_section_id:
-          enrolledSubject.current_section_id !== null
-            ? Number(enrolledSubject.current_section_id)
-            : null,
-
-        current_section_subject_id:
-          enrolledSubject.current_section_subject_id !== null
-            ? Number(enrolledSubject.current_section_subject_id)
-            : null,
-
-        curriculum_subject: curriculumSubject,
-
-        academic_eligibility: academicEligibility,
-      });
+    if (subjectId) {
+      queryParams.push(subjectId);
     }
 
     // =================================================
-    // 11. NOTHING CAN CURRENTLY BE PLACED
+    // GET AVAILABLE OFFERINGS
+    //
+    // Only READY offerings are returned.
+    //
+    // IMPORTANT:
+    // The subject must already exist as an active
+    // Enrolled subject inside this enrollment.
     // =================================================
-
-    if (eligibleSubjectMap.size === 0) {
-      return res.status(200).json({
-        success: true,
-
-        enrollment: {
-          enrollment_id: enrollmentId,
-
-          student_id: studentId,
-
-          student_number: enrollment.student_number,
-
-          course_id: courseId,
-
-          course_code: enrollment.course_code,
-
-          course_name: enrollment.course_name,
-
-          year_level: yearLevel,
-
-          academic_year_id: academicYearId,
-
-          semester_id: semesterId,
-
-          enrollment_status: enrollmentStatus,
-        },
-
-        curriculum: {
-          curriculum_id: curriculumId,
-
-          curriculum_name: curriculum.curriculum_name,
-        },
-
-        count: 0,
-
-        offerings: [],
-      });
-    }
-
-    // =================================================
-    // 12. GET OFFERINGS FOR ELIGIBLE ENROLLED SUBJECTS
-    // =================================================
-
-    const eligibleSubjectIds = Array.from(eligibleSubjectMap.keys());
-
-    const placeholders = eligibleSubjectIds.map(() => "?").join(",");
 
     const [offeringRows] = await connection.execute(
       `
-            SELECT
-                so.offering_id,
-                so.section_subject_id,
-                so.subject_id,
-                so.section_id,
+          SELECT
+              -- =========================================
+              -- OFFERING
+              -- =========================================
 
-                so.faculty_id,
-                so.room_id,
+              so.offering_id,
+              so.subject_id,
 
-                so.academic_year_id,
-                so.semester_id,
+              so.section_id,
+              so.section_subject_id,
 
-                so.schedule_days,
-                so.schedule_time,
+              so.faculty_id,
+              so.room_id,
 
-                so.max_students,
+              so.academic_year_id,
+              so.semester_id,
 
-                so.status
-                    AS offering_status,
+              so.schedule_days,
+              so.schedule_time,
 
-                ss.subject_id
-                    AS section_subject_subject_id,
+              so.max_students,
 
-                ss.section_id
-                    AS section_subject_section_id,
+              so.status
+                  AS offering_status,
 
-                ss.academic_year_id
-                    AS section_subject_academic_year_id,
+              -- =========================================
+              -- SUBJECT
+              -- =========================================
 
-                ss.semester_id
-                    AS section_subject_semester_id,
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
 
-                ss.status
-                    AS section_subject_status,
+              sub.lecture_hours,
+              sub.laboratory_hours,
 
-                sec.section_name,
+              -- =========================================
+              -- SECTION SUBJECT
+              -- =========================================
 
-                sec.course_id
-                    AS section_course_id,
+              ss.status
+                  AS section_subject_status,
 
-                sec.year_level
-                    AS section_year_level,
+              -- =========================================
+              -- SECTION
+              -- =========================================
 
-                sub.subject_code,
-                sub.subject_name,
-                sub.units,
+              sec.section_name,
+              sec.year_level,
 
-                CONCAT(
-                    f.first_name,
-                    ' ',
-                    COALESCE(
-                        CONCAT(
-                            f.middle_name,
-                            ' '
-                        ),
-                        ''
-                    ),
-                    f.last_name
-                ) AS faculty_name,
+              sec.course_id
+                  AS section_course_id,
 
-                r.room_name,
+              -- =========================================
+              -- COURSE
+              -- =========================================
 
-                r.capacity
-                    AS room_capacity,
+              section_course.course_code
+                  AS section_course_code,
 
-                (
-                    SELECT
-                        COUNT(*)
+              section_course.course_name
+                  AS section_course_name,
 
-                    FROM enrollment_subjects es2
+              -- =========================================
+              -- FACULTY
+              -- =========================================
 
-                    INNER JOIN enrollments e2
-                        ON e2.enrollment_id =
-                           es2.enrollment_id
+              f.faculty_id,
 
-                    WHERE es2.offering_id =
-                          so.offering_id
+              TRIM(
+                CONCAT_WS(
+                  ' ',
+                  f.first_name,
+                  NULLIF(
+                    f.middle_name,
+                    ''
+                  ),
+                  f.last_name
+                )
+              ) AS faculty_name,
 
-                      AND es2.status IN (
-                          'Enrolled',
-                          'Completed',
-                          'Failed',
-                          'Incomplete'
+              -- =========================================
+              -- ROOM
+              -- =========================================
+
+              r.room_id,
+              r.room_name,
+
+              -- =========================================
+              -- CURRENT ENROLLED COUNT
+              -- =========================================
+
+              (
+                SELECT
+                    COUNT(*)
+
+                FROM enrollment_subjects es_count
+
+                INNER JOIN enrollments e_count
+                    ON e_count.enrollment_id =
+                       es_count.enrollment_id
+
+                WHERE es_count.offering_id =
+                      so.offering_id
+
+                  AND es_count.status =
+                      'Enrolled'
+
+                  AND e_count.enrollment_status
+                      IN (
+                        'Pending',
+                        'Approved'
                       )
+              ) AS enrolled_count
 
-                      AND e2.enrollment_status IN (
-                          'Pending',
-                          'Approved'
-                      )
-                ) AS enrolled_count
+          FROM subject_offerings so
 
-            FROM subject_offerings so
+          INNER JOIN section_subjects ss
+              ON ss.section_subject_id =
+                 so.section_subject_id
 
-            INNER JOIN section_subjects ss
-                ON ss.section_subject_id =
-                   so.section_subject_id
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 so.subject_id
 
-            INNER JOIN sections sec
-                ON sec.section_id =
-                   so.section_id
+          INNER JOIN sections sec
+              ON sec.section_id =
+                 so.section_id
 
-            INNER JOIN subjects sub
-                ON sub.subject_id =
-                   so.subject_id
+          LEFT JOIN courses section_course
+              ON section_course.course_id =
+                 sec.course_id
 
-            LEFT JOIN faculty f
-                ON f.faculty_id =
-                   so.faculty_id
+          LEFT JOIN faculty f
+              ON f.faculty_id =
+                 so.faculty_id
 
-            LEFT JOIN rooms r
-                ON r.room_id =
-                   so.room_id
+          LEFT JOIN rooms r
+              ON r.room_id =
+                 so.room_id
 
-            WHERE so.subject_id IN (
-                ${placeholders}
+          WHERE so.academic_year_id = ?
+
+            AND so.semester_id = ?
+
+            -- =========================================
+            -- SAME STUDENT COURSE
+            -- =========================================
+
+            AND sec.course_id = ?
+
+            -- =========================================
+            -- SUBJECT MUST ALREADY EXIST
+            -- AS AN ACTIVE ENROLLED SUBJECT
+            -- =========================================
+
+            AND EXISTS (
+              SELECT 1
+
+              FROM enrollment_subjects current_es
+
+              WHERE current_es.enrollment_id = ?
+
+                AND current_es.subject_id =
+                    so.subject_id
+
+                AND current_es.status =
+                    'Enrolled'
             )
 
-              AND so.academic_year_id = ?
+            -- =========================================
+            -- SECTION SUBJECT MUST MATCH OFFERING
+            -- =========================================
 
-              AND so.semester_id = ?
+            AND ss.subject_id =
+                so.subject_id
 
-              AND ss.academic_year_id = ?
+            AND ss.section_id =
+                so.section_id
 
-              AND ss.semester_id = ?
+            AND ss.academic_year_id =
+                so.academic_year_id
 
-              AND sec.course_id = ?
+            AND ss.semester_id =
+                so.semester_id
 
-              AND so.status = 'Open'
+            -- =========================================
+            -- OPEN ONLY
+            -- =========================================
 
-              AND ss.status = 'Open'
+            AND ss.status = 'Open'
 
-            ORDER BY
-                sub.subject_code ASC,
-                sec.section_name ASC,
-                so.offering_id ASC
-          `,
-      [
-        ...eligibleSubjectIds,
+            AND so.status = 'Open'
 
-        academicYearId,
-        semesterId,
+            -- =========================================
+            -- READY CONFIGURATION
+            --
+            -- Room is OPTIONAL.
+            -- =========================================
 
-        academicYearId,
-        semesterId,
+            AND so.faculty_id IS NOT NULL
 
-        courseId,
-      ],
+            AND so.schedule_days IS NOT NULL
+
+            AND TRIM(
+              so.schedule_days
+            ) <> ''
+
+            AND so.schedule_time IS NOT NULL
+
+            AND TRIM(
+              so.schedule_time
+            ) <> ''
+
+            AND so.max_students > 0
+
+            ${subjectCondition}
+
+          ORDER BY
+              sub.subject_code ASC,
+              sec.section_name ASC,
+              so.schedule_days ASC,
+              so.schedule_time ASC
+        `,
+      queryParams,
     );
 
     // =================================================
-    // 13. FILTER TO EXACT PUT ROUTE RULES
+    // FORMAT AVAILABLE OFFERINGS
     // =================================================
 
-    const offerings = [];
+    const offerings = offeringRows
+      .map((row) => {
+        const maxStudents = Number(row.max_students || 0);
 
-    for (const offering of offeringRows) {
-      const subjectId = Number(offering.subject_id);
+        const enrolledCount = Number(row.enrolled_count || 0);
 
-      const subjectInfo = eligibleSubjectMap.get(subjectId);
+        const availableSlots = Math.max(maxStudents - enrolledCount, 0);
 
-      if (!subjectInfo) {
-        continue;
-      }
+        return {
+          // =============================================
+          // OFFERING
+          // =============================================
 
-      // ===============================================
-      // RELATIONSHIP INTEGRITY
-      // ===============================================
+          offering_id: Number(row.offering_id),
 
-      if (
-        Number(offering.section_subject_subject_id) !== subjectId ||
-        Number(offering.section_subject_section_id) !==
-          Number(offering.section_id)
-      ) {
-        continue;
-      }
+          offering_status: row.offering_status,
 
-      // ===============================================
-      // DON'T OFFER CURRENT OFFERING AS A CHANGE
-      // ===============================================
+          academic_year_id: Number(row.academic_year_id),
 
-      if (
-        subjectInfo.current_offering_id !== null &&
-        Number(offering.offering_id) === subjectInfo.current_offering_id
-      ) {
-        continue;
-      }
+          semester_id: Number(row.semester_id),
 
-      // ===============================================
-      // REGULAR -> SAME YEAR-LEVEL SECTION
-      // ===============================================
+          // =============================================
+          // SUBJECT
+          // =============================================
 
-      if (
-        subjectInfo.academic_eligibility.eligibility_type ===
-          ELIGIBILITY_TYPE.REGULAR &&
-        Number(offering.section_year_level) !== yearLevel
-      ) {
-        continue;
-      }
+          subject: {
+            subject_id: Number(row.subject_id),
 
-      // ===============================================
-      // READINESS
-      //
-      // Room remains optional.
-      // ===============================================
+            subject_code: row.subject_code,
 
-      const maxStudents = Number(offering.max_students || 0);
+            subject_name: row.subject_name,
 
-      if (!offering.faculty_id) {
-        continue;
-      }
+            units: Number(row.units || 0),
 
-      if (!offering.schedule_days || !String(offering.schedule_days).trim()) {
-        continue;
-      }
+            lecture_hours:
+              row.lecture_hours !== null && row.lecture_hours !== undefined
+                ? Number(row.lecture_hours)
+                : null,
 
-      if (!offering.schedule_time || !String(offering.schedule_time).trim()) {
-        continue;
-      }
+            laboratory_hours:
+              row.laboratory_hours !== null &&
+              row.laboratory_hours !== undefined
+                ? Number(row.laboratory_hours)
+                : null,
+          },
 
-      if (!Number.isInteger(maxStudents) || maxStudents <= 0) {
-        continue;
-      }
+          // =============================================
+          // SECTION
+          // =============================================
 
-      // ===============================================
-      // ROOM CAPACITY WHEN ROOM EXISTS
-      // ===============================================
+          section: {
+            section_id: Number(row.section_id),
 
-      if (
-        offering.room_capacity !== null &&
-        Number(offering.room_capacity) > 0 &&
-        maxStudents > Number(offering.room_capacity)
-      ) {
-        continue;
-      }
+            section_name: row.section_name,
 
-      // ===============================================
-      // CAPACITY
-      // ===============================================
+            year_level:
+              row.year_level !== null && row.year_level !== undefined
+                ? Number(row.year_level)
+                : null,
 
-      const enrolledCount = Number(offering.enrolled_count || 0);
+            course_id: row.section_course_id
+              ? Number(row.section_course_id)
+              : null,
 
-      if (enrolledCount >= maxStudents) {
-        continue;
-      }
+            course_code: row.section_course_code || null,
 
-      // ===============================================
-      // RETURN VALID OFFERING
-      // ===============================================
+            course_name: row.section_course_name || null,
+          },
 
-      offerings.push({
-        enrollment_subject_id: subjectInfo.enrollment_subject_id,
+          // =============================================
+          // SECTION SUBJECT
+          // =============================================
 
-        subject_id: subjectId,
+          section_subject: {
+            section_subject_id: Number(row.section_subject_id),
 
-        subject_code: offering.subject_code,
+            status: row.section_subject_status,
+          },
 
-        subject_name: offering.subject_name,
+          // =============================================
+          // FACULTY
+          // =============================================
 
-        units: Number(offering.units || 0),
+          faculty: {
+            faculty_id: row.faculty_id ? Number(row.faculty_id) : null,
 
-        enrollment_type: subjectInfo.academic_eligibility.eligibility_type,
+            faculty_name: row.faculty_name || null,
+          },
 
-        offering_id: Number(offering.offering_id),
+          // =============================================
+          // ROOM
+          //
+          // Room is optional.
+          // =============================================
 
-        section_subject_id: Number(offering.section_subject_id),
+          room: {
+            room_id: row.room_id ? Number(row.room_id) : null,
 
-        section_id: Number(offering.section_id),
+            room_name: row.room_name || null,
+          },
 
-        section_name: offering.section_name,
+          // =============================================
+          // SCHEDULE
+          // =============================================
 
-        section_year_level: Number(offering.section_year_level),
+          schedule: {
+            days: row.schedule_days || null,
 
-        faculty_id: Number(offering.faculty_id),
+            time: row.schedule_time || null,
+          },
 
-        faculty_name: offering.faculty_name,
+          // =============================================
+          // CAPACITY
+          // =============================================
 
-        room_id: offering.room_id !== null ? Number(offering.room_id) : null,
+          capacity: {
+            max_students: maxStudents,
 
-        room_name: offering.room_name,
+            enrolled_count: enrolledCount,
 
-        schedule_days: offering.schedule_days,
+            available_slots: availableSlots,
 
-        schedule_time: offering.schedule_time,
+            is_full: availableSlots <= 0,
+          },
+        };
+      })
 
-        max_students: maxStudents,
+      // =================================================
+      // REMOVE FULL OFFERINGS
+      // =================================================
 
-        enrolled_count: enrolledCount,
-
-        available_slots: Math.max(maxStudents - enrolledCount, 0),
-
-        offering_status: offering.offering_status,
-
-        section_subject_status: offering.section_subject_status,
-
-        current_assignment: {
-          offering_id: subjectInfo.current_offering_id,
-
-          section_id: subjectInfo.current_section_id,
-
-          section_subject_id: subjectInfo.current_section_subject_id,
-        },
-
-        academic_eligibility: {
-          eligible: subjectInfo.academic_eligibility.eligible,
-
-          eligibility_type: subjectInfo.academic_eligibility.eligibility_type,
-
-          reason: subjectInfo.academic_eligibility.reason,
-
-          latest_approved_grade:
-            subjectInfo.academic_eligibility.latest_approved_grade,
-
-          prerequisites: subjectInfo.academic_eligibility.prerequisites,
-        },
-      });
-    }
+      .filter((offering) => offering.capacity.available_slots > 0);
 
     // =================================================
-    // 14. RESPONSE
+    // SUCCESS RESPONSE
     // =================================================
 
     return res.status(200).json({
       success: true,
 
       enrollment: {
-        enrollment_id: enrollmentId,
+        enrollment_id: Number(enrollment.enrollment_id),
 
-        student_id: studentId,
+        student_id: Number(enrollment.student_id),
 
         student_number: enrollment.student_number,
 
@@ -4302,29 +4213,31 @@ router.get("/:id/available-offerings", async (req, res) => {
 
         course_name: enrollment.course_name,
 
-        year_level: yearLevel,
+        academic_year_id: Number(enrollment.academic_year_id),
 
-        academic_year_id: academicYearId,
+        academic_year: enrollment.academic_year,
 
-        semester_id: semesterId,
+        semester_id: Number(enrollment.semester_id),
 
-        enrollment_status: enrollmentStatus,
+        semester_name: enrollment.semester_name,
+
+        enrollment_status: enrollment.enrollment_status,
       },
 
-      curriculum: {
-        curriculum_id: curriculumId,
-
-        curriculum_name: curriculum.curriculum_name,
-      },
-
-      subject_filter: requestedSubjectId,
+      subject_filter: subjectId,
 
       count: offerings.length,
 
       offerings,
+
+      actor: {
+        user_id: actor.user_id,
+
+        username: actor.username,
+      },
     });
   } catch (error) {
-    console.error("GET REGISTRAR AVAILABLE OFFERINGS ERROR:", error);
+    console.error("GET AVAILABLE OFFERINGS ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -4339,6 +4252,1606 @@ router.get("/:id/available-offerings", async (req, res) => {
     }
   }
 });
+
+// =====================================================
+// BULK ASSIGN REGULAR SUBJECTS TO ONE SECTION
+//
+// POST
+// /api/registrar/enrollments/:id/assign-section
+//
+// Body:
+// {
+//   "section_id": 19,
+//   "reason": "Assigned regular subjects to BSIT-1C."
+// }
+//
+// Purpose:
+// - Registrar chooses ONE section.
+// - System maps the student's regular Enrolled subjects
+//   to that section's READY offerings.
+// - Retake / special subjects are NOT bulk-assigned.
+// - Already-correct assignments are skipped.
+// - Entire operation is transactional.
+// - Pending enrollment only.
+// - Room remains optional.
+// =====================================================
+
+router.post("/:id/assign-section", async (req, res) => {
+  const actor = getRegistrarActor(req, res);
+
+  if (!actor) {
+    return;
+  }
+
+  // =================================================
+  // IDS
+  // =================================================
+
+  const enrollmentId = toPositiveInt(req.params.id);
+
+  const sectionId = toPositiveInt(req.body?.section_id);
+
+  if (!enrollmentId) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid enrollment ID.",
+    });
+  }
+
+  if (!sectionId) {
+    return res.status(400).json({
+      success: false,
+      message: "A valid section_id is required.",
+    });
+  }
+
+  // =================================================
+  // REASON
+  // =================================================
+
+  const reason =
+    typeof req.body?.reason === "string" && req.body.reason.trim()
+      ? req.body.reason.trim()
+      : "Registrar bulk assigned regular subjects to section.";
+
+  if (reason.length > 255) {
+    return res.status(400).json({
+      success: false,
+      message: "Assignment reason must not exceed 255 characters.",
+    });
+  }
+
+  let connection;
+
+  try {
+    connection = await db.getConnection();
+
+    // =================================================
+    // TRANSACTION
+    // =================================================
+
+    await connection.beginTransaction();
+
+    // =================================================
+    // GET + LOCK ENROLLMENT
+    // =================================================
+
+    const [enrollmentRows] = await connection.execute(
+      `
+          SELECT
+              e.enrollment_id,
+              e.student_id,
+              e.academic_year_id,
+              e.semester_id,
+              e.enrollment_status,
+
+              s.student_number,
+              s.first_name,
+              s.middle_name,
+              s.last_name,
+
+              s.course_id,
+              s.year_level,
+
+              c.course_code,
+              c.course_name,
+
+              ay.academic_year,
+              sem.semester_name
+
+          FROM enrollments e
+
+          INNER JOIN students s
+              ON s.student_id =
+                 e.student_id
+
+          LEFT JOIN courses c
+              ON c.course_id =
+                 s.course_id
+
+          INNER JOIN academic_years ay
+              ON ay.academic_year_id =
+                 e.academic_year_id
+
+          INNER JOIN semesters sem
+              ON sem.semester_id =
+                 e.semester_id
+
+          WHERE e.enrollment_id = ?
+
+          LIMIT 1
+
+          FOR UPDATE
+        `,
+      [enrollmentId],
+    );
+
+    if (enrollmentRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found.",
+      });
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    // =================================================
+    // BULK PLACEMENT IS PENDING ONLY
+    //
+    // Approved enrollment corrections continue to use
+    // the individual subject assignment/change route.
+    // =================================================
+
+    if (enrollment.enrollment_status !== "Pending") {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "BULK_PLACEMENT_REQUIRES_PENDING",
+
+        message:
+          "Bulk section placement is only allowed for Pending enrollments.",
+
+        enrollment_status: enrollment.enrollment_status,
+      });
+    }
+
+    // =================================================
+    // DEFENSIVE SUMMER EXCLUSION
+    //
+    // 1 = First Semester
+    // 2 = Second Semester
+    // =================================================
+
+    const semesterId = Number(enrollment.semester_id);
+
+    if (![1, 2].includes(semesterId)) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "UNSUPPORTED_ENROLLMENT_SEMESTER",
+
+        message:
+          "Bulk section placement supports only First Semester and Second Semester.",
+      });
+    }
+
+    // =================================================
+    // STUDENT COURSE / YEAR
+    // =================================================
+
+    const courseId = toPositiveInt(enrollment.course_id);
+
+    const yearLevel = toPositiveInt(enrollment.year_level);
+
+    if (!courseId) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        message: "Student does not have a valid course assignment.",
+      });
+    }
+
+    if (!yearLevel) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        message: "Student does not have a valid year level.",
+      });
+    }
+
+    const academicYearId = Number(enrollment.academic_year_id);
+
+    // =================================================
+    // GET + LOCK TARGET SECTION
+    // =================================================
+
+    const [sectionRows] = await connection.execute(
+      `
+          SELECT
+              section_id,
+              course_id,
+              academic_year_id,
+              year_level,
+              section_name,
+              max_students
+
+          FROM sections
+
+          WHERE section_id = ?
+
+          LIMIT 1
+
+          FOR UPDATE
+        `,
+      [sectionId],
+    );
+
+    if (sectionRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(404).json({
+        success: false,
+        message: "Target section not found.",
+      });
+    }
+
+    const section = sectionRows[0];
+
+    // =================================================
+    // SAME COURSE
+    // =================================================
+
+    if (Number(section.course_id) !== courseId) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "SECTION_COURSE_MISMATCH",
+
+        message:
+          "The selected section does not belong to the student's course.",
+
+        student_course_id: courseId,
+
+        section_course_id: Number(section.course_id),
+      });
+    }
+
+    // =================================================
+    // SAME ACADEMIC YEAR
+    // =================================================
+
+    if (Number(section.academic_year_id) !== academicYearId) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "SECTION_ACADEMIC_YEAR_MISMATCH",
+
+        message:
+          "The selected section does not belong to the enrollment academic year.",
+      });
+    }
+
+    // =================================================
+    // SAME YEAR LEVEL
+    //
+    // Bulk placement is for the student's NORMAL
+    // section at the current year level.
+    // Retake placement remains individual.
+    // =================================================
+
+    if (Number(section.year_level) !== yearLevel) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "SECTION_YEAR_LEVEL_MISMATCH",
+
+        message:
+          "The selected section does not match the student's current year level.",
+
+        student_year_level: yearLevel,
+
+        section_year_level: Number(section.year_level),
+      });
+    }
+
+    // =================================================
+    // GET ACTIVE STUDENT CURRICULUM
+    //
+    // Bulk placement uses curriculum membership only
+    // to determine which subjects are NORMAL subjects
+    // for this student's current year + semester.
+    //
+    // This does NOT rerun Grade V2 eligibility.
+    // =================================================
+
+    const [curriculumRows] = await connection.execute(
+      `
+          SELECT
+              sc.student_curriculum_id,
+              sc.curriculum_id,
+              sc.status
+                  AS assignment_status,
+
+              cur.curriculum_name,
+              cur.course_id,
+              cur.is_active
+
+          FROM student_curriculum sc
+
+          INNER JOIN curriculum cur
+              ON cur.curriculum_id =
+                 sc.curriculum_id
+
+          WHERE sc.student_id = ?
+
+            AND sc.status = 'Active'
+
+            AND cur.is_active = 1
+
+            AND cur.course_id = ?
+
+          LIMIT 1
+
+          FOR UPDATE
+        `,
+      [enrollment.student_id, courseId],
+    );
+
+    if (curriculumRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "VALID_ACTIVE_CURRICULUM_REQUIRED",
+
+        message:
+          "Bulk section placement requires a valid active curriculum assigned to the student.",
+      });
+    }
+
+    const curriculum = curriculumRows[0];
+
+    const curriculumId = Number(curriculum.curriculum_id);
+
+    // =================================================
+    // GET + LOCK ALL ACTIVE ENROLLMENT SUBJECTS
+    //
+    // IMPORTANT:
+    // We lock every Enrolled row first because this
+    // transaction may update several of them.
+    // =================================================
+
+    const [subjectRows] = await connection.execute(
+      `
+          SELECT
+              es.enrollment_subject_id,
+              es.enrollment_id,
+              es.subject_id,
+
+              es.offering_id,
+              es.section_id,
+              es.section_subject_id,
+
+              es.status,
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+              sub.lecture_hours,
+              sub.laboratory_hours
+
+          FROM enrollment_subjects es
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 es.subject_id
+
+          WHERE es.enrollment_id = ?
+
+            AND es.status = 'Enrolled'
+
+          ORDER BY
+              sub.subject_code ASC,
+              es.enrollment_subject_id ASC
+
+          FOR UPDATE
+        `,
+      [enrollmentId],
+    );
+
+    if (subjectRows.length === 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "NO_ACTIVE_ENROLLMENT_SUBJECTS",
+
+        message:
+          "This enrollment does not contain any active Enrolled subjects.",
+      });
+    }
+
+    // =================================================
+    // GET NORMAL CURRICULUM SUBJECTS FOR CURRENT TERM
+    //
+    // Regular bulk placement requires:
+    //
+    // active curriculum
+    // +
+    // current student year level
+    // +
+    // current enrollment semester
+    //
+    // This matches the curriculum structure already
+    // used by the Student enrollment workflow.
+    // =================================================
+
+    const [currentCurriculumRows] = await connection.execute(
+      `
+          SELECT
+              cs.curriculum_subject_id,
+              cs.curriculum_id,
+              cs.subject_id,
+              cs.year_level,
+              cs.semester_id,
+              cs.is_required,
+              cs.display_order,
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units
+
+          FROM curriculum_subjects cs
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 cs.subject_id
+
+          WHERE cs.curriculum_id = ?
+
+            AND cs.year_level = ?
+
+            AND cs.semester_id = ?
+
+          ORDER BY
+              cs.display_order ASC,
+              sub.subject_code ASC
+        `,
+      [curriculumId, yearLevel, semesterId],
+    );
+
+    const currentCurriculumMap = new Map();
+
+    for (const row of currentCurriculumRows) {
+      currentCurriculumMap.set(Number(row.subject_id), row);
+    }
+
+    // =================================================
+    // GET SUBJECTS WITH PREVIOUS APPROVED ATTEMPTS
+    //
+    // We do NOT run evaluateSubjectEligibility() here.
+    //
+    // We only need a lightweight distinction:
+    //
+    // no previous Approved grade
+    //     -> may be Regular
+    //
+    // previous Approved grade
+    //     -> Retake / previous attempt / duplicate
+    //        and must stay in individual placement.
+    //
+    // Final /validate remains academically authoritative.
+    // =================================================
+
+    const [previousApprovedRows] = await connection.execute(
+      `
+          SELECT DISTINCT
+              old_es.subject_id
+
+          FROM enrollment_subjects old_es
+
+          INNER JOIN enrollments old_e
+              ON old_e.enrollment_id =
+                 old_es.enrollment_id
+
+          INNER JOIN grades g
+              ON g.enrollment_subject_id =
+                 old_es.enrollment_subject_id
+
+          WHERE old_e.student_id = ?
+
+            AND old_e.enrollment_id <> ?
+
+            AND old_e.enrollment_status =
+                'Approved'
+
+            AND g.grade_status =
+                'Approved'
+        `,
+      [enrollment.student_id, enrollmentId],
+    );
+
+    const previouslyAttemptedSubjectIds = new Set(
+      previousApprovedRows.map((row) => Number(row.subject_id)),
+    );
+
+    // =================================================
+    // CLASSIFY ACTIVE ENROLLMENT SUBJECTS
+    //
+    // REGULAR:
+    //
+    // 1. Current curriculum subject
+    // 2. Correct current year level
+    // 3. Correct current semester
+    // 4. No previous Approved academic attempt
+    //
+    // MANUAL:
+    //
+    // - Retakes
+    // - Old curriculum subjects
+    // - Special subjects
+    // - Subjects with a previous Approved attempt
+    //
+    // Manual subjects remain available through the
+    // individual Assign Offering action.
+    // =================================================
+
+    const regularSubjects = [];
+
+    const manualSubjects = [];
+
+    for (const subject of subjectRows) {
+      const subjectId = Number(subject.subject_id);
+
+      const curriculumSubject = currentCurriculumMap.get(subjectId);
+
+      const hasPreviousApprovedAttempt =
+        previouslyAttemptedSubjectIds.has(subjectId);
+
+      if (curriculumSubject && !hasPreviousApprovedAttempt) {
+        regularSubjects.push({
+          ...subject,
+
+          curriculum_subject_id: Number(
+            curriculumSubject.curriculum_subject_id,
+          ),
+
+          classification: "REGULAR",
+        });
+
+        continue;
+      }
+
+      manualSubjects.push({
+        enrollment_subject_id: Number(subject.enrollment_subject_id),
+
+        subject_id: subjectId,
+
+        subject_code: subject.subject_code,
+
+        subject_name: subject.subject_name,
+
+        current_offering_id:
+          subject.offering_id !== null ? Number(subject.offering_id) : null,
+
+        current_section_id:
+          subject.section_id !== null ? Number(subject.section_id) : null,
+
+        classification: hasPreviousApprovedAttempt
+          ? "PREVIOUS_APPROVED_ATTEMPT"
+          : "RETAKE_OR_SPECIAL",
+      });
+    }
+
+    // =================================================
+    // NOTHING REGULAR TO BULK PLACE
+    // =================================================
+
+    if (regularSubjects.length === 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "NO_REGULAR_SUBJECTS_FOR_BULK_PLACEMENT",
+
+        message:
+          "No regular current-term subjects are available for bulk section placement.",
+
+        manual_subjects: manualSubjects,
+      });
+    }
+
+    // =================================================
+    // REGULAR SUBJECT IDS
+    // =================================================
+
+    const regularSubjectIds = regularSubjects.map((subject) =>
+      Number(subject.subject_id),
+    );
+
+    // =================================================
+    // GET READY OFFERINGS IN TARGET SECTION
+    // =================================================
+
+    const placeholders = regularSubjectIds.map(() => "?").join(",");
+
+    const [offeringRows] = await connection.execute(
+      `
+          SELECT
+              so.offering_id,
+              so.subject_id,
+              so.section_id,
+              so.section_subject_id,
+
+              so.faculty_id,
+              so.room_id,
+
+              so.academic_year_id,
+              so.semester_id,
+
+              so.schedule_days,
+              so.schedule_time,
+
+              so.max_students,
+
+              so.status
+                  AS offering_status,
+
+              ss.subject_id
+                  AS section_subject_subject_id,
+
+              ss.section_id
+                  AS section_subject_section_id,
+
+              ss.academic_year_id
+                  AS section_subject_academic_year_id,
+
+              ss.semester_id
+                  AS section_subject_semester_id,
+
+              ss.status
+                  AS section_subject_status,
+
+              sub.subject_code,
+              sub.subject_name,
+              sub.units,
+
+              sec.section_name,
+              sec.year_level,
+
+              sec.course_id
+                  AS section_course_id,
+
+              TRIM(
+                CONCAT_WS(
+                  ' ',
+                  f.first_name,
+                  NULLIF(
+                    f.middle_name,
+                    ''
+                  ),
+                  f.last_name
+                )
+              ) AS faculty_name,
+
+              r.room_name,
+
+              (
+                SELECT
+                    COUNT(*)
+
+                FROM enrollment_subjects es_count
+
+                INNER JOIN enrollments e_count
+                    ON e_count.enrollment_id =
+                       es_count.enrollment_id
+
+                WHERE es_count.offering_id =
+                      so.offering_id
+
+                  AND es_count.status =
+                      'Enrolled'
+
+                  AND e_count.enrollment_status
+                      IN (
+                        'Pending',
+                        'Approved'
+                      )
+              ) AS enrolled_count
+
+          FROM subject_offerings so
+
+          INNER JOIN section_subjects ss
+              ON ss.section_subject_id =
+                 so.section_subject_id
+
+          INNER JOIN subjects sub
+              ON sub.subject_id =
+                 so.subject_id
+
+          INNER JOIN sections sec
+              ON sec.section_id =
+                 so.section_id
+
+          LEFT JOIN faculty f
+              ON f.faculty_id =
+                 so.faculty_id
+
+          LEFT JOIN rooms r
+              ON r.room_id =
+                 so.room_id
+
+          WHERE so.subject_id
+                IN (${placeholders})
+
+            AND so.section_id = ?
+
+            AND so.academic_year_id = ?
+
+            AND so.semester_id = ?
+
+            AND ss.section_id = ?
+
+            AND ss.academic_year_id = ?
+
+            AND ss.semester_id = ?
+
+            AND sec.course_id = ?
+
+            AND sec.year_level = ?
+
+            AND so.status = 'Open'
+
+            AND ss.status = 'Open'
+
+            AND so.faculty_id IS NOT NULL
+
+            AND so.schedule_days IS NOT NULL
+
+            AND TRIM(
+              so.schedule_days
+            ) <> ''
+
+            AND so.schedule_time IS NOT NULL
+
+            AND TRIM(
+              so.schedule_time
+            ) <> ''
+
+            AND so.max_students > 0
+
+          ORDER BY
+              sub.subject_code ASC,
+              so.offering_id ASC
+
+          FOR UPDATE
+        `,
+      [
+        ...regularSubjectIds,
+
+        sectionId,
+
+        academicYearId,
+        semesterId,
+
+        sectionId,
+
+        academicYearId,
+        semesterId,
+
+        courseId,
+        yearLevel,
+      ],
+    );
+
+    // =================================================
+    // GROUP OFFERINGS BY SUBJECT
+    // =================================================
+
+    const offeringsBySubject = new Map();
+
+    for (const row of offeringRows) {
+      const subjectId = Number(row.subject_id);
+
+      // ===============================================
+      // DEFENSIVE RELATIONSHIP CHECK
+      // ===============================================
+
+      const relationshipValid =
+        Number(row.section_subject_subject_id) === subjectId &&
+        Number(row.section_subject_section_id) === sectionId &&
+        Number(row.section_subject_academic_year_id) === academicYearId &&
+        Number(row.section_subject_semester_id) === semesterId;
+
+      if (!relationshipValid) {
+        continue;
+      }
+
+      // ===============================================
+      // ROOM IS OPTIONAL
+      //
+      // Do NOT reject when:
+      //
+      // room_id   = null
+      // room_name = null
+      // ===============================================
+
+      const maxStudents = Number(row.max_students || 0);
+
+      const enrolledCount = Number(row.enrolled_count || 0);
+
+      const normalized = {
+        offering_id: Number(row.offering_id),
+
+        subject_id: subjectId,
+
+        section_id: Number(row.section_id),
+
+        section_subject_id: Number(row.section_subject_id),
+
+        faculty_id: row.faculty_id !== null ? Number(row.faculty_id) : null,
+
+        faculty_name: row.faculty_name || null,
+
+        room_id: row.room_id !== null ? Number(row.room_id) : null,
+
+        room_name: row.room_name || null,
+
+        schedule_days: row.schedule_days,
+
+        schedule_time: row.schedule_time,
+
+        max_students: maxStudents,
+
+        enrolled_count: enrolledCount,
+
+        offering_status: row.offering_status,
+
+        section_subject_status: row.section_subject_status,
+
+        section_name: row.section_name,
+
+        year_level: Number(row.year_level),
+
+        course_id: Number(row.section_course_id),
+      };
+
+      if (!offeringsBySubject.has(subjectId)) {
+        offeringsBySubject.set(subjectId, []);
+      }
+
+      offeringsBySubject.get(subjectId).push(normalized);
+    }
+
+    // =================================================
+    // BUILD BULK PLACEMENT PLAN
+    //
+    // Nothing is written yet.
+    // =================================================
+
+    const placementPlan = [];
+
+    const placementErrors = [];
+
+    const skippedSubjects = [];
+
+    for (const subject of regularSubjects) {
+      const subjectId = Number(subject.subject_id);
+
+      const enrollmentSubjectId = Number(subject.enrollment_subject_id);
+
+      const candidates = offeringsBySubject.get(subjectId) || [];
+
+      // ===============================================
+      // NO READY OFFERING
+      // ===============================================
+
+      if (candidates.length === 0) {
+        placementErrors.push({
+          enrollment_subject_id: enrollmentSubjectId,
+
+          subject_id: subjectId,
+
+          subject_code: subject.subject_code,
+
+          subject_name: subject.subject_name,
+
+          code: "READY_OFFERING_NOT_FOUND",
+
+          message: `No READY / Open offering was found for ${subject.subject_code} in ${section.section_name}.`,
+        });
+
+        continue;
+      }
+
+      // ===============================================
+      // MORE THAN ONE READY OFFERING
+      //
+      // Bulk placement must be deterministic.
+      // Registrar should not have to guess.
+      // ===============================================
+
+      if (candidates.length > 1) {
+        placementErrors.push({
+          enrollment_subject_id: enrollmentSubjectId,
+
+          subject_id: subjectId,
+
+          subject_code: subject.subject_code,
+
+          subject_name: subject.subject_name,
+
+          code: "MULTIPLE_READY_OFFERINGS",
+
+          message: `More than one READY offering exists for ${subject.subject_code} in ${section.section_name}. Resolve the duplicate offerings first.`,
+
+          offering_ids: candidates.map((item) => item.offering_id),
+        });
+
+        continue;
+      }
+
+      const offering = candidates[0];
+
+      // ===============================================
+      // ALREADY CORRECTLY ASSIGNED
+      //
+      // Example:
+      // CC101 was manually assigned before bulk action.
+      //
+      // Do not write it again.
+      // Do not create duplicate history.
+      // ===============================================
+
+      const alreadyCorrect =
+        subject.offering_id !== null &&
+        subject.section_id !== null &&
+        subject.section_subject_id !== null &&
+        Number(subject.offering_id) === offering.offering_id &&
+        Number(subject.section_id) === sectionId &&
+        Number(subject.section_subject_id) === offering.section_subject_id;
+
+      if (alreadyCorrect) {
+        skippedSubjects.push({
+          enrollment_subject_id: enrollmentSubjectId,
+
+          subject_id: subjectId,
+
+          subject_code: subject.subject_code,
+
+          subject_name: subject.subject_name,
+
+          offering_id: offering.offering_id,
+
+          section_id: sectionId,
+
+          section_subject_id: offering.section_subject_id,
+
+          reason: "Already assigned to the correct READY offering.",
+        });
+
+        continue;
+      }
+
+      // ===============================================
+      // CAPACITY
+      //
+      // Current subject is NOT counted against the
+      // target offering unless it already belongs there.
+      //
+      // If it already belongs there, it would have been
+      // caught by alreadyCorrect above.
+      // ===============================================
+
+      if (offering.enrolled_count >= offering.max_students) {
+        placementErrors.push({
+          enrollment_subject_id: enrollmentSubjectId,
+
+          subject_id: subjectId,
+
+          subject_code: subject.subject_code,
+
+          subject_name: subject.subject_name,
+
+          code: "OFFERING_FULL",
+
+          message: `The READY offering for ${subject.subject_code} is already full.`,
+
+          offering_id: offering.offering_id,
+
+          capacity: {
+            enrolled_count: offering.enrolled_count,
+
+            max_students: offering.max_students,
+
+            available_slots: 0,
+          },
+        });
+
+        continue;
+      }
+
+      // ===============================================
+      // PREPARE OLD VALUES
+      // ===============================================
+
+      const oldValues = {
+        offering_id:
+          subject.offering_id !== null ? Number(subject.offering_id) : null,
+
+        section_id:
+          subject.section_id !== null ? Number(subject.section_id) : null,
+
+        section_subject_id:
+          subject.section_subject_id !== null
+            ? Number(subject.section_subject_id)
+            : null,
+
+        status: subject.status,
+      };
+
+      // ===============================================
+      // PREPARE NEW VALUES
+      // ===============================================
+
+      const newValues = {
+        offering_id: offering.offering_id,
+
+        section_id: sectionId,
+
+        section_subject_id: offering.section_subject_id,
+
+        status: subject.status,
+      };
+
+      placementPlan.push({
+        enrollment_subject_id: enrollmentSubjectId,
+
+        subject_id: subjectId,
+
+        subject_code: subject.subject_code,
+
+        subject_name: subject.subject_name,
+
+        units: Number(subject.units || 0),
+
+        old_values: oldValues,
+
+        new_values: newValues,
+
+        offering: {
+          offering_id: offering.offering_id,
+
+          faculty_id: offering.faculty_id,
+
+          faculty_name: offering.faculty_name,
+
+          room_id: offering.room_id,
+
+          room_name: offering.room_name,
+
+          schedule_days: offering.schedule_days,
+
+          schedule_time: offering.schedule_time,
+
+          max_students: offering.max_students,
+
+          enrolled_count: offering.enrolled_count,
+        },
+      });
+    }
+
+    // =================================================
+    // ABORT BEFORE WRITING IF ANY REGULAR SUBJECT
+    // CANNOT BE SAFELY PLACED
+    //
+    // This gives us ALL-OR-NOTHING placement.
+    // =================================================
+
+    if (placementErrors.length > 0) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+
+        code: "BULK_PLACEMENT_NOT_READY",
+
+        message:
+          "Bulk section placement could not continue because one or more regular subjects do not have exactly one available READY offering.",
+
+        section: {
+          section_id: sectionId,
+
+          section_name: section.section_name,
+        },
+
+        summary: {
+          regular_subjects: regularSubjects.length,
+
+          ready_to_assign: placementPlan.length,
+
+          already_correct: skippedSubjects.length,
+
+          errors: placementErrors.length,
+
+          manual_subjects: manualSubjects.length,
+        },
+
+        errors: placementErrors,
+
+        already_correct: skippedSubjects,
+
+        manual_subjects: manualSubjects,
+      });
+    }
+
+    // =================================================
+    // NOTHING NEEDS TO CHANGE
+    //
+    // All regular subjects may already be correctly
+    // assigned to this section.
+    // =================================================
+
+    if (placementPlan.length === 0) {
+      await connection.rollback();
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          "All regular subjects are already assigned to the selected section.",
+
+        section: {
+          section_id: sectionId,
+
+          section_name: section.section_name,
+        },
+
+        summary: {
+          regular_subjects: regularSubjects.length,
+
+          assigned: 0,
+
+          already_correct: skippedSubjects.length,
+
+          manual_subjects: manualSubjects.length,
+        },
+
+        already_correct: skippedSubjects,
+
+        manual_subjects: manualSubjects,
+
+        actor: {
+          user_id: actor.user_id,
+
+          username: actor.username,
+        },
+      });
+    }
+
+    // =================================================
+    // APPLY BULK PLACEMENT
+    //
+    // We reached this point only after ALL Regular
+    // subjects passed the readiness checks.
+    // =================================================
+
+    const assignedSubjects = [];
+
+    for (const item of placementPlan) {
+      // ===============================================
+      // UPDATE ENROLLMENT SUBJECT
+      // ===============================================
+
+      const [updateResult] = await connection.execute(
+        `
+            UPDATE enrollment_subjects
+
+            SET
+                offering_id = ?,
+                section_id = ?,
+                section_subject_id = ?
+
+            WHERE enrollment_subject_id = ?
+
+              AND enrollment_id = ?
+
+              AND status = 'Enrolled'
+          `,
+        [
+          item.new_values.offering_id,
+          item.new_values.section_id,
+          item.new_values.section_subject_id,
+
+          item.enrollment_subject_id,
+          enrollmentId,
+        ],
+      );
+
+      // ===============================================
+      // VERIFY UPDATE
+      // ===============================================
+
+      if (updateResult.affectedRows === 0) {
+        throw new Error(
+          `Bulk placement failed while updating ${item.subject_code}.`,
+        );
+      }
+
+      // ===============================================
+      // SUBJECT CHANGE HISTORY
+      //
+      // Existing enum supports:
+      //
+      // ADD
+      // DROP
+      // REMOVE
+      // CHANGE
+      //
+      // Bulk assignment therefore uses CHANGE.
+      // ===============================================
+
+      await connection.execute(
+        `
+          INSERT INTO enrollment_subject_changes (
+              enrollment_id,
+              enrollment_subject_id,
+              subject_id,
+
+              change_type,
+
+              old_offering_id,
+              old_section_id,
+              old_section_subject_id,
+
+              new_offering_id,
+              new_section_id,
+              new_section_subject_id,
+
+              reason,
+              changed_by
+          )
+
+          VALUES (
+              ?,
+              ?,
+              ?,
+
+              'CHANGE',
+
+              ?,
+              ?,
+              ?,
+
+              ?,
+              ?,
+              ?,
+
+              ?,
+              ?
+          )
+        `,
+        [
+          enrollmentId,
+          item.enrollment_subject_id,
+          item.subject_id,
+
+          item.old_values.offering_id,
+          item.old_values.section_id,
+          item.old_values.section_subject_id,
+
+          item.new_values.offering_id,
+          item.new_values.section_id,
+          item.new_values.section_subject_id,
+
+          reason,
+          actor.user_id,
+        ],
+      );
+
+      // ===============================================
+      // AUDIT TRAIL
+      // ===============================================
+
+      await connection.execute(
+        `
+          INSERT INTO audit_trail (
+              user_id,
+              table_name,
+              record_id,
+              action,
+              old_values,
+              new_values
+          )
+
+          VALUES (
+              ?,
+              'enrollment_subjects',
+              ?,
+              'UPDATE',
+              ?,
+              ?
+          )
+        `,
+        [
+          actor.user_id,
+
+          item.enrollment_subject_id,
+
+          JSON.stringify({
+            ...item.old_values,
+
+            bulk_section_assignment: false,
+          }),
+
+          JSON.stringify({
+            ...item.new_values,
+
+            bulk_section_assignment: true,
+
+            target_section_name: section.section_name,
+          }),
+        ],
+      );
+
+      // ===============================================
+      // RESPONSE ITEM
+      // ===============================================
+
+      assignedSubjects.push({
+        enrollment_subject_id: item.enrollment_subject_id,
+
+        subject_id: item.subject_id,
+
+        subject_code: item.subject_code,
+
+        subject_name: item.subject_name,
+
+        units: item.units,
+
+        classification: "REGULAR",
+
+        placement: {
+          offering_id: item.new_values.offering_id,
+
+          section_id: item.new_values.section_id,
+
+          section_name: section.section_name,
+
+          section_subject_id: item.new_values.section_subject_id,
+        },
+
+        faculty: {
+          faculty_id: item.offering.faculty_id,
+
+          faculty_name: item.offering.faculty_name,
+        },
+
+        room: {
+          room_id: item.offering.room_id,
+
+          room_name: item.offering.room_name,
+        },
+
+        schedule: {
+          days: item.offering.schedule_days,
+
+          time: item.offering.schedule_time,
+        },
+
+        capacity: {
+          max_students: item.offering.max_students,
+
+          enrolled_count_after_assignment: item.offering.enrolled_count + 1,
+
+          available_slots_after_assignment: Math.max(
+            item.offering.max_students - (item.offering.enrolled_count + 1),
+            0,
+          ),
+        },
+      });
+    }
+
+    // =================================================
+    // AUDIT THE BULK ENROLLMENT ACTION ITSELF
+    //
+    // Subject-level audit entries already exist above.
+    // This enrollment-level record makes it obvious that
+    // Registrar performed one bulk placement operation.
+    // =================================================
+
+    await connection.execute(
+      `
+        INSERT INTO audit_trail (
+            user_id,
+            table_name,
+            record_id,
+            action,
+            old_values,
+            new_values
+        )
+
+        VALUES (
+            ?,
+            'enrollments',
+            ?,
+            'UPDATE',
+            ?,
+            ?
+        )
+      `,
+      [
+        actor.user_id,
+
+        enrollmentId,
+
+        JSON.stringify({
+          bulk_section_assignment: false,
+        }),
+
+        JSON.stringify({
+          bulk_section_assignment: true,
+
+          section_id: sectionId,
+
+          section_name: section.section_name,
+
+          subjects_assigned: assignedSubjects.length,
+
+          subjects_already_correct: skippedSubjects.length,
+
+          manual_subjects: manualSubjects.length,
+        }),
+      ],
+    );
+
+    // =================================================
+    // COMMIT
+    // =================================================
+
+    await connection.commit();
+
+    // =================================================
+    // SUCCESS
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      message: `Regular subjects were successfully assigned to ${section.section_name}.`,
+
+      enrollment: {
+        enrollment_id: enrollmentId,
+
+        enrollment_status: enrollment.enrollment_status,
+
+        student_id: Number(enrollment.student_id),
+
+        student_number: enrollment.student_number,
+
+        student_name: [
+          enrollment.first_name,
+          enrollment.middle_name,
+          enrollment.last_name,
+        ]
+          .filter(Boolean)
+          .join(" "),
+
+        course: {
+          course_id: courseId,
+
+          course_code: enrollment.course_code,
+
+          course_name: enrollment.course_name,
+        },
+
+        year_level: yearLevel,
+
+        academic_period: {
+          academic_year_id: academicYearId,
+
+          academic_year: enrollment.academic_year,
+
+          semester_id: semesterId,
+
+          semester_name: enrollment.semester_name,
+        },
+      },
+
+      section: {
+        section_id: sectionId,
+
+        section_name: section.section_name,
+
+        course_id: Number(section.course_id),
+
+        academic_year_id: Number(section.academic_year_id),
+
+        year_level: Number(section.year_level),
+
+        max_students:
+          section.max_students !== null ? Number(section.max_students) : null,
+      },
+
+      summary: {
+        total_active_subjects: subjectRows.length,
+
+        regular_subjects: regularSubjects.length,
+
+        assigned: assignedSubjects.length,
+
+        already_correct: skippedSubjects.length,
+
+        manual_subjects: manualSubjects.length,
+
+        errors: 0,
+      },
+
+      assigned_subjects: assignedSubjects,
+
+      already_correct: skippedSubjects,
+
+      manual_subjects: manualSubjects,
+
+      actor: {
+        user_id: actor.user_id,
+
+        username: actor.username,
+      },
+    });
+  } catch (error) {
+    // =================================================
+    // ROLLBACK
+    //
+    // If ONE subject fails, NONE of the bulk
+    // assignments are committed.
+    // =================================================
+
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("BULK SECTION PLACEMENT ROLLBACK ERROR:", rollbackError);
+      }
+    }
+
+    console.error("BULK SECTION PLACEMENT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+
+      code: "BULK_SECTION_PLACEMENT_FAILED",
+
+      message: "Failed to bulk assign the enrollment to the selected section.",
+
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
 // =====================================================
 // ASSIGN / CHANGE SUBJECT OFFERING
 //

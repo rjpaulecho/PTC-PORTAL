@@ -1,0 +1,1645 @@
+/* =========================================================
+   FACULTY - ENTER GRADES
+   ========================================================= */
+
+.faculty-enter-grades-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.faculty-grade-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+
+  margin-bottom: 18px;
+  padding: 22px 24px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.faculty-grade-header > div:first-child {
+  min-width: 0;
+}
+
+.faculty-grade-back {
+  display: inline-flex;
+  align-items: center;
+
+  margin: 0 0 13px;
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+  color: #475569;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.faculty-grade-back:hover {
+  color: #2563eb;
+  transform: translateX(-2px);
+}
+
+.faculty-grade-eyebrow {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #2563eb;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.faculty-grade-header h1 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.faculty-grade-header p {
+  max-width: 720px;
+
+  margin: 8px 0 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* =========================================================
+   HEADER ACTIONS
+   ========================================================= */
+
+.faculty-grade-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  flex-shrink: 0;
+}
+
+.faculty-grade-header-actions button {
+  min-height: 40px;
+
+  padding: 8px 14px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.faculty-grade-header-actions button:hover:not(:disabled) {
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.faculty-grade-header-actions button.primary {
+  border-color: #2563eb;
+
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.faculty-grade-header-actions button.primary:hover:not(:disabled) {
+  border-color: #1d4ed8;
+
+  background: #1d4ed8;
+
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+
+  transform: translateY(-1px);
+}
+
+.faculty-grade-header-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
+.faculty-grade-toolbar {
+  display: grid;
+
+  grid-template-columns:
+    minmax(220px, 0.8fr)
+    minmax(320px, 2fr);
+
+  gap: 14px;
+
+  margin-bottom: 16px;
+}
+
+.faculty-grade-faculty,
+.faculty-grade-class-select {
+  min-width: 0;
+
+  padding: 16px 18px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+
+  background: #ffffff;
+}
+
+.faculty-grade-faculty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.faculty-grade-faculty span {
+  margin-bottom: 4px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.faculty-grade-faculty strong {
+  overflow: hidden;
+
+  color: #0f172a;
+
+  font-size: 14px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faculty-grade-faculty small {
+  margin-top: 3px;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.faculty-grade-class-select label {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: #475569;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.faculty-grade-class-select select {
+  width: 100%;
+  min-height: 40px;
+
+  box-sizing: border-box;
+
+  padding: 8px 11px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 12px;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.faculty-grade-class-select select:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.faculty-grade-class-select select:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   CLASS CARD
+   ========================================================= */
+
+.faculty-grade-class-card {
+  display: grid;
+
+  grid-template-columns:
+    minmax(230px, 0.8fr)
+    minmax(0, 2.2fr);
+
+  gap: 18px;
+
+  margin-bottom: 16px;
+  padding: 18px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+.faculty-grade-subject {
+  padding: 17px;
+
+  border-radius: 10px;
+
+  background: #f8fafc;
+}
+
+.faculty-grade-subject span {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.faculty-grade-subject strong {
+  display: block;
+
+  color: #0f172a;
+
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.faculty-grade-subject p {
+  margin: 7px 0 0;
+
+  color: #475569;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.faculty-grade-class-details {
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 10px;
+}
+
+.faculty-grade-class-details > div {
+  min-width: 0;
+
+  padding: 12px 13px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+.faculty-grade-class-details span {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.faculty-grade-class-details strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #1e293b;
+
+  font-size: 12px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+}
+
+.faculty-grade-class-details small {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #94a3b8;
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   OFFERING STATUS
+   ========================================================= */
+
+.faculty-grade-offering-status {
+  display: inline-flex !important;
+  align-items: center;
+
+  width: fit-content;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  font-size: 10px !important;
+}
+
+.faculty-grade-offering-status.open {
+  background: #dcfce7;
+  color: #166534 !important;
+}
+
+.faculty-grade-offering-status.closed {
+  background: #e2e8f0;
+  color: #475569 !important;
+}
+
+.faculty-grade-offering-status.cancelled {
+  background: #fee2e2;
+  color: #991b1b !important;
+}
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+.faculty-grade-summary {
+  display: grid;
+
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+
+  gap: 10px;
+
+  margin-bottom: 18px;
+}
+
+.faculty-grade-summary > div {
+  position: relative;
+
+  min-width: 0;
+  overflow: hidden;
+
+  padding: 15px 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.faculty-grade-summary > div::before {
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  width: 3px;
+  height: 100%;
+
+  background: #2563eb;
+
+  content: "";
+}
+
+.faculty-grade-summary span {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.faculty-grade-summary strong {
+  display: block;
+
+  color: #0f172a;
+
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.faculty-grade-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+
+  margin-bottom: 18px;
+  padding: 15px 17px;
+
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+
+  background: #fef2f2;
+}
+
+.faculty-grade-error strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #991b1b;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.faculty-grade-error p {
+  margin: 0;
+
+  color: #b91c1c;
+
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.faculty-grade-error button {
+  flex-shrink: 0;
+
+  min-height: 34px;
+
+  padding: 7px 11px;
+
+  border: 1px solid #fca5a5;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #991b1b;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.faculty-grade-loading {
+  min-height: 230px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+
+  margin-bottom: 18px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+.faculty-grade-loading > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.faculty-grade-loading strong {
+  color: #334155;
+
+  font-size: 14px;
+}
+
+.faculty-grade-loading span {
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+.faculty-grade-spinner {
+  width: 30px;
+  height: 30px;
+
+  box-sizing: border-box;
+
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+
+  animation: faculty-grade-spin 700ms linear infinite;
+}
+
+@keyframes faculty-grade-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   GRADEBOOK CARD
+   ========================================================= */
+
+.faculty-gradebook {
+  overflow: hidden;
+
+  margin-bottom: 18px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   GRADEBOOK HEADER
+   ========================================================= */
+
+.faculty-gradebook-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 18px 20px;
+
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.faculty-gradebook-header > div:first-child {
+  min-width: 0;
+}
+
+.faculty-gradebook-header h2 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.faculty-gradebook-header p {
+  max-width: 700px;
+
+  margin: 5px 0 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   GRADEBOOK FILTERS
+   ========================================================= */
+
+.faculty-gradebook-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  flex-shrink: 0;
+}
+
+.faculty-gradebook-filters input,
+.faculty-gradebook-filters select {
+  min-height: 37px;
+
+  box-sizing: border-box;
+
+  padding: 7px 10px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 11px;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.faculty-gradebook-filters input {
+  width: 220px;
+}
+
+.faculty-gradebook-filters select {
+  width: 145px;
+}
+
+.faculty-gradebook-filters input:focus,
+.faculty-gradebook-filters select:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.faculty-grade-empty {
+  min-height: 190px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 30px;
+
+  text-align: center;
+}
+
+.faculty-grade-empty strong {
+  color: #334155;
+
+  font-size: 15px;
+}
+
+.faculty-grade-empty p {
+  max-width: 440px;
+
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.faculty-grade-empty button {
+  margin-top: 6px;
+
+  min-height: 34px;
+
+  padding: 7px 12px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+   ========================================================= */
+
+.faculty-grade-table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+.faculty-grade-table {
+  width: 100%;
+
+  min-width: 1450px;
+
+  border-collapse: collapse;
+
+  background: #ffffff;
+}
+
+.faculty-grade-table th {
+  padding: 11px 12px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+  color: #475569;
+
+  text-align: left;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.02em;
+
+  white-space: nowrap;
+}
+
+.faculty-grade-table td {
+  padding: 12px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  vertical-align: top;
+
+  color: #334155;
+
+  font-size: 11px;
+}
+
+.faculty-grade-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.faculty-grade-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.faculty-grade-table tbody tr:hover {
+  background: #fafcff;
+}
+
+.faculty-grade-table tbody tr.returned-row {
+  background: #fff7ed;
+}
+
+.faculty-grade-table tbody tr.returned-row:hover {
+  background: #ffedd5;
+}
+
+/* =========================================================
+   STUDENT CELL
+   ========================================================= */
+
+.faculty-grade-student {
+  min-width: 180px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.faculty-grade-student strong {
+  color: #0f172a;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.faculty-grade-student span {
+  color: #475569;
+
+  font-size: 11px;
+}
+
+.faculty-grade-student small {
+  color: #94a3b8;
+
+  font-size: 9px;
+}
+
+/* =========================================================
+   GRADE INPUTS
+   ========================================================= */
+
+.faculty-grade-input {
+  width: 78px;
+  min-height: 36px;
+
+  box-sizing: border-box;
+
+  padding: 7px 8px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+
+  text-align: center;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.faculty-grade-input:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.faculty-grade-input:disabled {
+  border-color: #e2e8f0;
+
+  background: #f8fafc;
+  color: #64748b;
+
+  cursor: not-allowed;
+}
+
+/* Remove browser arrows where appropriate */
+
+.faculty-grade-input::-webkit-inner-spin-button,
+.faculty-grade-input::-webkit-outer-spin-button {
+  margin: 0;
+}
+
+/* =========================================================
+   RATING FIELD
+   ========================================================= */
+
+.faculty-grade-rating-field {
+  min-width: 95px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.faculty-grade-rating-field small {
+  max-width: 105px;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+/* =========================================================
+   REMARK SELECT
+   ========================================================= */
+
+.faculty-grade-remarks {
+  width: 110px;
+  min-height: 36px;
+
+  box-sizing: border-box;
+
+  padding: 7px 8px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.faculty-grade-remarks:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.faculty-grade-remarks:disabled {
+  background: #f8fafc;
+  color: #64748b;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   GRADE STATUS
+   ========================================================= */
+
+.faculty-grade-status-cell {
+  min-width: 120px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.faculty-grade-status-cell small {
+  max-width: 145px;
+
+  color: #94a3b8;
+
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.faculty-grade-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 24px;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  background: #f1f5f9;
+  color: #475569;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.faculty-grade-status.not-started {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.faculty-grade-status.draft {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.faculty-grade-status.submitted {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.faculty-grade-status.returned {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.faculty-grade-status.approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* =========================================================
+   PROGRAM HEAD REVIEW
+   ========================================================= */
+
+.faculty-grade-review {
+  min-width: 150px;
+  max-width: 220px;
+
+  padding: 8px 9px;
+
+  border: 1px solid #fed7aa;
+  border-radius: 7px;
+
+  background: #fff7ed;
+}
+
+.faculty-grade-review strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #9a3412;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.faculty-grade-review p {
+  margin: 0;
+
+  color: #7c2d12;
+
+  font-size: 10px;
+  line-height: 1.4;
+
+  white-space: normal;
+}
+
+.faculty-grade-review small {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #c2410c;
+
+  font-size: 9px;
+}
+
+.faculty-grade-review.approved {
+  border-color: #bbf7d0;
+
+  background: #f0fdf4;
+}
+
+.faculty-grade-review.approved strong {
+  color: #166534;
+}
+
+.faculty-grade-review.approved small {
+  color: #15803d;
+}
+
+.faculty-grade-no-review {
+  color: #94a3b8;
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+
+.faculty-grade-actions {
+  min-width: 145px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.faculty-grade-actions button {
+  width: 100%;
+  min-height: 32px;
+
+  padding: 6px 9px;
+
+  border-radius: 7px;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.faculty-grade-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.faculty-grade-save {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #334155;
+}
+
+.faculty-grade-save:hover:not(:disabled) {
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.faculty-grade-submit {
+  border: 1px solid #2563eb;
+
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.faculty-grade-submit:hover:not(:disabled) {
+  border-color: #1d4ed8;
+
+  background: #1d4ed8;
+
+  box-shadow: 0 3px 9px rgba(37, 99, 235, 0.18);
+
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   LOCKED
+   ========================================================= */
+
+.faculty-grade-locked {
+  display: block;
+
+  padding: 7px 9px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+
+  background: #f8fafc;
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+
+  text-align: center;
+}
+
+/* =========================================================
+   ROW FEEDBACK
+   ========================================================= */
+
+.faculty-grade-feedback {
+  padding: 6px 7px;
+
+  border-radius: 6px;
+
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.faculty-grade-feedback.success {
+  border: 1px solid #bbf7d0;
+
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.faculty-grade-feedback.error {
+  border: 1px solid #fecaca;
+
+  background: #fef2f2;
+  color: #991b1b;
+}
+/* =========================================================
+   STUDENT CELL
+   ========================================================= */
+
+.faculty-grade-student {
+  min-width: 180px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.faculty-grade-student strong {
+  color: #0f172a;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.faculty-grade-student span {
+  color: #475569;
+
+  font-size: 11px;
+}
+
+.faculty-grade-student small {
+  color: #94a3b8;
+
+  font-size: 9px;
+}
+
+/* =========================================================
+   GRADE INPUTS
+   ========================================================= */
+
+.faculty-grade-input {
+  width: 78px;
+  min-height: 36px;
+
+  box-sizing: border-box;
+
+  padding: 7px 8px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+
+  text-align: center;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.faculty-grade-input:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.faculty-grade-input:disabled {
+  border-color: #e2e8f0;
+
+  background: #f8fafc;
+  color: #64748b;
+
+  cursor: not-allowed;
+}
+
+/* Remove browser arrows where appropriate */
+
+.faculty-grade-input::-webkit-inner-spin-button,
+.faculty-grade-input::-webkit-outer-spin-button {
+  margin: 0;
+}
+
+/* =========================================================
+   RATING FIELD
+   ========================================================= */
+
+.faculty-grade-rating-field {
+  min-width: 95px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.faculty-grade-rating-field small {
+  max-width: 105px;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+/* =========================================================
+   REMARK SELECT
+   ========================================================= */
+
+.faculty-grade-remarks {
+  width: 110px;
+  min-height: 36px;
+
+  box-sizing: border-box;
+
+  padding: 7px 8px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.faculty-grade-remarks:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.faculty-grade-remarks:disabled {
+  background: #f8fafc;
+  color: #64748b;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   GRADE STATUS
+   ========================================================= */
+
+.faculty-grade-status-cell {
+  min-width: 120px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.faculty-grade-status-cell small {
+  max-width: 145px;
+
+  color: #94a3b8;
+
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.faculty-grade-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 24px;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  background: #f1f5f9;
+  color: #475569;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.faculty-grade-status.not-started {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.faculty-grade-status.draft {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.faculty-grade-status.submitted {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.faculty-grade-status.returned {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.faculty-grade-status.approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* =========================================================
+   PROGRAM HEAD REVIEW
+   ========================================================= */
+
+.faculty-grade-review {
+  min-width: 150px;
+  max-width: 220px;
+
+  padding: 8px 9px;
+
+  border: 1px solid #fed7aa;
+  border-radius: 7px;
+
+  background: #fff7ed;
+}
+
+.faculty-grade-review strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #9a3412;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.faculty-grade-review p {
+  margin: 0;
+
+  color: #7c2d12;
+
+  font-size: 10px;
+  line-height: 1.4;
+
+  white-space: normal;
+}
+
+.faculty-grade-review small {
+  display: block;
+
+  margin-top: 4px;
+
+  color: #c2410c;
+
+  font-size: 9px;
+}
+
+.faculty-grade-review.approved {
+  border-color: #bbf7d0;
+
+  background: #f0fdf4;
+}
+
+.faculty-grade-review.approved strong {
+  color: #166534;
+}
+
+.faculty-grade-review.approved small {
+  color: #15803d;
+}
+
+.faculty-grade-no-review {
+  color: #94a3b8;
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+
+.faculty-grade-actions {
+  min-width: 145px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.faculty-grade-actions button {
+  width: 100%;
+  min-height: 32px;
+
+  padding: 6px 9px;
+
+  border-radius: 7px;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.faculty-grade-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.faculty-grade-save {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #334155;
+}
+
+.faculty-grade-save:hover:not(:disabled) {
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.faculty-grade-submit {
+  border: 1px solid #2563eb;
+
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.faculty-grade-submit:hover:not(:disabled) {
+  border-color: #1d4ed8;
+
+  background: #1d4ed8;
+
+  box-shadow: 0 3px 9px rgba(37, 99, 235, 0.18);
+
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   LOCKED
+   ========================================================= */
+
+.faculty-grade-locked {
+  display: block;
+
+  padding: 7px 9px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+
+  background: #f8fafc;
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+
+  text-align: center;
+}
+
+/* =========================================================
+   ROW FEEDBACK
+   ========================================================= */
+
+.faculty-grade-feedback {
+  padding: 6px 7px;
+
+  border-radius: 6px;
+
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.faculty-grade-feedback.success {
+  border: 1px solid #bbf7d0;
+
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.faculty-grade-feedback.error {
+  border: 1px solid #fecaca;
+
+  background: #fef2f2;
+  color: #991b1b;
+}

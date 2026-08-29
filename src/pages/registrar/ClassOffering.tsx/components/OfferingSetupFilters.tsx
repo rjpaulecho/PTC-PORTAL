@@ -133,20 +133,51 @@ export default function OfferingSetupFilters({
   // child selections whenever a parent selection changes.
   // =====================================================
 
+  // =====================================================
+  // SUPPORTED SEMESTER POLICY
+  //
+  // PTC Portal enrollment / offering progression supports:
+  //
+  // 1 = First Semester
+  // 2 = Second Semester
+  //
+  // Summer is intentionally excluded.
+  //
+  // Backend remains authoritative. This component also
+  // filters defensively so a stale semester_id = 3 cannot
+  // unlock the offering setup cascade.
+  // =====================================================
+
+  const selectableSemesters = semesters.filter((semester) =>
+    [1, 2].includes(Number(semester.semester_id)),
+  );
+
+  const semesterIsSupported = [1, 2].includes(Number(semesterId));
+
+  const safeSemesterId = semesterIsSupported ? semesterId : "";
+
+  // =====================================================
+  // CASCADE DISABLED STATE
+  // =====================================================
+
   const semesterDisabled = loading || !academicYearId;
 
-  const courseDisabled = loading || !academicYearId || !semesterId;
+  const courseDisabled = loading || !academicYearId || !semesterIsSupported;
 
   const yearLevelDisabled =
-    loading || !academicYearId || !semesterId || !courseId;
+    loading || !academicYearId || !semesterIsSupported || !courseId;
 
   const curriculumDisabled =
-    loading || !academicYearId || !semesterId || !courseId || !yearLevel;
+    loading ||
+    !academicYearId ||
+    !semesterIsSupported ||
+    !courseId ||
+    !yearLevel;
 
   const sectionDisabled =
     loading ||
     !academicYearId ||
-    !semesterId ||
+    !semesterIsSupported ||
     !courseId ||
     !yearLevel ||
     !curriculumId;
@@ -232,19 +263,19 @@ export default function OfferingSetupFilters({
 
             <select
               id="offering-semester"
-              value={semesterId}
+              value={safeSemesterId}
               disabled={semesterDisabled}
               onChange={(event) => onSemesterChange(event.target.value)}
             >
               <option value="">
                 {!academicYearId
                   ? "Select Academic Year First"
-                  : semesters.length === 0
-                    ? "No Semesters Available"
+                  : selectableSemesters.length === 0
+                    ? "No Supported Semesters Available"
                     : "Select Semester"}
               </option>
 
-              {semesters.map((semester) => (
+              {selectableSemesters.map((semester) => (
                 <option
                   key={semester.semester_id}
                   value={String(semester.semester_id)}
@@ -269,8 +300,8 @@ export default function OfferingSetupFilters({
               onChange={(event) => onCourseChange(event.target.value)}
             >
               <option value="">
-                {!semesterId
-                  ? "Select Semester First"
+                {!semesterIsSupported
+                  ? "Select First or Second Semester First"
                   : courses.length === 0
                     ? "No Courses Available"
                     : "Select Course"}

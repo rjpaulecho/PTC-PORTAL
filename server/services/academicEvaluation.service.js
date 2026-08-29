@@ -17,6 +17,7 @@ export const ACADEMIC_RESULT = Object.freeze({
 export const ELIGIBILITY_TYPE = Object.freeze({
   REGULAR: "Regular",
   RETAKE: "Retake",
+  CARRY_OVER: "Carry Over",
   ALREADY_PASSED: "Already Passed",
   BLOCKED_PREREQUISITE: "Blocked - Prerequisite",
   UNRESOLVED: "Unresolved",
@@ -575,7 +576,6 @@ export async function checkPrerequisites(studentId, subjectId, executor = db) {
     satisfied: missing.length === 0,
   };
 }
-
 // =====================================================
 // EVALUATE ONE SUBJECT
 // =====================================================
@@ -937,6 +937,327 @@ export async function evaluateCurriculumTerm(
     blocked: evaluatedSubjects.filter((subject) => !subject.eligible),
   };
 }
+// =====================================================
+// GET CARRY-OVER / BACKLOG SUBJECTS
+//
+// A Carry-Over subject is:
+//
+// - part of the Student's active curriculum
+// - required
+// - from an EARLIER curriculum term
+// - not already passed
+// - not a 4.00 / 5.00 retake
+// - never officially taken in an Approved enrollment
+// - prerequisites are now satisfied
+//
+// IMPORTANT:
+//
+// An old subject that was officially enrolled but still
+// has no Approved academic result is NOT Carry-Over.
+// That is an unresolved academic attempt.
+// =====================================================
+
+export async function getCarryOverCandidates(
+  studentId,
+  curriculumId,
+  currentYearLevel,
+  currentSemesterId,
+  executor = db,
+) {
+  const safeStudentId = toPositiveInt(studentId, "studentId");
+
+  const safeCurriculumId = toPositiveInt(curriculumId, "curriculumId");
+
+  const safeYearLevel = toPositiveInt(currentYearLevel, "currentYearLevel");
+
+  const safeSemesterId = toPositiveInt(currentSemesterId, "currentSemesterId");
+
+  if (![1, 2].includes(safeSemesterId)) {
+    throw new Error(
+      "Carry-over evaluation supports only First Semester and Second Semester.",
+    );
+  }
+
+  const database = getExecutor(executor);
+
+  // ===================================================
+  // LOAD REQUIRED SUBJECTS FROM EARLIER TERMS
+  //
+  // Examples:
+  //
+  // Current: Year 1 / Sem 2
+  // Previous:
+  //   Year 1 / Sem 1
+  //
+  // Current: Year 2 / Sem 1
+  // Previous:
+  //   Year 1 / Sem 1
+  //   Year 1 / Sem 2
+  //
+  // Current: Year 2 / Sem 2
+  // Previous:
+  //   Year 1 / Sem 1
+  //   Year 1 / Sem 2
+  //   Year 2 / Sem 1
+  // ===================================================
+
+  const [rows] = await database.execute(
+    `
+      SELECT
+          cs.curriculum_subject_id,
+          cs.curriculum_id,
+          cs.subject_id,
+
+          cs.year_level,
+          cs.semester_id,
+
+          cs.is_required,
+          cs.display_order,
+
+          s.subject_code,
+          s.subject_name,
+          s.units,
+          s.lecture_hours,
+          s.laboratory_hours,
+          s.is_active,
+
+          CASE
+              WHEN EXISTS (
+                  SELECT 1
+
+                  FROM enrollment_subjects es
+
+                  INNER JOIN enrollments e
+                      ON e.enrollment_id =
+                         es.enrollment_id
+
+                  WHERE e.student_id = ?
+
+                    AND es.subject_id =
+                        cs.subject_id
+
+                    AND e.enrollment_status =
+                        'Approved'
+
+                    AND es.status NOT IN (
+                        'Dropped',
+                        'Withdrawn'
+                    )
+              )
+              THEN 1
+              ELSE 0
+          END AS has_official_attempt
+
+      FROM curriculum_subjects cs
+
+      INNER JOIN subjects s
+          ON s.subject_id =
+             cs.subject_id
+
+      WHERE cs.curriculum_id = ?
+
+        AND cs.is_required = 1
+
+        AND s.is_active = 1
+
+        AND cs.semester_id IN (1, 2)
+
+        AND (
+            cs.year_level < ?
+
+            OR (
+                cs.year_level = ?
+
+                AND cs.semester_id < ?
+            )
+        )
+
+      ORDER BY
+          cs.year_level ASC,
+          cs.semester_id ASC,
+          cs.display_order ASC,
+          s.subject_code ASC
+    `,
+    [
+      safeStudentId,
+      safeCurriculumId,
+      safeYearLevel,
+      safeYearLevel,
+      safeSemesterId,
+    ],
+  );
+
+  const eligible = [];
+  const blocked = [];
+
+  for (const row of rows) {
+    const subjectId = Number(row.subject_id);
+
+    const evaluation = await evaluateSubjectEligibility(
+      safeStudentId,
+      subjectId,
+      database,
+    );
+
+    const baseSubject = {
+      curriculum_subject_id: Number(row.curriculum_subject_id),
+
+      curriculum_id: Number(row.curriculum_id),
+
+      subject_id: subjectId,
+
+      subject_code: row.subject_code,
+
+      subject_name: row.subject_name,
+
+      units: Number(row.units || 0),
+
+      lecture_hours: Number(row.lecture_hours || 0),
+
+      laboratory_hours: Number(row.laboratory_hours || 0),
+
+      original_year_level: Number(row.year_level),
+
+      original_semester_id: Number(row.semester_id),
+
+      is_required: Number(row.is_required) === 1,
+
+      display_order: Number(row.display_order),
+
+      has_official_attempt: Number(row.has_official_attempt) === 1,
+
+      prerequisites: evaluation.prerequisites,
+    };
+
+    // ===============================================
+    // ALREADY PASSED
+    //
+    // Never enroll again.
+    // ===============================================
+
+    if (evaluation.eligibility_type === ELIGIBILITY_TYPE.ALREADY_PASSED) {
+      continue;
+    }
+
+    // ===============================================
+    // RETAKE
+    //
+    // getRetakeCandidates() owns 4.00 / 5.00.
+    // Do not duplicate it as Carry-Over.
+    // ===============================================
+
+    if (evaluation.eligibility_type === ELIGIBILITY_TYPE.RETAKE) {
+      continue;
+    }
+
+    // ===============================================
+    // OFFICIAL ATTEMPT EXISTS BUT NO RESOLVED
+    // APPROVED RESULT
+    //
+    // This is NOT a never-taken Carry-Over.
+    // ===============================================
+
+    if (Number(row.has_official_attempt) === 1) {
+      blocked.push({
+        ...baseSubject,
+
+        eligible: false,
+
+        eligibility_type: ELIGIBILITY_TYPE.UNRESOLVED,
+
+        reason:
+          "Subject has an official enrollment attempt but does not yet have a resolved Approved academic result.",
+
+        carry_over_reason: "OFFICIAL_ATTEMPT_UNRESOLVED",
+      });
+
+      continue;
+    }
+
+    // ===============================================
+    // PREREQUISITES STILL BLOCKED
+    // ===============================================
+
+    if (evaluation.eligibility_type === ELIGIBILITY_TYPE.BLOCKED_PREREQUISITE) {
+      blocked.push({
+        ...baseSubject,
+
+        eligible: false,
+
+        eligibility_type: ELIGIBILITY_TYPE.BLOCKED_PREREQUISITE,
+
+        reason: evaluation.reason,
+
+        carry_over_reason: "PREREQUISITE_NOT_PASSED",
+      });
+
+      continue;
+    }
+
+    // ===============================================
+    // OTHER UNRESOLVED STATE
+    // ===============================================
+
+    if (evaluation.eligibility_type === ELIGIBILITY_TYPE.UNRESOLVED) {
+      blocked.push({
+        ...baseSubject,
+
+        eligible: false,
+
+        eligibility_type: ELIGIBILITY_TYPE.UNRESOLVED,
+
+        reason: evaluation.reason,
+
+        carry_over_reason: "ACADEMIC_RESULT_UNRESOLVED",
+      });
+
+      continue;
+    }
+
+    // ===============================================
+    // NEVER TAKEN + PREREQUISITES SATISFIED
+    //
+    // Valid Carry-Over.
+    // ===============================================
+
+    if (evaluation.eligibility_type === ELIGIBILITY_TYPE.REGULAR) {
+      eligible.push({
+        ...baseSubject,
+
+        eligible: true,
+
+        eligibility_type: ELIGIBILITY_TYPE.CARRY_OVER,
+
+        enrollment_type: "Carry Over",
+
+        carry_over_reason: "EARLIER_REQUIRED_SUBJECT_NOT_TAKEN",
+
+        reason:
+          "Required subject from an earlier curriculum term is now academically eligible.",
+      });
+    }
+  }
+
+  return {
+    student_id: safeStudentId,
+
+    curriculum_id: safeCurriculumId,
+
+    current_year_level: safeYearLevel,
+
+    current_semester_id: safeSemesterId,
+
+    eligible,
+
+    blocked,
+
+    summary: {
+      eligible: eligible.length,
+
+      blocked: blocked.length,
+    },
+  };
+}
 
 // =====================================================
 // GET VALID RETAKE CANDIDATES
@@ -1083,6 +1404,8 @@ export default {
   getCurriculumSubjectsForTerm,
 
   evaluateCurriculumTerm,
+
+  getCarryOverCandidates,
 
   getRetakeCandidates,
 };

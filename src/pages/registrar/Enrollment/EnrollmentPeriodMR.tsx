@@ -296,14 +296,28 @@ export default function EnrollmentPeriodMR() {
       setAcademicYears(years);
 
       // ========================================================
-      // SEMESTERS
+      // SUPPORTED SEMESTERS
+      //
+      // PTC Portal enrollment progression supports only:
+      //
+      // 1 = First Semester
+      // 2 = Second Semester
+      //
+      // Summer is intentionally excluded.
+      //
+      // The backend is authoritative, but the frontend filters
+      // unsupported semesters defensively as well.
       // ========================================================
 
       const semesterData = Array.isArray(responseData.semesters)
         ? responseData.semesters
         : [];
 
-      setSemesters(semesterData);
+      const supportedSemesters = semesterData.filter((semester) =>
+        [1, 2].includes(Number(semester.semester_id)),
+      );
+
+      setSemesters(supportedSemesters);
 
       // ========================================================
       // CURRENT PERIOD
@@ -343,8 +357,16 @@ export default function EnrollmentPeriodMR() {
         setSelectedAcademicYearId(0);
       }
 
-      if (semesterData.length > 0) {
-        setSelectedSemesterId(Number(semesterData[0].semester_id));
+      if (supportedSemesters.length > 0) {
+        const firstSemester = supportedSemesters.find(
+          (semester) => Number(semester.semester_id) === 1,
+        );
+
+        setSelectedSemesterId(
+          Number(
+            firstSemester?.semester_id ?? supportedSemesters[0].semester_id,
+          ),
+        );
       } else {
         setSelectedSemesterId(0);
       }
@@ -400,6 +422,21 @@ export default function EnrollmentPeriodMR() {
 
     if (!selectedSemesterId) {
       setError("Please select a semester.");
+
+      return;
+    }
+
+    // ======================================================
+    // SUPPORTED SEMESTER GUARD
+    //
+    // Frontend defense only.
+    // Backend remains authoritative.
+    // ======================================================
+
+    if (![1, 2].includes(Number(selectedSemesterId))) {
+      setError(
+        "Only First Semester and Second Semester are supported for enrollment.",
+      );
 
       return;
     }
@@ -1014,6 +1051,11 @@ export default function EnrollmentPeriodMR() {
               <li>
                 Students can submit enrollment only while the enrollment period
                 is open.
+              </li>
+
+              <li>
+                Enrollment is available only for First Semester and Second
+                Semester. Summer is not part of the PTC Portal enrollment cycle.
               </li>
 
               <li>Students cannot select or change sections.</li>

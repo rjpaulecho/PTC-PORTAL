@@ -1,360 +1,1946 @@
-/* =====================================================
-   ACADEMIC RECORDS
-===================================================== */
+/* =========================================================
+   REGISTRAR — OFFICIAL ACADEMIC RECORD
+   File: RegistrarAcademicRecord.css
+   ========================================================= */
 
-.registrar-acadRecR-container {
-  padding: 30px;
-  background: #f4f7fb;
-  min-height: 100vh;
+/* =========================================================
+   PAGE
+   ========================================================= */
+
+.registrar-academic-record-page {
+  width: 100%;
+  min-height: 100%;
+
+  box-sizing: border-box;
+
+  padding: 24px;
+
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-/* =====================================================
+/* =========================================================
    HEADER
-===================================================== */
+   ========================================================= */
 
-.registrar-acadRecR-header {
+.registrar-record-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-}
 
-.registrar-acadRecR-header h1 {
-  margin: 0;
-  font-size: 30px;
-  font-weight: 700;
-  color: #1f2937;
-}
+  gap: 24px;
 
-.registrar-acadRecR-header p {
-  margin-top: 6px;
-  color: #6b7280;
-  font-size: 15px;
-}
+  margin-bottom: 16px;
+  padding: 24px;
 
-/* =====================================================
-   SUMMARY CARD
-===================================================== */
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
 
-.student-summary-card {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 25px;
-  margin-bottom: 25px;
 
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 40px;
-
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 28px rgba(15, 23, 42, 0.04);
 }
 
-.student-summary-left {
-  display: flex;
-  align-items: center;
-  gap: 18px;
+.registrar-record-header > div:first-child {
+  min-width: 0;
 }
 
-.student-avatar {
-  width: 85px;
-  height: 85px;
+.registrar-record-eyebrow {
+  display: block;
 
-  border-radius: 50%;
+  margin-bottom: 6px;
 
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #2563eb;
 
-  color: white;
+  font-size: 11px;
+  font-weight: 800;
 
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.registrar-record-header h1 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 28px;
+  font-weight: 800;
+
+  line-height: 1.2;
+}
+
+.registrar-record-header p {
+  max-width: 760px;
+
+  margin: 8px 0 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* =========================================================
+   HEADER ACTIONS
+   ========================================================= */
+
+.registrar-record-header-actions {
   display: flex;
-  justify-content: center;
   align-items: center;
 
-  font-size: 32px;
-  font-weight: bold;
+  gap: 8px;
 
   flex-shrink: 0;
 }
 
-.student-summary-left h2 {
-  margin: 0;
-  color: #111827;
-  font-size: 28px;
-}
+.registrar-record-back,
+.registrar-record-refresh {
+  min-height: 40px;
 
-.student-summary-left p {
-  margin: 8px 0;
-  color: #6b7280;
-}
+  box-sizing: border-box;
 
-.student-summary-right {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(170px, 1fr));
-  gap: 20px;
-}
-
-.summary-item span {
-  display: block;
-  color: #9ca3af;
-  font-size: 13px;
-  margin-bottom: 5px;
-}
-
-.summary-item strong {
-  color: #111827;
-  font-size: 16px;
-}
-
-/* =====================================================
-   STATISTICS
-===================================================== */
-
-.academic-statistics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-
-  margin-bottom: 25px;
-}
-
-.academic-card {
-  background: white;
-
-  border-radius: 14px;
-
-  padding: 20px;
-
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-
-  text-align: center;
-}
-
-.academic-card span {
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.academic-card h2 {
-  margin-top: 10px;
-  margin-bottom: 0;
-
-  font-size: 30px;
-
-  color: #2563eb;
-}
-
-/* =====================================================
-   TABLE CARD
-===================================================== */
-
-.records-card {
-  background: white;
-
-  border-radius: 16px;
-
-  padding: 25px;
-
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-
-  margin-bottom: 25px;
-}
-
-.records-card h3 {
-  margin-top: 0;
-  margin-bottom: 20px;
-
-  color: #1f2937;
-
-  border-bottom: 2px solid #eef2f7;
-
-  padding-bottom: 12px;
-}
-
-/* =====================================================
-   TABLE
-===================================================== */
-
-.records-table-wrapper {
-  overflow-x: auto;
-}
-
-.records-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1200px;
-}
-
-.records-table thead {
-  background: #2563eb;
-}
-
-.records-table thead th {
-  color: white;
-  padding: 14px;
-  text-align: left;
-  font-size: 14px;
-}
-
-.records-table tbody td {
-  padding: 14px;
-  border-bottom: 1px solid #eef2f7;
-  font-size: 14px;
-}
-
-.records-table tbody tr:hover {
-  background: #f8fafc;
-}
-
-.table-message {
-  text-align: center;
-  padding: 30px;
-  color: #6b7280;
-}
-
-/* =====================================================
-   STATUS
-===================================================== */
-
-.status {
-  display: inline-block;
-  padding: 5px 12px;
-
-  border-radius: 999px;
-
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status.active,
-.status.approved,
-.status.completed {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.status.pending {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.status.rejected,
-.status.failed,
-.status.inactive {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-
-.status.dropped {
-  background: #ffe4e6;
-  color: #be123c;
-}
-
-/* =====================================================
-   BUTTONS
-===================================================== */
-
-.records-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.records-actions button {
-  border: none;
+  padding: 8px 15px;
 
   border-radius: 8px;
 
-  padding: 12px 22px;
-
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 800;
 
   cursor: pointer;
 
-  transition: 0.25s;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
-.back-btn {
-  background: #6b7280;
-  color: white;
+.registrar-record-back {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #334155;
 }
 
-.back-btn:hover {
-  background: #4b5563;
+.registrar-record-back:hover {
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-.document-btn {
-  background: #16a34a;
-  color: white;
+.registrar-record-refresh {
+  border: 1px solid #2563eb;
+
+  background: #2563eb;
+  color: #ffffff;
 }
 
-.document-btn:hover {
-  background: #15803d;
+.registrar-record-refresh:hover:not(:disabled) {
+  border-color: #1d4ed8;
+
+  background: #1d4ed8;
+
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+
+  transform: translateY(-1px);
 }
 
-/* =====================================================
-   MESSAGE
-===================================================== */
+.registrar-record-refresh:disabled {
+  opacity: 0.55;
 
-.details-message {
-  background: white;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   OFFICIAL RECORD NOTICE
+   ========================================================= */
+
+.registrar-record-official-notice {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 12px;
+
+  margin-bottom: 16px;
+  padding: 14px 16px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+
+  background: #eff6ff;
+}
+
+.registrar-record-official-icon {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 30px;
+
+  border-radius: 50%;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.registrar-record-official-notice strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #1e3a8a;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.registrar-record-official-notice p {
+  margin: 0;
+
+  color: #475569;
+
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.registrar-record-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-bottom: 18px;
+  padding: 15px 16px;
+
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+
+  background: #fef2f2;
+}
+
+.registrar-record-error > div {
+  min-width: 0;
+}
+
+.registrar-record-error strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #991b1b;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.registrar-record-error p {
+  margin: 0;
+
+  color: #b91c1c;
+
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.registrar-record-error button {
+  flex-shrink: 0;
+
+  min-height: 34px;
+
+  padding: 7px 12px;
+
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #991b1b;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.registrar-record-error button:hover {
+  background: #fff7f7;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.registrar-record-loading {
+  min-height: 220px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 13px;
+
+  margin-bottom: 18px;
+
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 30px;
-  text-align: center;
-  font-size: 16px;
-  color: #6b7280;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+
+  background: #ffffff;
 }
 
-.details-message.error {
-  color: #dc2626;
+.registrar-record-loading > div:last-child {
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.registrar-record-loading strong {
+  color: #334155;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.registrar-record-loading span {
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+.registrar-record-spinner {
+  width: 30px;
+  height: 30px;
+
+  box-sizing: border-box;
+
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+
+  animation: registrar-record-spin 700ms linear infinite;
+}
+
+@keyframes registrar-record-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   STUDENT CARD
+   ========================================================= */
+
+.registrar-record-student-card {
+  display: grid;
+
+  grid-template-columns:
+    minmax(250px, 1.35fr)
+    minmax(0, 2.65fr);
+
+  gap: 0;
+
+  overflow: hidden;
+
+  margin-bottom: 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+/* =========================================================
+   STUDENT PRIMARY
+   ========================================================= */
+
+.registrar-record-student-primary {
+  display: flex;
+  align-items: center;
+
+  gap: 13px;
+
+  min-width: 0;
+
+  padding: 18px;
+
+  border-right: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+}
+
+.registrar-record-avatar {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 48px;
+
+  border-radius: 12px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 19px;
+  font-weight: 900;
+
+  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.16);
+}
+
+.registrar-record-student-primary > div:last-child {
+  min-width: 0;
+}
+
+.registrar-record-student-primary span {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.registrar-record-student-primary h2 {
+  margin: 0;
+
+  overflow: hidden;
+
+  color: #0f172a;
+
+  font-size: 16px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registrar-record-student-primary p {
+  margin: 4px 0 0;
+
+  color: #64748b;
+
+  font-size: 10px;
   font-weight: 600;
 }
 
-/* =====================================================
-   RESPONSIVE
-===================================================== */
+/* =========================================================
+   STUDENT DATA
+   ========================================================= */
 
-@media (max-width: 992px) {
-  .student-summary-card {
-    flex-direction: column;
-    align-items: flex-start;
+.registrar-record-student-data {
+  display: grid;
+
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.registrar-record-student-data > div {
+  min-width: 0;
+
+  padding: 16px;
+
+  border-right: 1px solid #f1f5f9;
+}
+
+.registrar-record-student-data > div:last-child {
+  border-right: none;
+}
+
+.registrar-record-student-data span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.registrar-record-student-data strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #0f172a;
+
+  font-size: 12px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registrar-record-student-data small {
+  display: block;
+
+  margin-top: 3px;
+
+  overflow: hidden;
+
+  color: #64748b;
+
+  font-size: 8px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   STUDENT STATUS
+   ========================================================= */
+
+.registrar-record-student-status {
+  width: fit-content;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+}
+
+.registrar-record-student-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.registrar-record-student-status.inactive {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.registrar-record-student-status.graduated {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.registrar-record-student-status.suspended {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+.registrar-record-summary {
+  display: grid;
+
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+
+  gap: 10px;
+
+  margin-bottom: 18px;
+}
+
+.registrar-record-summary > div {
+  position: relative;
+
+  min-width: 0;
+  overflow: hidden;
+
+  padding: 15px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.registrar-record-summary > div::before {
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  width: 3px;
+  height: 100%;
+
+  background: #2563eb;
+
+  content: "";
+}
+
+.registrar-record-summary > div:nth-child(3)::before {
+  background: #16a34a;
+}
+
+.registrar-record-summary > div:nth-child(4)::before {
+  background: #d97706;
+}
+
+.registrar-record-summary > div:nth-child(5)::before {
+  background: #dc2626;
+}
+
+.registrar-record-summary > div:nth-child(6)::before {
+  background: #ea580c;
+}
+
+.registrar-record-summary span {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.registrar-record-summary strong {
+  color: #0f172a;
+
+  font-size: 22px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   FILTERS
+   ========================================================= */
+
+.registrar-record-filters {
+  display: grid;
+
+  grid-template-columns:
+    minmax(240px, 1.5fr)
+    repeat(3, minmax(150px, 1fr))
+    auto;
+
+  align-items: end;
+
+  gap: 10px;
+
+  margin-bottom: 18px;
+  padding: 15px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.registrar-record-filters > div {
+  min-width: 0;
+}
+
+.registrar-record-filters label {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #475569;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.registrar-record-filters input,
+.registrar-record-filters select {
+  width: 100%;
+  min-height: 38px;
+
+  box-sizing: border-box;
+
+  padding: 8px 10px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 11px;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.registrar-record-filters input::placeholder {
+  color: #94a3b8;
+}
+
+.registrar-record-filters input:hover,
+.registrar-record-filters select:hover {
+  border-color: #94a3b8;
+}
+
+.registrar-record-filters input:focus,
+.registrar-record-filters select:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.registrar-record-clear {
+  min-height: 38px;
+
+  padding: 8px 14px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  background: #f8fafc;
+  color: #475569;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.registrar-record-clear:hover {
+  border-color: #94a3b8;
+
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+.registrar-record-empty {
+  min-height: 190px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  margin-bottom: 18px;
+  padding: 28px;
+
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+
+  background: #ffffff;
+
+  text-align: center;
+}
+
+.registrar-record-empty-icon {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #eff6ff;
+  color: #2563eb;
+
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.registrar-record-empty strong {
+  color: #334155;
+
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.registrar-record-empty p {
+  max-width: 440px;
+
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.registrar-record-empty button {
+  margin-top: 4px;
+
+  min-height: 34px;
+
+  padding: 7px 12px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.registrar-record-empty button:hover {
+  background: #f8fafc;
+}
+
+/* =========================================================
+   ACADEMIC HISTORY CONTAINER
+   ========================================================= */
+
+.registrar-record-history {
+  margin-bottom: 18px;
+
+  overflow: hidden;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   HISTORY HEADING
+   ========================================================= */
+
+.registrar-record-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  padding: 18px 20px;
+
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.registrar-record-history-heading > div {
+  min-width: 0;
+}
+
+.registrar-record-history-heading h2 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.registrar-record-history-heading p {
+  margin: 5px 0 0;
+
+  color: #64748b;
+
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.registrar-record-history-heading > span {
+  flex-shrink: 0;
+
+  padding: 5px 9px;
+
+  border-radius: 999px;
+
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   YEAR LIST
+   ========================================================= */
+
+.registrar-record-year-list {
+  padding: 16px;
+}
+
+/* =========================================================
+   ACADEMIC YEAR
+   ========================================================= */
+
+.registrar-record-year {
+  overflow: hidden;
+
+  margin-bottom: 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.registrar-record-year:last-child {
+  margin-bottom: 0;
+}
+
+.registrar-record-year-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  padding: 13px 16px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+}
+
+.registrar-record-year-header span {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.registrar-record-year-header h3 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.registrar-record-year-header > strong {
+  color: #475569;
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   SEMESTER
+   ========================================================= */
+
+.registrar-record-semester {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.registrar-record-semester:last-child {
+  border-bottom: none;
+}
+
+.registrar-record-semester-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  padding: 12px 15px;
+
+  background: #ffffff;
+}
+
+.registrar-record-semester-header h4 {
+  margin: 0;
+
+  color: #1e293b;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.registrar-record-semester-header > div:first-child > span {
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.registrar-record-semester-stats {
+  display: flex;
+  align-items: center;
+
+  gap: 14px;
+
+  color: #64748b;
+
+  font-size: 9px;
+}
+
+.registrar-record-semester-stats span {
+  white-space: nowrap;
+}
+
+.registrar-record-semester-stats strong {
+  margin-left: 2px;
+
+  color: #0f172a;
+
+  font-weight: 800;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+   ========================================================= */
+
+.registrar-record-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+
+  border-top: 1px solid #f1f5f9;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+.registrar-record-table {
+  width: 100%;
+  min-width: 1320px;
+
+  border-collapse: collapse;
+
+  background: #ffffff;
+}
+
+.registrar-record-table thead {
+  background: #f8fafc;
+}
+
+.registrar-record-table th {
+  padding: 10px 12px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  color: #475569;
+
+  text-align: left;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.025em;
+
+  white-space: nowrap;
+}
+
+.registrar-record-table td {
+  padding: 12px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  vertical-align: top;
+
+  color: #334155;
+
+  font-size: 10px;
+}
+
+.registrar-record-table tbody tr {
+  transition: background-color 0.14s ease;
+}
+
+.registrar-record-table tbody tr:hover {
+  background: #fafcff;
+}
+
+.registrar-record-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =========================================================
+   SUBJECT
+   ========================================================= */
+
+.registrar-record-subject {
+  min-width: 190px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.registrar-record-subject strong {
+  color: #0f172a;
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.registrar-record-subject span {
+  max-width: 220px;
+
+  color: #475569;
+
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.registrar-record-subject small {
+  margin-top: 2px;
+
+  color: #94a3b8;
+
+  font-size: 8px;
+}
+
+/* =========================================================
+   SECTION
+   ========================================================= */
+
+.registrar-record-section {
+  display: inline-flex;
+  align-items: center;
+
+  min-height: 23px;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  background: #f1f5f9;
+  color: #334155;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   UNITS
+   ========================================================= */
+
+.registrar-record-units {
+  color: #334155;
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   FINAL RATING
+   ========================================================= */
+
+.registrar-record-final-rating {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 50px;
+  min-height: 28px;
+
+  box-sizing: border-box;
+
+  padding: 3px 8px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  font-size: 11px;
+  font-weight: 900;
+}
+
+/* =========================================================
+   RESULT
+   ========================================================= */
+
+.registrar-record-result-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  gap: 4px;
+}
+
+.registrar-record-result {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 23px;
+
+  box-sizing: border-box;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.registrar-record-result.passed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.registrar-record-result.incomplete {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.registrar-record-result.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.registrar-record-result.unknown {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.registrar-record-retake {
+  color: #b45309;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   SUBJECT STATUS
+   ========================================================= */
+
+.registrar-record-subject-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 23px;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  background: #f1f5f9;
+  color: #475569;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.registrar-record-subject-status.completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.registrar-record-subject-status.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.registrar-record-subject-status.incomplete {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.registrar-record-subject-status.enrolled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.registrar-record-subject-status.dropped {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* =========================================================
+   FACULTY
+   ========================================================= */
+
+.registrar-record-faculty {
+  min-width: 100px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.registrar-record-faculty strong {
+  color: #334155;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.registrar-record-faculty small {
+  color: #94a3b8;
+
+  font-size: 8px;
+
+  white-space: nowrap;
+}
+
+.registrar-record-faculty > span {
+  color: #94a3b8;
+}
+
+/* =========================================================
+   APPROVAL
+   ========================================================= */
+
+.registrar-record-approval {
+  min-width: 135px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  gap: 3px;
+}
+
+.registrar-record-approved {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  background: #dcfce7;
+  color: #166534;
+
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.registrar-record-approval small {
+  color: #64748b;
+
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.registrar-record-review-note {
+  max-width: 160px;
+
+  margin-top: 2px;
+
+  color: #475569 !important;
+
+  white-space: normal;
+}
+
+/* =========================================================
+   RESULT GUIDE
+   ========================================================= */
+
+.registrar-record-guide {
+  display: grid;
+
+  grid-template-columns:
+    220px
+    minmax(0, 1fr);
+
+  gap: 16px;
+
+  margin-bottom: 18px;
+  padding: 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.registrar-record-guide-heading span {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.registrar-record-guide-heading strong {
+  color: #0f172a;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.registrar-record-guide-items {
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 10px;
+}
+
+.registrar-record-guide-items > div {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 9px;
+
+  min-width: 0;
+
+  padding: 10px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+.registrar-record-guide-rating {
+  flex-shrink: 0;
+
+  padding: 4px 7px;
+
+  border-radius: 6px;
+
+  font-size: 8px;
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+.registrar-record-guide-rating.passed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.registrar-record-guide-rating.incomplete {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.registrar-record-guide-rating.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.registrar-record-guide-items strong {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color: #1e293b;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.registrar-record-guide-items p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+.registrar-record-footer {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    auto;
+
+  align-items: center;
+
+  gap: 18px;
+
+  padding: 16px 18px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.registrar-record-footer > div:first-child {
+  min-width: 0;
+}
+
+.registrar-record-footer > div:first-child > strong {
+  color: #0f172a;
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.registrar-record-footer > div:first-child > p {
+  max-width: 700px;
+
+  margin: 4px 0 0;
+
+  color: #64748b;
+
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+/* =========================================================
+   RECORDED UNITS FOOTER CARD
+   ========================================================= */
+
+.registrar-record-footer-units {
+  min-width: 110px;
+
+  padding: 9px 12px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+
+  background: #eff6ff;
+
+  text-align: center;
+}
+
+.registrar-record-footer-units span {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.registrar-record-footer-units strong {
+  color: #1d4ed8;
+
+  font-size: 19px;
+  font-weight: 900;
+}
+
+/* =========================================================
+   FOOTER ACTIONS
+   ========================================================= */
+
+.registrar-record-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.registrar-record-profile-button,
+.registrar-record-transcript-button,
+.registrar-record-documents-button {
+  min-height: 36px;
+
+  box-sizing: border-box;
+
+  padding: 7px 12px;
+
+  border-radius: 7px;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  white-space: nowrap;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+/* STUDENT PROFILE */
+
+.registrar-record-profile-button {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #334155;
+}
+
+.registrar-record-profile-button:hover {
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* TRANSCRIPT */
+
+.registrar-record-transcript-button {
+  border: 1px solid #2563eb;
+
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.registrar-record-transcript-button:hover {
+  border-color: #1d4ed8;
+
+  background: #1d4ed8;
+
+  box-shadow: 0 4px 11px rgba(37, 99, 235, 0.16);
+
+  transform: translateY(-1px);
+}
+
+/* DOCUMENTS */
+
+.registrar-record-documents-button {
+  border: 1px solid #cbd5e1;
+
+  background: #f8fafc;
+  color: #334155;
+}
+
+.registrar-record-documents-button:hover {
+  border-color: #94a3b8;
+
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* =========================================================
+   TABLE SCROLLBAR
+   ========================================================= */
+
+.registrar-record-table-wrapper::-webkit-scrollbar {
+  height: 8px;
+}
+
+.registrar-record-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.registrar-record-table-wrapper::-webkit-scrollbar-thumb {
+  border: 2px solid #f1f5f9;
+  border-radius: 999px;
+
+  background: #cbd5e1;
+}
+
+.registrar-record-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =========================================================
+   FOCUS ACCESSIBILITY
+   ========================================================= */
+
+.registrar-record-back:focus-visible,
+.registrar-record-refresh:focus-visible,
+.registrar-record-clear:focus-visible,
+.registrar-record-profile-button:focus-visible,
+.registrar-record-transcript-button:focus-visible,
+.registrar-record-documents-button:focus-visible,
+.registrar-record-empty button:focus-visible,
+.registrar-record-error button:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.22);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   RESPONSIVE — 1400px
+   ========================================================= */
+
+@media (max-width: 1400px) {
+  .registrar-record-student-card {
+    grid-template-columns:
+      minmax(230px, 1.2fr)
+      minmax(0, 2.8fr);
   }
 
-  .student-summary-right {
-    width: 100%;
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .registrar-acadRecR-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
+  .registrar-record-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 768px) {
-  .registrar-acadRecR-container {
-    padding: 18px;
-  }
+/* =========================================================
+   RESPONSIVE — 1200px
+   ========================================================= */
 
-  .student-summary-left {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    width: 100%;
-  }
-
-  .student-summary-right {
+@media (max-width: 1200px) {
+  .registrar-record-student-card {
     grid-template-columns: 1fr;
   }
 
-  .records-actions {
+  .registrar-record-student-primary {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .registrar-record-student-data {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .registrar-record-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registrar-record-search {
+    grid-column: span 2;
+  }
+
+  .registrar-record-clear {
+    grid-column: span 2;
+
+    width: 100%;
+  }
+
+  .registrar-record-footer {
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+  }
+
+  .registrar-record-actions {
+    grid-column: 1 / -1;
+
+    justify-content: flex-start;
+
+    padding-top: 4px;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE — 900px
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .registrar-academic-record-page {
+    padding: 16px;
+  }
+
+  .registrar-record-header {
     flex-direction: column;
   }
 
-  .records-actions button {
+  .registrar-record-header-actions {
     width: 100%;
+  }
+
+  .registrar-record-back,
+  .registrar-record-refresh {
+    flex: 1;
+  }
+
+  .registrar-record-student-data {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registrar-record-student-data > div:nth-child(2) {
+    border-right: none;
+  }
+
+  .registrar-record-student-data > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .registrar-record-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-guide-items {
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-footer-units {
+    width: fit-content;
+  }
+
+  .registrar-record-actions {
+    grid-column: auto;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE — 650px
+   ========================================================= */
+
+@media (max-width: 650px) {
+  .registrar-academic-record-page {
+    padding: 12px;
+  }
+
+  .registrar-record-header {
+    padding: 18px;
+  }
+
+  .registrar-record-header h1 {
+    font-size: 23px;
+  }
+
+  .registrar-record-header p {
+    font-size: 11px;
+  }
+
+  .registrar-record-header-actions {
+    flex-direction: column;
+  }
+
+  .registrar-record-back,
+  .registrar-record-refresh {
+    width: 100%;
+  }
+
+  .registrar-record-official-notice {
+    padding: 12px;
+  }
+
+  .registrar-record-student-data {
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-student-data > div {
+    border-right: none;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .registrar-record-student-data > div:last-child {
+    border-bottom: none;
+  }
+
+  .registrar-record-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registrar-record-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-search,
+  .registrar-record-clear {
+    grid-column: auto;
+  }
+
+  .registrar-record-history-heading {
+    flex-direction: column;
+  }
+
+  .registrar-record-year-list {
+    padding: 10px;
+  }
+
+  .registrar-record-year-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .registrar-record-semester-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .registrar-record-semester-stats {
+    width: 100%;
+
+    justify-content: space-between;
+  }
+
+  .registrar-record-footer-units {
+    width: auto;
+  }
+
+  .registrar-record-actions {
+    display: grid;
+
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-profile-button,
+  .registrar-record-transcript-button,
+  .registrar-record-documents-button {
+    width: 100%;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE — 420px
+   ========================================================= */
+
+@media (max-width: 420px) {
+  .registrar-record-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .registrar-record-student-primary {
+    align-items: flex-start;
+  }
+
+  .registrar-record-avatar {
+    width: 42px;
+    height: 42px;
+
+    flex-basis: 42px;
+
+    font-size: 17px;
+  }
+
+  .registrar-record-semester-stats {
+    flex-direction: column;
+    align-items: flex-start;
+
+    gap: 4px;
   }
 }

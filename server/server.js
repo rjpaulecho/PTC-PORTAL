@@ -122,18 +122,11 @@ app.use(
   registrarRoutes,
 );
 
-
 // =====================================================
 // FACULTY ROUTES
 // =====================================================
 
-app.use(
-  "/api/faculty",
-  authenticate,
-  requireRole("Faculty"),
-  facultyRouter,
-);
-
+app.use("/api/faculty", authenticate, requireRole("Faculty"), facultyRouter);
 
 // =====================================================
 // PROGRAM HEAD ROUTES
@@ -146,14 +139,15 @@ app.use(
   programHeadRouter,
 );
 
-
+// =====================================================
+// TEMPORARY STUDENT ROUTE DEBUG
+// =====================================================
 
 // =====================================================
 // STUDENT ROUTES
 // =====================================================
 
 app.use("/api/student", authenticate, requireRole("Student"), studentRoutes);
-
 // =====================================================
 // SHARED AUTHENTICATED FILE ROUTES
 // =====================================================

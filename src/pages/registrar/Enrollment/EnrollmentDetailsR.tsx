@@ -212,6 +212,63 @@ interface ValidationResponse {
   warnings?: ValidationIssue[];
 }
 
+interface RawValidationPlacement {
+  offering_id?: number | null;
+  section_id?: number | null;
+  section_subject_id?: number | null;
+  section_name?: string | null;
+}
+
+interface RawValidationCapacity {
+  max_students?: number | null;
+  enrolled_count?: number | null;
+  available_slots?: number | null;
+}
+
+interface RawValidationSubject {
+  enrollment_subject_id?: number;
+  subject_id?: number;
+  subject_code?: string;
+  subject_name?: string;
+  units?: number;
+  offering_id?: number | null;
+  section_id?: number | null;
+  section_name?: string | null;
+  section_subject_id?: number | null;
+  offering_status?: string | null;
+  section_subject_status?: string | null;
+  placement?: RawValidationPlacement;
+  capacity?: RawValidationCapacity;
+  academic_eligibility?: AcademicEligibility;
+  valid?: boolean;
+  errors?: ValidationIssue[];
+}
+
+interface RawValidationSummary {
+  total_enrolled_subjects?: number;
+  active_subjects?: number;
+  total_units?: number;
+  valid_subjects?: number;
+  invalid_subjects?: number;
+  error_count?: number;
+  warning_count?: number;
+  validation_errors?: number;
+  validation_warnings?: number;
+}
+
+interface RawValidationResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  valid?: boolean;
+  can_approve?: boolean;
+  ready_for_approval?: boolean;
+  summary?: RawValidationSummary;
+  subjects?: RawValidationSubject[];
+  errors?: ValidationIssue[];
+  warnings?: ValidationIssue[];
+}
+
 interface AvailableOffering {
   offering_id: number;
 
@@ -269,8 +326,27 @@ interface AvailableOfferingsResponse {
   success: boolean;
   message?: string;
   error?: string;
+  subject_filter?: number | null;
   count?: number;
   offerings?: AvailableOffering[];
+  enrollment?: {
+    enrollment_id: number;
+    student_id: number;
+    student_number: string;
+    student_name: string;
+    course_id: number;
+    course_code: string | null;
+    course_name: string | null;
+    academic_year_id: number;
+    academic_year: string;
+    semester_id: number;
+    semester_name: string;
+    enrollment_status: string;
+  };
+  actor?: {
+    user_id: number;
+    username: string | null;
+  };
 }
 
 interface AvailableSubjectOffering {
@@ -348,6 +424,44 @@ interface MutationResponse {
   academic_eligibility?: AcademicEligibility;
 }
 
+interface BulkSectionOption {
+  section_id: number;
+  section_name: string;
+  year_level: number | null;
+  course_id: number | null;
+  course_code: string | null;
+  course_name: string | null;
+  ready_subject_count: number;
+  ready_offering_count: number;
+}
+
+interface BulkSectionAssignmentResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  code?: string;
+
+  section?: {
+    section_id: number;
+    section_name: string;
+  };
+
+  summary?: {
+    total_active_subjects?: number;
+    regular_subjects?: number;
+    assigned?: number;
+    already_correct?: number;
+    manual_subjects?: number;
+    errors?: number;
+  };
+
+  errors?: Array<{
+    subject_code?: string;
+    message?: string;
+    code?: string;
+  }>;
+}
+
 // =====================================================
 // SAFE JSON
 // =====================================================
@@ -382,7 +496,10 @@ export default function EnrollmentDetailsR() {
   // on every render; using that object directly in effect dependencies causes
   // the enrollment-loading effect to run again after every state update.
   const [user] = useState(() => authService.getSession());
+  const [token] = useState(() => authService.getToken());
+
   const userRole = user?.role;
+  const authenticated = Boolean(user && token);
 
   const enrollmentId = useMemo(() => {
     const value = Number(id);
@@ -426,6 +543,23 @@ export default function EnrollmentDetailsR() {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
 
   // =====================================================
+  // BULK SECTION PLACEMENT
+  // =====================================================
+
+  const [bulkSectionOpen, setBulkSectionOpen] = useState(false);
+  const [bulkSectionOptions, setBulkSectionOptions] = useState<
+    BulkSectionOption[]
+  >([]);
+  const [bulkSectionOptionsLoading, setBulkSectionOptionsLoading] =
+    useState(false);
+  const [selectedBulkSectionId, setSelectedBulkSectionId] = useState("");
+  const [bulkSectionReason, setBulkSectionReason] = useState(
+    "Registrar assigned regular subjects to the selected section.",
+  );
+  const [bulkSectionLoading, setBulkSectionLoading] = useState(false);
+  const [bulkSectionError, setBulkSectionError] = useState("");
+
+  // =====================================================
   // ADD SUBJECT PANEL
   // =====================================================
 
@@ -452,6 +586,13 @@ export default function EnrollmentDetailsR() {
   const [approvalLoading, setApprovalLoading] = useState(false);
 
   // =====================================================
+  // REJECTION
+  // =====================================================
+
+  const [rejectionRemarks, setRejectionRemarks] = useState("");
+  const [rejectionLoading, setRejectionLoading] = useState(false);
+
+  // =====================================================
   // FEEDBACK / REFRESH
   // =====================================================
 
@@ -464,7 +605,8 @@ export default function EnrollmentDetailsR() {
   // =====================================================
 
   useEffect(() => {
-    if (!user) {
+    if (!authenticated || !user) {
+      authService.logout();
       navigate("/login", { replace: true });
       return;
     }
@@ -474,7 +616,7 @@ export default function EnrollmentDetailsR() {
         replace: true,
       });
     }
-  }, [user, userRole, navigate]);
+  }, [authenticated, user, userRole, navigate]);
 
   const handleUnauthorized = useCallback(() => {
     authService.logout();
@@ -490,7 +632,7 @@ export default function EnrollmentDetailsR() {
   // =====================================================
 
   useEffect(() => {
-    if (!user || userRole !== "Registrar") {
+    if (!authenticated || !user || userRole !== "Registrar") {
       return;
     }
 
@@ -539,6 +681,14 @@ export default function EnrollmentDetailsR() {
           );
         }
 
+        const semesterId = Number(data.enrollment.academic_period.semester_id);
+
+        if (![1, 2].includes(semesterId)) {
+          throw new Error(
+            "This enrollment uses an unsupported semester. The PTC Portal enrollment workflow supports only First Semester and Second Semester.",
+          );
+        }
+
         setEnrollment(data.enrollment);
         setSubjects(Array.isArray(data.subjects) ? data.subjects : []);
         setSummary(data.summary || null);
@@ -570,14 +720,21 @@ export default function EnrollmentDetailsR() {
     void loadEnrollment();
 
     return () => controller.abort();
-  }, [enrollmentId, user, userRole, refreshKey, handleUnauthorized]);
+  }, [
+    authenticated,
+    enrollmentId,
+    user,
+    userRole,
+    refreshKey,
+    handleUnauthorized,
+  ]);
 
   // =====================================================
   // LOAD VALIDATION
   // =====================================================
 
   const loadValidation = useCallback(async () => {
-    if (!enrollmentId || !user || userRole !== "Registrar") {
+    if (!authenticated || !enrollmentId || !user || userRole !== "Registrar") {
       return;
     }
 
@@ -600,7 +757,26 @@ export default function EnrollmentDetailsR() {
         return;
       }
 
-      const data = await readJsonResponse<ValidationResponse>(response);
+      // The Registrar validation backend currently returns the newer contract:
+      //
+      //   valid
+      //   can_approve
+      //   summary.active_subjects
+      //   summary.validation_errors
+      //   summary.validation_warnings
+      //   subjects[].placement
+      //
+      // Older frontend builds expected:
+      //
+      //   ready_for_approval
+      //   summary.valid_subjects
+      //   summary.invalid_subjects
+      //   summary.error_count
+      //   summary.warning_count
+      //
+      // Normalize the API response here so the rest of this page has one
+      // stable validation contract.
+      const data = await readJsonResponse<RawValidationResponse>(response);
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -608,7 +784,114 @@ export default function EnrollmentDetailsR() {
         );
       }
 
-      setValidation(data);
+      const rawSubjects = Array.isArray(data.subjects) ? data.subjects : [];
+      const rawErrors = Array.isArray(data.errors) ? data.errors : [];
+      const rawWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+
+      const normalizedSubjects: ValidationSubject[] = rawSubjects.map(
+        (item: RawValidationSubject) => {
+          const placement = item?.placement || {};
+          const capacity = item?.capacity || {};
+
+          return {
+            enrollment_subject_id: Number(item?.enrollment_subject_id || 0),
+            subject_id: Number(item?.subject_id || 0),
+            subject_code: String(item?.subject_code || ""),
+            subject_name: String(item?.subject_name || ""),
+            units: Number(item?.units || 0),
+
+            offering_id:
+              item?.offering_id !== undefined && item?.offering_id !== null
+                ? Number(item.offering_id)
+                : placement?.offering_id !== undefined &&
+                    placement?.offering_id !== null
+                  ? Number(placement.offering_id)
+                  : null,
+
+            section_id:
+              item?.section_id !== undefined && item?.section_id !== null
+                ? Number(item.section_id)
+                : placement?.section_id !== undefined &&
+                    placement?.section_id !== null
+                  ? Number(placement.section_id)
+                  : null,
+
+            section_name: item?.section_name ?? placement?.section_name ?? null,
+
+            section_subject_id:
+              item?.section_subject_id !== undefined &&
+              item?.section_subject_id !== null
+                ? Number(item.section_subject_id)
+                : placement?.section_subject_id !== undefined &&
+                    placement?.section_subject_id !== null
+                  ? Number(placement.section_subject_id)
+                  : null,
+
+            offering_status: item?.offering_status ?? null,
+            section_subject_status: item?.section_subject_status ?? null,
+
+            capacity: {
+              max_students: Number(capacity?.max_students || 0),
+              enrolled_count: Number(capacity?.enrolled_count || 0),
+              available_slots: Number(capacity?.available_slots || 0),
+            },
+
+            academic_eligibility: item?.academic_eligibility,
+            valid: item?.valid === true,
+            errors: Array.isArray(item?.errors) ? item.errors : [],
+          };
+        },
+      );
+
+      const validSubjects = normalizedSubjects.filter(
+        (subject) => subject.valid,
+      ).length;
+      const invalidSubjects = normalizedSubjects.length - validSubjects;
+
+      const normalizedValidation: ValidationResponse = {
+        success: true,
+
+        ready_for_approval:
+          typeof data.ready_for_approval === "boolean"
+            ? data.ready_for_approval
+            : typeof data.can_approve === "boolean"
+              ? data.can_approve
+              : data.valid === true,
+
+        summary: {
+          total_enrolled_subjects: Number(
+            data.summary?.total_enrolled_subjects ??
+              data.summary?.active_subjects ??
+              normalizedSubjects.length,
+          ),
+
+          total_units: Number(data.summary?.total_units ?? 0),
+
+          valid_subjects: Number(data.summary?.valid_subjects ?? validSubjects),
+
+          invalid_subjects: Number(
+            data.summary?.invalid_subjects ?? invalidSubjects,
+          ),
+
+          error_count: Number(
+            data.summary?.error_count ??
+              data.summary?.validation_errors ??
+              rawErrors.length,
+          ),
+
+          warning_count: Number(
+            data.summary?.warning_count ??
+              data.summary?.validation_warnings ??
+              rawWarnings.length,
+          ),
+        },
+
+        subjects: normalizedSubjects,
+        errors: rawErrors,
+        warnings: rawWarnings,
+      };
+
+      setValidation(normalizedValidation);
     } catch (requestError) {
       console.error("VALIDATE ENROLLMENT ERROR:", requestError);
       setValidation(null);
@@ -620,10 +903,18 @@ export default function EnrollmentDetailsR() {
     } finally {
       setValidationLoading(false);
     }
-  }, [enrollmentId, user, userRole, handleUnauthorized]);
+  }, [authenticated, enrollmentId, user, userRole, handleUnauthorized]);
 
   useEffect(() => {
     if (!enrollment || !enrollmentId) {
+      return;
+    }
+
+    if (
+      !["Pending", "Approved"].includes(String(enrollment.enrollment_status))
+    ) {
+      setValidation(null);
+      setValidationError("");
       return;
     }
 
@@ -644,12 +935,40 @@ export default function EnrollmentDetailsR() {
     return map;
   }, [validation?.subjects]);
 
+  const selectedAssignmentOffering = useMemo(() => {
+    const offeringId = Number(selectedOfferingId);
+
+    if (!Number.isInteger(offeringId) || offeringId <= 0) {
+      return null;
+    }
+
+    return (
+      availableOfferings.find(
+        (offering) => Number(offering.offering_id) === offeringId,
+      ) || null
+    );
+  }, [availableOfferings, selectedOfferingId]);
+
+  const selectedBulkSection = useMemo(() => {
+    const sectionId = Number(selectedBulkSectionId);
+
+    if (!Number.isInteger(sectionId) || sectionId <= 0) {
+      return null;
+    }
+
+    return (
+      bulkSectionOptions.find(
+        (section) => Number(section.section_id) === sectionId,
+      ) || null
+    );
+  }, [bulkSectionOptions, selectedBulkSectionId]);
+
   // =====================================================
   // OPEN ASSIGNMENT PANEL
   // =====================================================
 
   const openAssignment = async (subject: EnrollmentSubject) => {
-    if (!enrollmentId) {
+    if (!enrollmentId || !enrollment) {
       return;
     }
 
@@ -657,7 +976,7 @@ export default function EnrollmentDetailsR() {
       setSelectedSubject(subject);
       setAvailableOfferings([]);
       setSelectedOfferingId(
-        subject.offering.offering_id
+        subject.assignment_complete && subject.offering.offering_id
           ? String(subject.offering.offering_id)
           : "",
       );
@@ -690,6 +1009,10 @@ export default function EnrollmentDetailsR() {
 
       const data = await readJsonResponse<AvailableOfferingsResponse>(response);
 
+      if (response.status === 403) {
+        throw new Error(data.message || "Registrar access is required.");
+      }
+
       if (!response.ok || !data.success) {
         throw new Error(
           data.message ||
@@ -698,12 +1021,49 @@ export default function EnrollmentDetailsR() {
         );
       }
 
-      setAvailableOfferings(
-        Array.isArray(data.offerings) ? data.offerings : [],
-      );
+      const returnedOfferings = Array.isArray(data.offerings)
+        ? data.offerings.filter((offering) => {
+            return (
+              Number(offering.subject.subject_id) ===
+                Number(subject.subject_id) &&
+              Number(offering.academic_year_id) ===
+                Number(enrollment.academic_period.academic_year_id) &&
+              Number(offering.semester_id) ===
+                Number(enrollment.academic_period.semester_id) &&
+              offering.offering_status === "Open" &&
+              offering.section_subject.status === "Open" &&
+              offering.capacity.available_slots > 0 &&
+              !offering.capacity.is_full
+            );
+          })
+        : [];
+
+      setAvailableOfferings(returnedOfferings);
+
+      const currentOfferingId = subject.offering.offering_id
+        ? Number(subject.offering.offering_id)
+        : null;
+
+      const currentOfferingStillAvailable =
+        currentOfferingId !== null &&
+        returnedOfferings.some(
+          (offering) => Number(offering.offering_id) === currentOfferingId,
+        );
+
+      if (currentOfferingStillAvailable && currentOfferingId !== null) {
+        setSelectedOfferingId(String(currentOfferingId));
+      } else if (
+        !subject.assignment_complete &&
+        returnedOfferings.length === 1
+      ) {
+        setSelectedOfferingId(String(returnedOfferings[0].offering_id));
+      } else {
+        setSelectedOfferingId("");
+      }
     } catch (requestError) {
       console.error("LOAD AVAILABLE OFFERINGS ERROR:", requestError);
       setAvailableOfferings([]);
+      setSelectedOfferingId("");
       setActionError(
         requestError instanceof Error
           ? requestError.message
@@ -726,6 +1086,37 @@ export default function EnrollmentDetailsR() {
   };
 
   // =====================================================
+  // ASSIGNMENT MODAL BEHAVIOR
+  // =====================================================
+
+  useEffect(() => {
+    if (!selectedSubject) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || assignmentLoading) {
+        return;
+      }
+
+      setSelectedSubject(null);
+      setAvailableOfferings([]);
+      setSelectedOfferingId("");
+      setAssignmentReason("Assigned by Registrar.");
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedSubject, assignmentLoading]);
+
+  // =====================================================
   // ASSIGN / CHANGE OFFERING
   // =====================================================
 
@@ -738,6 +1129,21 @@ export default function EnrollmentDetailsR() {
 
     if (!Number.isInteger(offeringId) || offeringId <= 0) {
       setActionError("Select a valid available offering.");
+      return;
+    }
+
+    if (!selectedAssignmentOffering) {
+      setActionError(
+        "The selected offering is no longer in the current READY / Open offering list. Reload the assignment choices and select again.",
+      );
+      return;
+    }
+
+    if (
+      selectedAssignmentOffering.capacity.is_full ||
+      selectedAssignmentOffering.capacity.available_slots <= 0
+    ) {
+      setActionError("The selected offering no longer has available capacity.");
       return;
     }
 
@@ -791,6 +1197,283 @@ export default function EnrollmentDetailsR() {
       setAssignmentLoading(false);
     }
   };
+
+  // =====================================================
+  // BULK SECTION PLACEMENT
+  // =====================================================
+
+  const resetBulkSectionModal = () => {
+    setBulkSectionOpen(false);
+    setBulkSectionOptions([]);
+    setSelectedBulkSectionId("");
+    setBulkSectionReason(
+      "Registrar assigned regular subjects to the selected section.",
+    );
+    setBulkSectionError("");
+  };
+
+  const closeBulkSectionModal = (force = false) => {
+    if (!force && (bulkSectionLoading || bulkSectionOptionsLoading)) {
+      return;
+    }
+
+    resetBulkSectionModal();
+  };
+
+  const openBulkSectionModal = async () => {
+    if (!enrollmentId || !enrollment) {
+      return;
+    }
+
+    if (enrollment.enrollment_status !== "Pending") {
+      setActionError(
+        "Bulk section placement is only available for Pending enrollments.",
+      );
+      return;
+    }
+
+    try {
+      closeAssignment(true);
+      setAddSubjectOpen(false);
+      setBulkSectionOpen(true);
+      setBulkSectionOptions([]);
+      setSelectedBulkSectionId("");
+      setBulkSectionError("");
+      setActionError("");
+      setSuccessMessage("");
+      setBulkSectionOptionsLoading(true);
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/available-offerings`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<AvailableOfferingsResponse>(response);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "Failed to load sections available for bulk placement.",
+        );
+      }
+
+      const returnedOfferings = Array.isArray(data.offerings)
+        ? data.offerings.filter((offering) => {
+            return (
+              Number(offering.academic_year_id) ===
+                Number(enrollment.academic_period.academic_year_id) &&
+              Number(offering.semester_id) ===
+                Number(enrollment.academic_period.semester_id) &&
+              Number(offering.section.course_id) ===
+                Number(enrollment.course.course_id) &&
+              Number(offering.section.year_level) ===
+                Number(enrollment.student.year_level) &&
+              offering.offering_status === "Open" &&
+              offering.section_subject.status === "Open" &&
+              offering.capacity.available_slots > 0 &&
+              !offering.capacity.is_full
+            );
+          })
+        : [];
+
+      const sectionMap = new Map<
+        number,
+        {
+          option: BulkSectionOption;
+          subjectIds: Set<number>;
+        }
+      >();
+
+      for (const offering of returnedOfferings) {
+        const sectionId = Number(offering.section.section_id);
+
+        if (!Number.isInteger(sectionId) || sectionId <= 0) {
+          continue;
+        }
+
+        const existing = sectionMap.get(sectionId);
+
+        if (existing) {
+          existing.option.ready_offering_count += 1;
+          existing.subjectIds.add(Number(offering.subject.subject_id));
+          existing.option.ready_subject_count = existing.subjectIds.size;
+          continue;
+        }
+
+        sectionMap.set(sectionId, {
+          option: {
+            section_id: sectionId,
+            section_name: offering.section.section_name,
+            year_level: offering.section.year_level,
+            course_id: offering.section.course_id,
+            course_code: offering.section.course_code,
+            course_name: offering.section.course_name,
+            ready_subject_count: 1,
+            ready_offering_count: 1,
+          },
+          subjectIds: new Set([Number(offering.subject.subject_id)]),
+        });
+      }
+
+      const options = Array.from(sectionMap.values())
+        .map((entry) => entry.option)
+        .sort((a, b) => a.section_name.localeCompare(b.section_name));
+
+      setBulkSectionOptions(options);
+
+      const profileSectionId = enrollment.student_section.section_id
+        ? Number(enrollment.student_section.section_id)
+        : null;
+
+      const profileSectionIsAvailable =
+        profileSectionId !== null &&
+        options.some(
+          (section) => Number(section.section_id) === profileSectionId,
+        );
+
+      if (profileSectionIsAvailable && profileSectionId !== null) {
+        setSelectedBulkSectionId(String(profileSectionId));
+      } else if (options.length === 1) {
+        setSelectedBulkSectionId(String(options[0].section_id));
+      }
+    } catch (requestError) {
+      console.error("LOAD BULK SECTION OPTIONS ERROR:", requestError);
+      setBulkSectionOptions([]);
+      setSelectedBulkSectionId("");
+      setBulkSectionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load sections available for bulk placement.",
+      );
+    } finally {
+      setBulkSectionOptionsLoading(false);
+    }
+  };
+
+  const saveBulkSectionAssignment = async () => {
+    if (!enrollmentId || !selectedBulkSection) {
+      setBulkSectionError("Select a valid section.");
+      return;
+    }
+
+    const cleanReason =
+      bulkSectionReason.trim() ||
+      "Registrar assigned regular subjects to the selected section.";
+
+    if (cleanReason.length > 255) {
+      setBulkSectionError("Assignment reason must not exceed 255 characters.");
+      return;
+    }
+
+    try {
+      setBulkSectionLoading(true);
+      setBulkSectionError("");
+      setActionError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/assign-section`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            section_id: selectedBulkSection.section_id,
+            reason: cleanReason,
+          }),
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data =
+        await readJsonResponse<BulkSectionAssignmentResponse>(response);
+
+      if (!response.ok || !data.success) {
+        const detail =
+          Array.isArray(data.errors) && data.errors.length > 0
+            ? data.errors
+                .map((item) => item.message || item.code || item.subject_code)
+                .filter(Boolean)
+                .join(" ")
+            : "";
+
+        throw new Error(
+          [data.message || data.error, detail].filter(Boolean).join(" ") ||
+            "Bulk section placement failed.",
+        );
+      }
+
+      const assignedCount = data.summary?.assigned ?? 0;
+      const alreadyCorrectCount = data.summary?.already_correct ?? 0;
+
+      setSuccessMessage(
+        data.message ||
+          `${assignedCount} subject(s) assigned. ${alreadyCorrectCount} already correct.`,
+      );
+
+      closeBulkSectionModal(true);
+      refresh();
+    } catch (requestError) {
+      console.error("BULK SECTION ASSIGNMENT ERROR:", requestError);
+
+      setBulkSectionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to assign the selected section.",
+      );
+    } finally {
+      setBulkSectionLoading(false);
+    }
+  };
+
+  // =====================================================
+  // BULK SECTION MODAL BEHAVIOR
+  // =====================================================
+
+  useEffect(() => {
+    if (!bulkSectionOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        bulkSectionLoading ||
+        bulkSectionOptionsLoading
+      ) {
+        return;
+      }
+
+      resetBulkSectionModal();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [bulkSectionOpen, bulkSectionLoading, bulkSectionOptionsLoading]);
 
   // =====================================================
   // ADD SUBJECT
@@ -1012,6 +1695,10 @@ export default function EnrollmentDetailsR() {
       return;
     }
 
+    if (rejectionLoading) {
+      return;
+    }
+
     try {
       setApprovalLoading(true);
       setActionError("");
@@ -1070,6 +1757,99 @@ export default function EnrollmentDetailsR() {
   };
 
   // =====================================================
+  // REJECT
+  //
+  // Only Pending enrollments can be rejected.
+  // Registrar identity comes from the JWT on the backend.
+  // The frontend sends only the required rejection remarks.
+  // =====================================================
+
+  const rejectEnrollment = async () => {
+    if (!enrollmentId || !enrollment) {
+      return;
+    }
+
+    if (enrollment.enrollment_status !== "Pending") {
+      setActionError("Only Pending enrollments can be rejected.");
+      return;
+    }
+
+    const remarks = rejectionRemarks.trim();
+
+    if (!remarks) {
+      setActionError("Rejection reason is required.");
+      return;
+    }
+
+    if (remarks.length > 255) {
+      setActionError("Rejection reason must not exceed 255 characters.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Reject this enrollment? The enrollment record will remain in the system and its subjects will not be deleted.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRejectionLoading(true);
+      setActionError("");
+      setSuccessMessage("");
+
+      const response = await authService.authFetch(
+        `${API_BASE_URL}/${enrollmentId}/reject`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            remarks,
+          }),
+        },
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await readJsonResponse<MutationResponse>(response);
+
+      if (response.status === 403) {
+        throw new Error(
+          data.message || data.error || "Registrar access is required.",
+        );
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || data.error || "Failed to reject enrollment.",
+        );
+      }
+
+      setSuccessMessage(data.message || "Enrollment rejected successfully.");
+
+      setRejectionRemarks("");
+      refresh();
+    } catch (requestError) {
+      console.error("REJECT ENROLLMENT ERROR:", requestError);
+
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to reject enrollment.",
+      );
+    } finally {
+      setRejectionLoading(false);
+    }
+  };
+
+  // =====================================================
   // HELPERS
   // =====================================================
 
@@ -1118,11 +1898,51 @@ export default function EnrollmentDetailsR() {
     return validationSubject?.academic_eligibility?.attempt_type || "Regular";
   };
 
+  const officialSectionPlacements = useMemo(() => {
+    const activeStatuses = new Set([
+      "Enrolled",
+      "Completed",
+      "Failed",
+      "Incomplete",
+    ]);
+
+    const map = new Map<number, string>();
+
+    subjects.forEach((subject) => {
+      if (
+        activeStatuses.has(String(subject.status)) &&
+        subject.section.section_id !== null &&
+        subject.section.section_name
+      ) {
+        map.set(
+          Number(subject.section.section_id),
+          subject.section.section_name,
+        );
+      }
+    });
+
+    return Array.from(map.entries())
+      .map(([sectionId, sectionName]) => ({
+        sectionId,
+        sectionName,
+      }))
+      .sort((a, b) => a.sectionName.localeCompare(b.sectionName));
+  }, [subjects]);
+
+  const officialSectionLabel =
+    officialSectionPlacements.length === 0
+      ? "Not Assigned"
+      : officialSectionPlacements.length === 1
+        ? `${officialSectionPlacements[0].sectionName} (#${officialSectionPlacements[0].sectionId})`
+        : officialSectionPlacements
+            .map((section) => `${section.sectionName} (#${section.sectionId})`)
+            .join(", ");
+
   // =====================================================
   // GUARD
   // =====================================================
 
-  if (!user || userRole !== "Registrar") {
+  if (!authenticated || !user || userRole !== "Registrar") {
     return null;
   }
 
@@ -1269,10 +2089,21 @@ export default function EnrollmentDetailsR() {
             </div>
 
             <div className="detail-item">
-              <span>Student Section</span>
+              <span>Profile Section (Reference)</span>
               <strong>
-                {enrollment.student_section.section_name || "Not Assigned"}
+                {enrollment.student_section.section_name
+                  ? `${enrollment.student_section.section_name}${
+                      enrollment.student_section.section_id !== null
+                        ? ` (#${enrollment.student_section.section_id})`
+                        : ""
+                    }`
+                  : "Not Assigned"}
               </strong>
+            </div>
+
+            <div className="detail-item">
+              <span>Official Enrollment Section</span>
+              <strong>{officialSectionLabel}</strong>
             </div>
 
             <div className="detail-item">
@@ -1341,7 +2172,12 @@ export default function EnrollmentDetailsR() {
             <button
               type="button"
               className="subject-action-btn"
-              disabled={validationLoading}
+              disabled={
+                validationLoading ||
+                !["Pending", "Approved"].includes(
+                  String(enrollment.enrollment_status),
+                )
+              }
               onClick={() => void loadValidation()}
             >
               {validationLoading ? "Validating..." : "Validate"}
@@ -1407,20 +2243,37 @@ export default function EnrollmentDetailsR() {
               </span>
             </div>
 
-            <button
-              type="button"
-              className="subject-action-btn"
-              disabled={
-                addSubjectLoading ||
-                availableSubjectsLoading ||
-                !["Pending", "Approved"].includes(
-                  String(enrollment.enrollment_status),
-                )
-              }
-              onClick={() => void openAddSubject()}
-            >
-              {availableSubjectsLoading ? "Loading..." : "+ Add Subject"}
-            </button>
+            <div className="subjects-header-actions">
+              <button
+                type="button"
+                className="subject-action-btn bulk-section-btn"
+                disabled={
+                  bulkSectionLoading ||
+                  bulkSectionOptionsLoading ||
+                  enrollment.enrollment_status !== "Pending"
+                }
+                onClick={() => void openBulkSectionModal()}
+              >
+                {bulkSectionOptionsLoading
+                  ? "Loading Sections..."
+                  : "Assign Section"}
+              </button>
+
+              <button
+                type="button"
+                className="subject-action-btn"
+                disabled={
+                  addSubjectLoading ||
+                  availableSubjectsLoading ||
+                  !["Pending", "Approved"].includes(
+                    String(enrollment.enrollment_status),
+                  )
+                }
+                onClick={() => void openAddSubject()}
+              >
+                {availableSubjectsLoading ? "Loading..." : "+ Add Subject"}
+              </button>
+            </div>
           </div>
 
           <div className="subjects-table-wrapper">
@@ -1524,7 +2377,10 @@ export default function EnrollmentDetailsR() {
                       </td>
 
                       <td>
-                        {subject.status === "Enrolled" ? (
+                        {subject.status === "Enrolled" &&
+                        ["Pending", "Approved"].includes(
+                          String(enrollment.enrollment_status),
+                        ) ? (
                           <button
                             type="button"
                             className="subject-action-btn"
@@ -1740,86 +2596,533 @@ export default function EnrollmentDetailsR() {
           </div>
         )}
 
-        {selectedSubject && (
-          <div className="enrollment-details-card">
-            <div className="details-card-header">
-              <div>
-                <h2>
-                  {selectedSubject.assignment_complete
-                    ? "Change Offering"
-                    : "Assign Offering"}
-                </h2>
-                <span>
-                  {selectedSubject.subject_code} —{" "}
-                  {selectedSubject.subject_name}
-                </span>
-              </div>
-            </div>
+        {bulkSectionOpen && (
+          <div
+            className="assignment-modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (
+                event.target === event.currentTarget &&
+                !bulkSectionLoading &&
+                !bulkSectionOptionsLoading
+              ) {
+                closeBulkSectionModal();
+              }
+            }}
+          >
+            <section
+              className="assignment-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="bulk-section-modal-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="assignment-modal-header">
+                <div>
+                  <span className="assignment-modal-eyebrow">
+                    Registrar Bulk Placement
+                  </span>
 
-            {offeringsLoading ? (
-              <div className="enrollment-details-loading">
-                Loading available offerings...
-              </div>
-            ) : (
-              <>
-                <div className="details-grid">
-                  <div className="detail-item">
-                    <span>Available Offering</span>
-                    <select
-                      value={selectedOfferingId}
-                      disabled={assignmentLoading}
-                      onChange={(event) =>
-                        setSelectedOfferingId(event.target.value)
-                      }
-                    >
-                      <option value="">Select offering</option>
+                  <h2 id="bulk-section-modal-title">Assign Section</h2>
 
-                      {availableOfferings.map((offering) => (
-                        <option
-                          key={offering.offering_id}
-                          value={offering.offering_id}
-                        >
-                          #{offering.offering_id} ·{" "}
-                          {offering.section.section_name} ·{" "}
-                          {offering.faculty.faculty_name ||
-                            "Faculty not assigned"}{" "}
-                          ·{" "}
-                          {formatSchedule(
-                            offering.schedule.days,
-                            offering.schedule.time,
-                          )}{" "}
-                          · {offering.capacity.available_slots} slot
-                          {offering.capacity.available_slots !== 1 ? "s" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="detail-item">
-                    <span>Reason</span>
-                    <textarea
-                      value={assignmentReason}
-                      disabled={assignmentLoading}
-                      onChange={(event) =>
-                        setAssignmentReason(event.target.value)
-                      }
-                    />
-                  </div>
+                  <p>
+                    Assign all regular current-term subjects to one READY
+                    section. Retake and special subjects remain for individual
+                    placement.
+                  </p>
                 </div>
 
-                {availableOfferings.length === 0 && (
-                  <div className="remarks-box">
-                    <p>
-                      No READY / Open offering is currently available for this
-                      subject in the enrollment's academic period.
-                    </p>
+                <button
+                  type="button"
+                  className="assignment-modal-close"
+                  aria-label="Close assign section modal"
+                  title="Close"
+                  disabled={bulkSectionLoading || bulkSectionOptionsLoading}
+                  onClick={() => closeBulkSectionModal()}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="assignment-modal-body">
+                {bulkSectionError && (
+                  <div className="assignment-modal-alert" role="alert">
+                    {bulkSectionError}
                   </div>
                 )}
 
-                <div className="enrollment-details-actions">
+                {bulkSectionOptionsLoading ? (
+                  <div className="assignment-modal-loading">
+                    <div
+                      className="assignment-modal-spinner"
+                      aria-hidden="true"
+                    />
+
+                    <div>
+                      <strong>Loading READY sections...</strong>
+                      <span>
+                        Checking available offerings for this student's course,
+                        year level, and academic period.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="assignment-modal-section-heading">
+                      <div>
+                        <h3>Available Sections</h3>
+                        <p>
+                          Choose the section that should become the official
+                          placement for the student's regular subjects.
+                        </p>
+                      </div>
+
+                      <span className="assignment-modal-count">
+                        {bulkSectionOptions.length} section
+                        {bulkSectionOptions.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+
+                    {bulkSectionOptions.length === 0 ? (
+                      <div className="assignment-modal-empty">
+                        <strong>No READY section available</strong>
+                        <p>
+                          The available-offerings endpoint did not return a
+                          matching READY section for this Pending enrollment.
+                        </p>
+                      </div>
+                    ) : (
+                      <div
+                        className="assignment-offering-list"
+                        role="radiogroup"
+                        aria-label="Available sections"
+                      >
+                        {bulkSectionOptions.map((section) => {
+                          const selected =
+                            Number(selectedBulkSectionId) ===
+                            Number(section.section_id);
+
+                          const isProfileReference =
+                            enrollment.student_section.section_id !== null &&
+                            Number(enrollment.student_section.section_id) ===
+                              Number(section.section_id);
+
+                          return (
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              key={section.section_id}
+                              className={`assignment-offering-option${
+                                selected ? " selected" : ""
+                              }`}
+                              disabled={bulkSectionLoading}
+                              onClick={() => {
+                                setSelectedBulkSectionId(
+                                  String(section.section_id),
+                                );
+                                setBulkSectionError("");
+                              }}
+                            >
+                              <div className="assignment-offering-option-top">
+                                <div>
+                                  <strong>{section.section_name}</strong>
+                                  <span>
+                                    Section #{section.section_id}
+                                    {isProfileReference
+                                      ? " · Profile reference"
+                                      : ""}
+                                  </span>
+                                </div>
+
+                                <div className="assignment-offering-option-status">
+                                  <span>READY</span>
+                                  <span>
+                                    {section.ready_subject_count} subject
+                                    {section.ready_subject_count !== 1
+                                      ? "s"
+                                      : ""}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="assignment-offering-meta">
+                                <div>
+                                  <span>Course</span>
+                                  <strong>
+                                    {section.course_code ||
+                                      enrollment.course.course_code ||
+                                      "—"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>Year Level</span>
+                                  <strong>
+                                    {section.year_level
+                                      ? `Year ${section.year_level}`
+                                      : "—"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>READY Subjects</span>
+                                  <strong>{section.ready_subject_count}</strong>
+                                </div>
+
+                                <div>
+                                  <span>READY Offerings</span>
+                                  <strong>
+                                    {section.ready_offering_count}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              <div className="assignment-offering-select-row">
+                                <span
+                                  className={`assignment-offering-radio${
+                                    selected ? " selected" : ""
+                                  }`}
+                                  aria-hidden="true"
+                                />
+
+                                <strong>
+                                  {selected
+                                    ? "Selected"
+                                    : "Select this section"}
+                                </strong>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedBulkSection && (
+                      <div className="assignment-selected-summary">
+                        <div>
+                          <span>Selected section</span>
+                          <strong>{selectedBulkSection.section_name}</strong>
+                        </div>
+
+                        <div>
+                          <span>Year Level</span>
+                          <strong>
+                            {selectedBulkSection.year_level
+                              ? `Year ${selectedBulkSection.year_level}`
+                              : "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>READY Subjects</span>
+                          <strong>
+                            {selectedBulkSection.ready_subject_count}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
+
+                    <label className="assignment-reason-field">
+                      <span>Assignment reason</span>
+
+                      <textarea
+                        value={bulkSectionReason}
+                        disabled={bulkSectionLoading}
+                        rows={3}
+                        maxLength={255}
+                        placeholder="Reason for bulk section placement"
+                        onChange={(event) =>
+                          setBulkSectionReason(event.target.value)
+                        }
+                      />
+
+                      <small>{bulkSectionReason.length}/255 characters</small>
+                    </label>
+                  </>
+                )}
+              </div>
+
+              <div className="assignment-modal-footer">
+                <div className="assignment-modal-footer-note">
+                  {selectedBulkSection
+                    ? `${selectedBulkSection.section_name} will be used for regular subjects.`
+                    : "Select one READY section to continue."}
+                </div>
+
+                <div className="assignment-modal-actions">
                   <button
                     type="button"
-                    className="reject-enrollment-btn"
+                    className="assignment-modal-cancel"
+                    disabled={bulkSectionLoading || bulkSectionOptionsLoading}
+                    onClick={() => closeBulkSectionModal()}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    className="assignment-modal-save"
+                    disabled={
+                      bulkSectionLoading ||
+                      bulkSectionOptionsLoading ||
+                      !selectedBulkSection
+                    }
+                    onClick={() => void saveBulkSectionAssignment()}
+                  >
+                    {bulkSectionLoading
+                      ? "Assigning Section..."
+                      : "Assign Section"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {selectedSubject && (
+          <div
+            className="assignment-modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !assignmentLoading) {
+                closeAssignment();
+              }
+            }}
+          >
+            <section
+              className="assignment-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="assignment-modal-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="assignment-modal-header">
+                <div>
+                  <span className="assignment-modal-eyebrow">
+                    Registrar Placement
+                  </span>
+                  <h2 id="assignment-modal-title">
+                    {selectedSubject.assignment_complete
+                      ? "Change Offering"
+                      : "Assign Offering"}
+                  </h2>
+                  <p>
+                    <strong>{selectedSubject.subject_code}</strong> —{" "}
+                    {selectedSubject.subject_name} · {selectedSubject.units}{" "}
+                    unit
+                    {selectedSubject.units !== 1 ? "s" : ""}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="assignment-modal-close"
+                  aria-label="Close assignment modal"
+                  title="Close"
+                  disabled={assignmentLoading}
+                  onClick={() => closeAssignment()}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="assignment-modal-body">
+                {actionError && (
+                  <div className="assignment-modal-alert" role="alert">
+                    {actionError}
+                  </div>
+                )}
+
+                {offeringsLoading ? (
+                  <div className="assignment-modal-loading">
+                    <div
+                      className="assignment-modal-spinner"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <strong>Loading READY offerings...</strong>
+                      <span>
+                        Checking section, schedule, and available capacity.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="assignment-modal-section-heading">
+                      <div>
+                        <h3>Available Offerings</h3>
+                        <p>
+                          Select the class placement for this enrolled subject.
+                          Room is optional.
+                        </p>
+                      </div>
+
+                      <span className="assignment-modal-count">
+                        {availableOfferings.length} READY
+                      </span>
+                    </div>
+
+                    {availableOfferings.length === 0 ? (
+                      <div className="assignment-modal-empty">
+                        <strong>No READY offering available</strong>
+                        <p>
+                          No Open offering with available capacity was returned
+                          for this subject, course, and academic period.
+                        </p>
+                      </div>
+                    ) : (
+                      <div
+                        className="assignment-offering-list"
+                        role="radiogroup"
+                        aria-label="Available offerings"
+                      >
+                        {availableOfferings.map((offering) => {
+                          const selected =
+                            Number(selectedOfferingId) ===
+                            Number(offering.offering_id);
+
+                          return (
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              key={offering.offering_id}
+                              className={`assignment-offering-option${
+                                selected ? " selected" : ""
+                              }`}
+                              disabled={assignmentLoading}
+                              onClick={() => {
+                                setSelectedOfferingId(
+                                  String(offering.offering_id),
+                                );
+                                setActionError("");
+                              }}
+                            >
+                              <div className="assignment-offering-option-top">
+                                <div>
+                                  <strong>
+                                    {offering.section.section_name}
+                                  </strong>
+                                  <span>Offering #{offering.offering_id}</span>
+                                </div>
+
+                                <div className="assignment-offering-option-status">
+                                  <span>READY</span>
+                                  <span>{offering.offering_status}</span>
+                                </div>
+                              </div>
+
+                              <div className="assignment-offering-meta">
+                                <div>
+                                  <span>Faculty</span>
+                                  <strong>
+                                    {offering.faculty.faculty_name || "—"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>Schedule</span>
+                                  <strong>
+                                    {formatSchedule(
+                                      offering.schedule.days,
+                                      offering.schedule.time,
+                                    )}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>Room</span>
+                                  <strong>
+                                    {offering.room.room_name || "—"}
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  <span>Capacity</span>
+                                  <strong>
+                                    {offering.capacity.enrolled_count}/
+                                    {offering.capacity.max_students} ·{" "}
+                                    {offering.capacity.available_slots} open
+                                  </strong>
+                                </div>
+                              </div>
+
+                              <div className="assignment-offering-select-row">
+                                <span
+                                  className={`assignment-offering-radio${
+                                    selected ? " selected" : ""
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                                <strong>
+                                  {selected
+                                    ? "Selected"
+                                    : "Select this offering"}
+                                </strong>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedAssignmentOffering && (
+                      <div className="assignment-selected-summary">
+                        <div>
+                          <span>Selected placement</span>
+                          <strong>
+                            {selectedAssignmentOffering.section.section_name}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Schedule</span>
+                          <strong>
+                            {formatSchedule(
+                              selectedAssignmentOffering.schedule.days,
+                              selectedAssignmentOffering.schedule.time,
+                            )}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Available slots</span>
+                          <strong>
+                            {
+                              selectedAssignmentOffering.capacity
+                                .available_slots
+                            }
+                          </strong>
+                        </div>
+                      </div>
+                    )}
+
+                    <label className="assignment-reason-field">
+                      <span>Assignment reason</span>
+                      <textarea
+                        value={assignmentReason}
+                        disabled={assignmentLoading}
+                        rows={3}
+                        placeholder="Reason for this placement"
+                        onChange={(event) =>
+                          setAssignmentReason(event.target.value)
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+
+              <div className="assignment-modal-footer">
+                <div className="assignment-modal-footer-note">
+                  {selectedAssignmentOffering
+                    ? `${selectedAssignmentOffering.section.section_name} is ready to assign.`
+                    : "Select one READY offering to continue."}
+                </div>
+
+                <div className="assignment-modal-actions">
+                  <button
+                    type="button"
+                    className="assignment-modal-cancel"
                     disabled={assignmentLoading}
                     onClick={() => closeAssignment()}
                   >
@@ -1828,19 +3131,25 @@ export default function EnrollmentDetailsR() {
 
                   <button
                     type="button"
-                    className="approve-enrollment-btn"
+                    className="assignment-modal-save"
                     disabled={
+                      offeringsLoading ||
                       assignmentLoading ||
-                      !selectedOfferingId ||
-                      availableOfferings.length === 0
+                      !selectedAssignmentOffering ||
+                      selectedAssignmentOffering.capacity.is_full ||
+                      selectedAssignmentOffering.capacity.available_slots <= 0
                     }
                     onClick={() => void saveAssignment()}
                   >
-                    {assignmentLoading ? "Saving..." : "Save Assignment"}
+                    {assignmentLoading
+                      ? "Saving Assignment..."
+                      : selectedSubject.assignment_complete
+                        ? "Save Change"
+                        : "Assign Offering"}
                   </button>
                 </div>
-              </>
-            )}
+              </div>
+            </section>
           </div>
         )}
 
@@ -1860,16 +3169,31 @@ export default function EnrollmentDetailsR() {
                 <span>Approval Remarks</span>
                 <textarea
                   value={approvalRemarks}
-                  disabled={approvalLoading}
+                  disabled={approvalLoading || rejectionLoading}
                   onChange={(event) => setApprovalRemarks(event.target.value)}
                 />
+              </div>
+
+              <div className="remarks-box">
+                <span>Rejection Reason</span>
+                <textarea
+                  value={rejectionRemarks}
+                  maxLength={255}
+                  disabled={approvalLoading || rejectionLoading}
+                  placeholder="Required only when rejecting this enrollment."
+                  onChange={(event) => setRejectionRemarks(event.target.value)}
+                />
+
+                <small>{rejectionRemarks.length}/255 characters</small>
               </div>
 
               <div className="enrollment-details-actions">
                 <button
                   type="button"
                   className="subject-action-btn"
-                  disabled={validationLoading || approvalLoading}
+                  disabled={
+                    validationLoading || approvalLoading || rejectionLoading
+                  }
                   onClick={() => void loadValidation()}
                 >
                   {validationLoading ? "Validating..." : "Validate Enrollment"}
@@ -1877,9 +3201,23 @@ export default function EnrollmentDetailsR() {
 
                 <button
                   type="button"
+                  className="reject-enrollment-btn"
+                  disabled={
+                    approvalLoading ||
+                    rejectionLoading ||
+                    !rejectionRemarks.trim()
+                  }
+                  onClick={() => void rejectEnrollment()}
+                >
+                  {rejectionLoading ? "Rejecting..." : "Reject Enrollment"}
+                </button>
+
+                <button
+                  type="button"
                   className="approve-enrollment-btn"
                   disabled={
                     approvalLoading ||
+                    rejectionLoading ||
                     validationLoading ||
                     !validation?.ready_for_approval
                   }

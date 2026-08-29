@@ -1,532 +1,1982 @@
-/* =====================================================
+/* =========================================================
    REGISTRAR TRANSCRIPT PREVIEW
-   ===================================================== */
+   File: RegistrarTranscriptPreview.css
+   ========================================================= */
+
+/* =========================================================
+   PAGE
+   ========================================================= */
 
 .transcript-page {
   width: 100%;
-  min-height: 100vh;
-  padding: 30px;
+  min-height: 100%;
+
   box-sizing: border-box;
-  background: #f5f6f8;
+
+  padding: 24px;
+
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-/* =====================================================
+/* =========================================================
    ACTION BAR
-   ===================================================== */
+   ========================================================= */
 
 .transcript-action-bar {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto 20px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 15px;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-bottom: 16px;
+  padding: 14px 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .transcript-actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+
+  gap: 8px;
+
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
+
+/* =========================================================
+   COMMON BUTTONS
+   ========================================================= */
 
 .transcript-back-btn,
+.transcript-refresh-btn,
 .transcript-print-btn,
-.transcript-generate-btn {
-  border: none;
+.transcript-retry-btn {
+  min-height: 38px;
+
+  box-sizing: border-box;
+
+  padding: 8px 14px;
+
   border-radius: 7px;
-  padding: 10px 18px;
-  font-size: 14px;
-  font-weight: 600;
+
+  font-size: 10px;
+  font-weight: 800;
+
   cursor: pointer;
-  transition: 0.2s ease;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
+/* =========================================================
+   BACK BUTTON
+   ========================================================= */
+
 .transcript-back-btn {
-  background: #e9ecef;
-  color: #333;
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+  color: #334155;
 }
 
 .transcript-back-btn:hover {
-  background: #dfe3e6;
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
 }
+
+/* =========================================================
+   REFRESH BUTTON
+   ========================================================= */
+
+.transcript-refresh-btn {
+  border: 1px solid #cbd5e1;
+
+  background: #f8fafc;
+  color: #334155;
+}
+
+.transcript-refresh-btn:hover {
+  border-color: #94a3b8;
+
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* =========================================================
+   PRINT PREVIEW BUTTON
+   ========================================================= */
 
 .transcript-print-btn {
-  background: #ffffff;
-  color: #333;
-  border: 1px solid #d5d8dc;
-}
+  border: 1px solid #2563eb;
 
-.transcript-print-btn:hover {
-  background: #f1f3f5;
-}
-
-.transcript-generate-btn {
-  background: #1f6feb;
+  background: #2563eb;
   color: #ffffff;
 }
 
-.transcript-generate-btn:hover {
-  background: #1558bd;
+.transcript-print-btn:hover {
+  border-color: #1d4ed8;
+
+  background: #1d4ed8;
+
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+
+  transform: translateY(-1px);
 }
 
-/* =====================================================
+/* =========================================================
+   OFFICIAL NOTICE
+   ========================================================= */
+
+.transcript-official-notice {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 12px;
+
+  margin-bottom: 16px;
+  padding: 14px 16px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+
+  background: #eff6ff;
+}
+
+.transcript-official-icon {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 30px;
+
+  border-radius: 50%;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.transcript-official-notice strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #1e3a8a;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.transcript-official-notice p {
+  margin: 0;
+
+  color: #475569;
+
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.transcript-loading {
+  min-height: 240px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  padding: 24px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+.transcript-loading > div:last-child {
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.transcript-loading strong {
+  color: #334155;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.transcript-loading span {
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+.transcript-loading-spinner {
+  width: 30px;
+  height: 30px;
+
+  box-sizing: border-box;
+
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+
+  animation: transcript-spin 700ms linear infinite;
+}
+
+@keyframes transcript-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.transcript-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  padding: 16px;
+
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+
+  background: #fef2f2;
+}
+
+.transcript-error > div:first-child {
+  min-width: 0;
+}
+
+.transcript-error strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #991b1b;
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.transcript-error p {
+  margin: 0;
+
+  color: #b91c1c;
+
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.transcript-error-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  flex-shrink: 0;
+}
+
+.transcript-retry-btn {
+  border: 1px solid #dc2626;
+
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.transcript-retry-btn:hover {
+  border-color: #b91c1c;
+
+  background: #b91c1c;
+}
+
+/* =========================================================
    TRANSCRIPT DOCUMENT
-   ===================================================== */
+   ========================================================= */
 
 .transcript-document {
   width: 100%;
-  max-width: 1100px;
-  min-height: 1100px;
-  margin: 0 auto;
-  padding: 55px 65px;
+  max-width: 1050px;
+
   box-sizing: border-box;
+
+  margin: 0 auto;
+  padding: 34px 38px 38px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
   background: #ffffff;
-  border: 1px solid #dcdfe3;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
 }
 
-/* =====================================================
-   HEADER
-   ===================================================== */
+/* =========================================================
+   SCHOOL HEADER
+   ========================================================= */
 
 .transcript-header {
+  position: relative;
+
+  padding-bottom: 18px;
+
+  border-bottom: 2px solid #0f172a;
+
   text-align: center;
-  margin-bottom: 35px;
-  border-bottom: 2px solid #222;
-  padding-bottom: 20px;
 }
 
 .transcript-header h1 {
   margin: 0;
-  font-size: 25px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #222;
+
+  color: #0f172a;
+
+  font-size: 21px;
+  font-weight: 900;
+
+  letter-spacing: 0.04em;
 }
 
 .transcript-header p {
-  margin: 6px 0 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #555;
-  letter-spacing: 0.8px;
+  margin: 4px 0 0;
+
+  color: #475569;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.08em;
 }
 
 .transcript-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: #222;
+  margin: 15px 0 0;
+
+  color: #0f172a;
+
+  font-size: 16px;
+  font-weight: 900;
+
+  letter-spacing: 0.08em;
 }
 
-/* =====================================================
+.transcript-preview-label {
+  position: absolute;
+
+  top: 0;
+  right: 0;
+
+  padding: 4px 7px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  font-size: 7px;
+  font-weight: 900;
+
+  letter-spacing: 0.05em;
+}
+
+/* =========================================================
    STUDENT INFORMATION
-   ===================================================== */
+   ========================================================= */
 
 .transcript-student-info {
-  margin-bottom: 30px;
-  padding: 18px 20px;
-  border: 1px solid #d9dde2;
-  background: #fafafa;
+  margin-top: 20px;
+  margin-bottom: 22px;
+
+  border: 1px solid #cbd5e1;
 }
 
 .student-info-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-  margin-bottom: 14px;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .student-info-row:last-child {
-  margin-bottom: 0;
+  border-bottom: none;
 }
 
 .student-info-row > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  min-width: 0;
+
+  padding: 10px 12px;
+
+  border-right: 1px solid #e2e8f0;
+}
+
+.student-info-row > div:last-child {
+  border-right: none;
+}
+
+.student-info-full {
+  grid-column: 1 / -1;
 }
 
 .student-info-row span {
-  font-size: 11px;
-  font-weight: 600;
-  color: #777;
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #64748b;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.035em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .student-info-row strong {
-  font-size: 14px;
-  color: #222;
+  display: block;
+
+  color: #0f172a;
+
+  font-size: 10px;
+  font-weight: 800;
 }
 
-/* =====================================================
+/* =========================================================
    ACADEMIC HISTORY
-   ===================================================== */
+   ========================================================= */
 
 .transcript-academic-history {
-  width: 100%;
+  margin-top: 8px;
 }
+
+/* =========================================================
+   ACADEMIC YEAR
+   ========================================================= */
 
 .transcript-academic-year {
-  margin-bottom: 30px;
+  margin-bottom: 26px;
 }
 
-.transcript-academic-year h3 {
-  margin: 0 0 12px;
-  padding: 9px 12px;
-  font-size: 15px;
-  font-weight: 700;
-  color: #222;
-  background: #f0f2f4;
-  border-left: 4px solid #333;
+.transcript-academic-year:last-child {
+  margin-bottom: 0;
 }
+
+.transcript-academic-year > h3 {
+  margin: 0 0 10px;
+
+  padding-bottom: 6px;
+
+  border-bottom: 1px solid #94a3b8;
+
+  color: #0f172a;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  letter-spacing: 0.02em;
+}
+
+/* =========================================================
+   SEMESTER
+   ========================================================= */
 
 .transcript-semester {
-  margin-bottom: 25px;
+  margin-bottom: 18px;
 }
 
-.transcript-semester h4 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #333;
+.transcript-semester:last-child {
+  margin-bottom: 0;
 }
 
-/* =====================================================
-   TRANSCRIPT TABLE
-   ===================================================== */
+.transcript-semester-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  margin-bottom: 7px;
+}
+
+.transcript-semester-heading h4 {
+  margin: 0;
+
+  color: #334155;
+
+  font-size: 10px;
+  font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+.transcript-semester-heading span {
+  color: #64748b;
+
+  font-size: 8px;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+   ========================================================= */
+
+.transcript-table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* =========================================================
+   TABLE
+   ========================================================= */
 
 .transcript-table {
   width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: 12px;
-}
+  min-width: 760px;
 
-.transcript-table th,
-.transcript-table td {
-  border: 1px solid #bfc4ca;
-  padding: 9px 8px;
-  text-align: left;
-  vertical-align: middle;
+  border-collapse: collapse;
+
+  border: 1px solid #94a3b8;
 }
 
 .transcript-table th {
-  background: #eeeeee;
-  color: #222;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+  padding: 8px 9px;
+
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
+
+  text-align: left;
+
+  font-size: 8px;
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+.transcript-table th:last-child {
+  border-right: none;
 }
 
 .transcript-table td {
-  color: #333;
-  background: #ffffff;
+  padding: 9px;
+
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+
+  vertical-align: middle;
+
+  color: #334155;
+
+  font-size: 9px;
 }
 
-/* Subject Code */
-.transcript-table th:nth-child(1),
-.transcript-table td:nth-child(1) {
-  width: 15%;
+.transcript-table td:last-child {
+  border-right: none;
 }
 
-/* Subject Description */
-.transcript-table th:nth-child(2),
-.transcript-table td:nth-child(2) {
-  width: 43%;
+.transcript-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-/* Units */
-.transcript-table th:nth-child(3),
-.transcript-table td:nth-child(3) {
-  width: 10%;
-  text-align: center;
+.transcript-table tbody tr:hover {
+  background: #fafcff;
 }
 
-/* Grade */
-.transcript-table th:nth-child(4),
-.transcript-table td:nth-child(4) {
-  width: 12%;
-  text-align: center;
+/* =========================================================
+   SUBJECT CODE
+   ========================================================= */
+
+.transcript-subject-code {
+  color: #0f172a;
+
+  font-size: 9px;
+  font-weight: 900;
+
+  white-space: nowrap;
 }
 
-/* Remarks */
-.transcript-table th:nth-child(5),
-.transcript-table td:nth-child(5) {
-  width: 20%;
+/* =========================================================
+   FINAL RATING
+   ========================================================= */
+
+.transcript-final-rating {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 44px;
+
+  padding: 3px 6px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 5px;
+
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  font-size: 9px;
+  font-weight: 900;
 }
 
-/* =====================================================
-   SEMESTER TOTAL
-   ===================================================== */
+/* =========================================================
+   RESULT
+   ========================================================= */
 
-.semester-total {
+.transcript-result-cell {
   display: flex;
-  justify-content: flex-end;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #333;
-  border-left: 1px solid #bfc4ca;
-  border-right: 1px solid #bfc4ca;
-  border-bottom: 1px solid #bfc4ca;
-  background: #fafafa;
+  flex-direction: column;
+  align-items: flex-start;
+
+  gap: 3px;
 }
 
-/* =====================================================
-   SUMMARY
-   ===================================================== */
+.transcript-result {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 3px 7px;
+
+  border-radius: 999px;
+
+  font-size: 8px;
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+.transcript-result.passed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.transcript-result.incomplete {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.transcript-result.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.transcript-result.unknown {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.transcript-retake {
+  color: #b45309;
+
+  font-size: 7px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   SUBJECT STATUS
+   ========================================================= */
+
+.transcript-subject-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 3px 7px;
+
+  border-radius: 999px;
+
+  background: #f1f5f9;
+  color: #475569;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.transcript-subject-status.completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.transcript-subject-status.incomplete {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.transcript-subject-status.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.transcript-subject-status.enrolled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+/* =========================================================
+   SEMESTER SUMMARY
+   ========================================================= */
+
+.transcript-semester-summary {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+
+  gap: 8px;
+
+  margin-top: 7px;
+}
+
+.transcript-semester-summary > div {
+  min-width: 100px;
+
+  padding: 7px 9px;
+
+  border: 1px solid #cbd5e1;
+
+  background: #f8fafc;
+
+  text-align: center;
+}
+
+.transcript-semester-summary span {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color: #64748b;
+
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.transcript-semester-summary strong {
+  color: #0f172a;
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.transcript-empty {
+  padding: 26px;
+
+  border: 1px dashed #cbd5e1;
+
+  color: #64748b;
+
+  text-align: center;
+}
+
+.transcript-empty strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #334155;
+
+  font-size: 11px;
+}
+
+.transcript-empty p {
+  margin: 0;
+
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+/* =========================================================
+   OVERALL SUMMARY
+   ========================================================= */
 
 .transcript-summary {
-  display: flex;
-  justify-content: flex-end;
-  gap: 45px;
-  margin-top: 35px;
-  padding: 18px 0;
-  border-top: 2px solid #333;
-  border-bottom: 1px solid #ccc;
+  display: grid;
+
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+
+  gap: 6px;
+
+  margin-top: 24px;
+  padding-top: 14px;
+
+  border-top: 2px solid #0f172a;
 }
 
 .transcript-summary > div {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
+  min-width: 0;
+
+  padding: 8px;
+
+  border: 1px solid #cbd5e1;
+
+  background: #f8fafc;
+
+  text-align: center;
 }
 
 .transcript-summary span {
-  font-size: 11px;
-  color: #777;
-  font-weight: 600;
-  text-transform: uppercase;
+  display: block;
+
+  margin-bottom: 3px;
+
+  color: #64748b;
+
+  font-size: 7px;
+  font-weight: 800;
 }
 
 .transcript-summary strong {
-  font-size: 18px;
-  color: #222;
+  color: #0f172a;
+
+  font-size: 13px;
+  font-weight: 900;
 }
 
-/* =====================================================
+/* =========================================================
+   GRADE GUIDE
+   ========================================================= */
+
+.transcript-grade-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  margin-top: 16px;
+  padding: 10px 12px;
+
+  border: 1px solid #cbd5e1;
+
+  background: #f8fafc;
+}
+
+.transcript-grade-guide > strong {
+  color: #334155;
+
+  font-size: 9px;
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+.transcript-grade-guide-items {
+  display: flex;
+  align-items: center;
+
+  gap: 18px;
+
+  flex-wrap: wrap;
+}
+
+.transcript-grade-guide-items span {
+  color: #475569;
+
+  font-size: 8px;
+}
+
+.transcript-grade-guide-items b {
+  color: #0f172a;
+
+  font-weight: 900;
+}
+
+/* =========================================================
    CERTIFICATION
-   ===================================================== */
+   ========================================================= */
 
 .transcript-certification {
-  margin-top: 50px;
-  max-width: 750px;
+  margin-top: 22px;
+  padding-top: 14px;
+
+  border-top: 1px solid #cbd5e1;
 }
 
 .transcript-certification p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.7;
-  color: #444;
-  text-align: justify;
+  margin: 0 0 6px;
+
+  color: #475569;
+
+  font-size: 8px;
+  line-height: 1.55;
 }
 
-/* =====================================================
+.transcript-certification-note {
+  color: #64748b !important;
+
+  font-style: italic;
+}
+
+/* =========================================================
+   DOCUMENT INFO
+   ========================================================= */
+
+.transcript-document-info {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 8px;
+
+  margin-top: 16px;
+}
+
+.transcript-document-info > div {
+  padding: 8px 10px;
+
+  border: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+}
+
+.transcript-document-info span {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color: #64748b;
+
+  font-size: 7px;
+  font-weight: 800;
+
+  text-transform: uppercase;
+}
+
+.transcript-document-info strong {
+  color: #334155;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+/* =========================================================
    SIGNATURE
-   ===================================================== */
+   ========================================================= */
 
 .transcript-signature {
   display: flex;
   justify-content: flex-end;
-  margin-top: 80px;
+
+  margin-top: 44px;
 }
 
 .signature-line {
-  width: 250px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  min-width: 220px;
+
+  padding-top: 7px;
+
+  border-top: 1px solid #0f172a;
+
   text-align: center;
 }
 
 .signature-line strong {
-  width: 100%;
-  padding-top: 8px;
-  border-top: 1px solid #222;
-  font-size: 13px;
-  color: #222;
+  display: block;
+
+  color: #0f172a;
+
+  font-size: 9px;
+  font-weight: 900;
 }
 
 .signature-line span {
-  margin-top: 5px;
-  font-size: 11px;
-  color: #777;
+  display: block;
+
+  margin-top: 2px;
+
+  color: #64748b;
+
+  font-size: 7px;
 }
 
-/* =====================================================
-   LOADING / ERROR / EMPTY
-   ===================================================== */
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
 
-.transcript-message {
-  width: 100%;
-  max-width: 1100px;
-  margin: 80px auto;
-  padding: 30px;
-  text-align: center;
-  background: #ffffff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  color: #555;
-  box-sizing: border-box;
+.transcript-table-wrapper::-webkit-scrollbar {
+  height: 8px;
 }
 
-.transcript-message.error {
-  color: #b42318;
-  border-color: #f0b7b2;
-  background: #fff7f6;
+.transcript-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
 }
 
-.transcript-empty {
-  padding: 30px;
-  text-align: center;
-  color: #777;
-  border: 1px solid #ddd;
-  background: #fafafa;
+.transcript-table-wrapper::-webkit-scrollbar-thumb {
+  border: 2px solid #f1f5f9;
+  border-radius: 999px;
+
+  background: #cbd5e1;
 }
 
-/* =====================================================
-   RESPONSIVE
-   ===================================================== */
+.transcript-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 
-@media (max-width: 900px) {
-  .transcript-page {
-    padding: 20px;
-  }
+/* =========================================================
+   FOCUS
+   ========================================================= */
 
+.transcript-back-btn:focus-visible,
+.transcript-refresh-btn:focus-visible,
+.transcript-print-btn:focus-visible,
+.transcript-retry-btn:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.2);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   RESPONSIVE — 1000px
+   ========================================================= */
+
+@media (max-width: 1000px) {
   .transcript-document {
-    padding: 35px 30px;
+    padding: 28px;
   }
 
-  .student-info-row {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-
-  .transcript-table {
-    min-width: 750px;
-  }
-
-  .transcript-academic-history {
-    overflow-x: auto;
+  .transcript-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 600px) {
+/* =========================================================
+   RESPONSIVE — 750px
+   ========================================================= */
+
+@media (max-width: 750px) {
   .transcript-page {
-    padding: 12px;
+    padding: 14px;
   }
 
   .transcript-action-bar {
-    flex-direction: column;
     align-items: stretch;
+    flex-direction: column;
   }
 
   .transcript-actions {
     width: 100%;
+
+    display: grid;
+
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .transcript-back-btn,
-  .transcript-print-btn,
-  .transcript-generate-btn {
-    flex: 1;
+  .transcript-back-btn {
+    width: 100%;
   }
 
   .transcript-document {
-    padding: 25px 18px;
+    padding: 20px;
   }
 
   .transcript-header h1 {
-    font-size: 19px;
+    font-size: 17px;
   }
 
   .transcript-header h2 {
-    font-size: 16px;
+    font-size: 13px;
+  }
+
+  .transcript-preview-label {
+    position: static;
+
+    display: inline-flex;
+
+    margin-top: 8px;
+  }
+
+  .student-info-row {
+    grid-template-columns: 1fr;
+  }
+
+  .student-info-row > div {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .student-info-row > div:last-child {
+    border-bottom: none;
   }
 
   .transcript-summary {
-    gap: 20px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .transcript-grade-guide {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .transcript-document-info {
+    grid-template-columns: 1fr;
   }
 }
 
-/* =====================================================
-   PRINT
-   ===================================================== */
-@media print {
-  @page {
-    size: letter;
-    margin: 0;
+/* =========================================================
+   RESPONSIVE — 480px
+   ========================================================= */
+
+@media (max-width: 480px) {
+  .transcript-actions {
+    grid-template-columns: 1fr;
   }
 
-  /* Hide EVERYTHING by default */
+  .transcript-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .transcript-semester-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .transcript-semester-summary {
+    flex-direction: column;
+  }
+
+  .transcript-semester-summary > div {
+    width: auto;
+  }
+
+  .signature-line {
+    min-width: 180px;
+  }
+}
+/* =========================================================
+   PRINT PREVIEW
+   PRINT ONLY THE OFFICIAL TRANSCRIPT
+   MULTIPLE PAGES ALLOWED
+   ========================================================= */
+
+@media print {
+  /* =======================================================
+     PHYSICAL PAGE
+     ======================================================= */
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm 11mm 14mm;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: visible !important;
+
+    background: #ffffff !important;
+  }
+
+  /* =======================================================
+     MOST IMPORTANT RULE
+
+     Hide absolutely everything in the application first.
+     This prevents:
+     - sidebar
+     - dashboard header
+     - navigation
+     - action buttons
+     - notices
+     - layout containers
+     from appearing in print.
+     ======================================================= */
+
   body * {
     visibility: hidden !important;
   }
 
-  /* Show ONLY the transcript */
+  /* =======================================================
+     SHOW ONLY OFFICIAL TRANSCRIPT
+     ======================================================= */
+
   .transcript-document,
   .transcript-document * {
     visibility: visible !important;
   }
 
-  /* Put transcript at the top-left of the printed page */
+  /* =======================================================
+     PLACE TRANSCRIPT AT TOP-LEFT OF PRINT PAGE
+
+     This removes the DashboardLayout spacing completely.
+     ======================================================= */
+
   .transcript-document {
     position: absolute !important;
-    left: 0 !important;
+
     top: 0 !important;
+    left: 0 !important;
 
     width: 100% !important;
     max-width: none !important;
-    min-height: auto !important;
+    min-width: 0 !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    box-sizing: border-box !important;
 
     margin: 0 !important;
-    padding: 15mm !important;
+    padding: 0 !important;
+
+    overflow: visible !important;
 
     border: none !important;
+    border-radius: 0 !important;
+
+    background: #ffffff !important;
+
     box-shadow: none !important;
+  }
+
+  /* =======================================================
+     REMOVE SCREEN-ONLY ELEMENTS INSIDE TRANSCRIPT
+     ======================================================= */
+
+  .transcript-preview-label {
+    display: none !important;
+  }
+
+  /* =======================================================
+     SCHOOL HEADER
+     ======================================================= */
+
+  .transcript-header {
+    position: relative !important;
+
+    margin: 0 0 12px !important;
+    padding: 0 0 10px !important;
+
+    border-bottom: 2px solid #000000 !important;
+
+    break-inside: avoid;
+    page-break-inside: avoid;
+
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .transcript-header h1 {
+    margin: 0 !important;
+
+    color: #000000 !important;
+
+    font-size: 17px !important;
+    font-weight: 900 !important;
+
+    letter-spacing: 0.03em !important;
+  }
+
+  .transcript-header p {
+    margin: 3px 0 0 !important;
+
+    color: #000000 !important;
+
+    font-size: 8px !important;
+    font-weight: 700 !important;
+  }
+
+  .transcript-header h2 {
+    margin: 9px 0 0 !important;
+
+    color: #000000 !important;
+
+    font-size: 13px !important;
+    font-weight: 900 !important;
+
+    letter-spacing: 0.06em !important;
+  }
+
+  /* =======================================================
+     STUDENT INFORMATION
+     ======================================================= */
+
+  .transcript-student-info {
+    width: 100% !important;
+
+    margin: 0 0 12px !important;
+
+    border: 1px solid #000000 !important;
+
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .student-info-row {
+    display: grid !important;
+
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+
+    border-bottom: 1px solid #b8b8b8 !important;
+  }
+
+  .student-info-row:last-child {
+    border-bottom: none !important;
+  }
+
+  .student-info-row > div {
+    padding: 5px 7px !important;
+
+    border-right: 1px solid #b8b8b8 !important;
+  }
+
+  .student-info-row > div:last-child {
+    border-right: none !important;
+  }
+
+  .student-info-full {
+    grid-column: 1 / -1 !important;
+  }
+
+  .student-info-row span {
+    margin: 0 0 2px !important;
+
+    color: #444444 !important;
+
+    font-size: 6px !important;
+    font-weight: 800 !important;
+
+    text-transform: uppercase !important;
+  }
+
+  .student-info-row strong {
+    color: #000000 !important;
+
+    font-size: 8px !important;
+    font-weight: 800 !important;
+  }
+
+  /* =======================================================
+     ACADEMIC HISTORY
+
+     IMPORTANT:
+     Allow the complete academic history to span as many
+     pages as necessary.
+     ======================================================= */
+
+  .transcript-academic-history {
+    width: 100% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: visible !important;
+  }
+
+  /* =======================================================
+     ACADEMIC YEAR
+
+     Academic years are allowed to continue onto another page.
+     ======================================================= */
+
+  .transcript-academic-year {
+    width: 100% !important;
+
+    margin: 0 0 13px !important;
+
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .transcript-academic-year > h3 {
+    margin: 0 0 6px !important;
+
+    padding: 0 0 4px !important;
+
+    border-bottom: 1px solid #000000 !important;
+
+    color: #000000 !important;
+
+    font-size: 9px !important;
+    font-weight: 900 !important;
+
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* =======================================================
+     SEMESTER
+
+     DO NOT use break-inside: avoid here.
+
+     A semester may contain many subjects and MUST be
+     allowed to continue onto page 2, page 3, etc.
+     ======================================================= */
+
+  .transcript-semester {
+    width: 100% !important;
+
+    margin: 0 0 10px !important;
+
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .transcript-semester-heading {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+
+    gap: 8px !important;
+
+    margin: 0 0 4px !important;
+
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .transcript-semester-heading h4 {
+    margin: 0 !important;
+
+    color: #000000 !important;
+
+    font-size: 7.5px !important;
+    font-weight: 900 !important;
+  }
+
+  .transcript-semester-heading span {
+    color: #333333 !important;
+
+    font-size: 6px !important;
+  }
+
+  /* =======================================================
+     TABLE WRAPPER
+     ======================================================= */
+
+  .transcript-table-wrapper {
+    width: 100% !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    overflow: visible !important;
+  }
+
+  /* =======================================================
+     TRANSCRIPT TABLE
+     ======================================================= */
+
+  .transcript-table {
+    width: 100% !important;
+    min-width: 0 !important;
+
+    border-collapse: collapse !important;
+
+    table-layout: fixed !important;
+
+    border: 1px solid #000000 !important;
 
     background: #ffffff !important;
   }
 
-  /* Hide buttons/action bar */
-  .transcript-action-bar,
-  .transcript-actions {
-    display: none !important;
+  /* =======================================================
+     REPEAT TABLE HEADER ON NEW PRINT PAGE
+     ======================================================= */
+
+  .transcript-table thead {
+    display: table-header-group !important;
   }
 
-  /* Make sure DashboardLayout doesn't affect printing */
-  .dashboard-header,
-  .dashboard-sidebar,
-  .dashboard-footer,
-  .sidebar,
-  .header,
-  .footer,
-  nav {
-    display: none !important;
+  .transcript-table tbody {
+    display: table-row-group !important;
   }
 
-  /* Keep transcript tables together */
-  .transcript-academic-year {
-    page-break-inside: avoid;
-  }
-
-  .transcript-semester {
-    page-break-inside: avoid;
-  }
-
-  .transcript-table {
-    page-break-inside: auto;
-  }
+  /* =======================================================
+     KEEP EACH SUBJECT ROW TOGETHER
+     ======================================================= */
 
   .transcript-table tr {
-    page-break-inside: avoid;
-    page-break-after: auto;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
-  .transcript-summary,
+  .transcript-table th {
+    padding: 4px 4px !important;
+
+    border-right: 1px solid #000000 !important;
+    border-bottom: 1px solid #000000 !important;
+
+    background: #ffffff !important;
+    color: #000000 !important;
+
+    font-size: 6px !important;
+    font-weight: 900 !important;
+
+    line-height: 1.2 !important;
+
+    white-space: normal !important;
+  }
+
+  .transcript-table th:last-child {
+    border-right: none !important;
+  }
+
+  .transcript-table td {
+    padding: 4px !important;
+
+    border-right: 1px solid #b8b8b8 !important;
+    border-bottom: 1px solid #b8b8b8 !important;
+
+    background: #ffffff !important;
+    color: #000000 !important;
+
+    font-size: 6.5px !important;
+
+    line-height: 1.25 !important;
+
+    vertical-align: middle !important;
+
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+
+  .transcript-table td:last-child {
+    border-right: none !important;
+  }
+
+  /* =======================================================
+     TABLE COLUMN WIDTHS
+     ======================================================= */
+
+  .transcript-table th:nth-child(1),
+  .transcript-table td:nth-child(1) {
+    width: 13% !important;
+  }
+
+  .transcript-table th:nth-child(2),
+  .transcript-table td:nth-child(2) {
+    width: 36% !important;
+  }
+
+  .transcript-table th:nth-child(3),
+  .transcript-table td:nth-child(3) {
+    width: 8% !important;
+
+    text-align: center !important;
+  }
+
+  .transcript-table th:nth-child(4),
+  .transcript-table td:nth-child(4) {
+    width: 13% !important;
+
+    text-align: center !important;
+  }
+
+  .transcript-table th:nth-child(5),
+  .transcript-table td:nth-child(5) {
+    width: 13% !important;
+
+    text-align: center !important;
+  }
+
+  .transcript-table th:nth-child(6),
+  .transcript-table td:nth-child(6) {
+    width: 17% !important;
+
+    text-align: center !important;
+  }
+
+  /* =======================================================
+     SUBJECT CODE
+     ======================================================= */
+
+  .transcript-subject-code {
+    color: #000000 !important;
+
+    font-size: 6.5px !important;
+    font-weight: 900 !important;
+  }
+
+  /* =======================================================
+     FINAL RATING
+
+     Remove screen badge styling.
+     ======================================================= */
+
+  .transcript-final-rating {
+    display: inline !important;
+
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: none !important;
+    border-radius: 0 !important;
+
+    background: transparent !important;
+    color: #000000 !important;
+
+    font-size: 6.5px !important;
+    font-weight: 900 !important;
+  }
+
+  /* =======================================================
+     RESULT
+     ======================================================= */
+
+  .transcript-result-cell {
+    display: block !important;
+  }
+
+  .transcript-result {
+    display: inline !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: none !important;
+    border-radius: 0 !important;
+
+    background: transparent !important;
+    color: #000000 !important;
+
+    font-size: 6.5px !important;
+    font-weight: 700 !important;
+  }
+
+  .transcript-retake {
+    display: block !important;
+
+    margin-top: 1px !important;
+
+    color: #000000 !important;
+
+    font-size: 5.5px !important;
+    font-weight: 700 !important;
+  }
+
+  /* =======================================================
+     SUBJECT STATUS
+     ======================================================= */
+
+  .transcript-subject-status {
+    display: inline !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border: none !important;
+    border-radius: 0 !important;
+
+    background: transparent !important;
+    color: #000000 !important;
+
+    font-size: 6.5px !important;
+    font-weight: 700 !important;
+  }
+
+  /* =======================================================
+     SEMESTER SUMMARY
+     ======================================================= */
+
+  .transcript-semester-summary {
+    display: flex !important;
+    justify-content: flex-end !important;
+
+    gap: 4px !important;
+
+    margin-top: 4px !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .transcript-semester-summary > div {
+    min-width: 72px !important;
+
+    padding: 4px 6px !important;
+
+    border: 1px solid #000000 !important;
+
+    background: #ffffff !important;
+
+    text-align: center !important;
+  }
+
+  .transcript-semester-summary span {
+    display: block !important;
+
+    margin-bottom: 1px !important;
+
+    color: #333333 !important;
+
+    font-size: 5.5px !important;
+  }
+
+  .transcript-semester-summary strong {
+    color: #000000 !important;
+
+    font-size: 7px !important;
+    font-weight: 900 !important;
+  }
+
+  /* =======================================================
+     OVERALL SUMMARY
+     ======================================================= */
+
+  .transcript-summary {
+    display: grid !important;
+
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+
+    gap: 3px !important;
+
+    margin-top: 12px !important;
+    padding-top: 7px !important;
+
+    border-top: 2px solid #000000 !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .transcript-summary > div {
+    padding: 4px 3px !important;
+
+    border: 1px solid #000000 !important;
+
+    background: #ffffff !important;
+
+    text-align: center !important;
+  }
+
+  .transcript-summary span {
+    display: block !important;
+
+    margin-bottom: 1px !important;
+
+    color: #333333 !important;
+
+    font-size: 5px !important;
+    font-weight: 700 !important;
+  }
+
+  .transcript-summary strong {
+    color: #000000 !important;
+
+    font-size: 8px !important;
+    font-weight: 900 !important;
+  }
+
+  /* =======================================================
+     GRADE GUIDE
+     ======================================================= */
+
+  .transcript-grade-guide {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+
+    gap: 8px !important;
+
+    margin-top: 8px !important;
+    padding: 5px 6px !important;
+
+    border: 1px solid #000000 !important;
+
+    background: #ffffff !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .transcript-grade-guide > strong {
+    color: #000000 !important;
+
+    font-size: 6px !important;
+  }
+
+  .transcript-grade-guide-items {
+    display: flex !important;
+
+    gap: 9px !important;
+
+    flex-wrap: wrap !important;
+  }
+
+  .transcript-grade-guide-items span {
+    color: #000000 !important;
+
+    font-size: 5.5px !important;
+  }
+
+  .transcript-grade-guide-items b {
+    color: #000000 !important;
+  }
+
+  /* =======================================================
+     CERTIFICATION
+
+     Keep this block together if possible.
+     ======================================================= */
+
+  .transcript-certification {
+    margin-top: 10px !important;
+    padding-top: 7px !important;
+
+    border-top: 1px solid #000000 !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .transcript-certification p {
+    margin: 0 0 3px !important;
+
+    color: #000000 !important;
+
+    font-size: 5.8px !important;
+
+    line-height: 1.35 !important;
+  }
+
+  /* =======================================================
+     DOCUMENT INFORMATION
+     ======================================================= */
+
+  .transcript-document-info {
+    display: grid !important;
+
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 4px !important;
+
+    margin-top: 8px !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .transcript-document-info > div {
+    padding: 4px 6px !important;
+
+    border: 1px solid #b8b8b8 !important;
+
+    background: #ffffff !important;
+  }
+
+  .transcript-document-info span {
+    display: block !important;
+
+    margin-bottom: 1px !important;
+
+    color: #333333 !important;
+
+    font-size: 5px !important;
+  }
+
+  .transcript-document-info strong {
+    color: #000000 !important;
+
+    font-size: 6.5px !important;
+  }
+
+  /* =======================================================
+     SIGNATURE
+
+     Keep signature together and move to next page
+     automatically if there isn't enough room.
+     ======================================================= */
+
   .transcript-signature {
-    page-break-inside: avoid;
+    display: flex !important;
+    justify-content: flex-end !important;
+
+    margin-top: 24px !important;
+
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .signature-line {
+    min-width: 180px !important;
+
+    padding-top: 5px !important;
+
+    border-top: 1px solid #000000 !important;
+
+    text-align: center !important;
+  }
+
+  .signature-line strong {
+    color: #000000 !important;
+
+    font-size: 7px !important;
+  }
+
+  .signature-line span {
+    color: #333333 !important;
+
+    font-size: 5.5px !important;
+  }
+
+  /* =======================================================
+     EMPTY STATE
+     ======================================================= */
+
+  .transcript-empty {
+    border: 1px solid #000000 !important;
+
+    color: #000000 !important;
+
+    padding: 14px !important;
+  }
+
+  .transcript-empty strong,
+  .transcript-empty p {
+    color: #000000 !important;
+  }
+
+  /* =======================================================
+     PRINT COLORS
+     ======================================================= */
+
+  * {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 }

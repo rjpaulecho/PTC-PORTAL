@@ -1,0 +1,928 @@
+/* =========================================================
+   FACULTY - STUDENT LIST / OFFICIAL CLASS ROSTER
+   ========================================================= */
+
+.faculty-student-list-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* =========================================================
+   PAGE HEADER
+   ========================================================= */
+
+.faculty-student-list-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+
+  margin-bottom: 20px;
+  padding: 22px 24px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.faculty-student-list-heading {
+  min-width: 0;
+}
+
+.faculty-roster-back {
+  display: inline-flex;
+  align-items: center;
+
+  margin-bottom: 14px;
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+  color: #475569;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.faculty-roster-back:hover {
+  color: #2563eb;
+  transform: translateX(-2px);
+}
+
+.faculty-roster-eyebrow {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #2563eb;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.faculty-student-list-header h1 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.faculty-student-list-header p {
+  max-width: 680px;
+
+  margin: 8px 0 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* =========================================================
+   REFRESH
+   ========================================================= */
+
+.faculty-roster-refresh {
+  min-height: 40px;
+  flex-shrink: 0;
+
+  padding: 8px 15px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.faculty-roster-refresh:hover:not(:disabled) {
+  border-color: #94a3b8;
+
+  background: #f8fafc;
+  color: #0f172a;
+
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+}
+
+.faculty-roster-refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   ERROR STATE
+   ========================================================= */
+
+.faculty-roster-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  margin-bottom: 20px;
+  padding: 17px 18px;
+
+  border: 1px solid #fecaca;
+  border-radius: 11px;
+
+  background: #fef2f2;
+}
+
+.faculty-roster-error strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #991b1b;
+
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.faculty-roster-error p {
+  margin: 0;
+
+  color: #b91c1c;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.faculty-roster-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  flex-shrink: 0;
+}
+
+.faculty-roster-error-actions button {
+  min-height: 35px;
+
+  padding: 7px 12px;
+
+  border: 1px solid #fca5a5;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #991b1b;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.faculty-roster-loading {
+  min-height: 230px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+
+  margin-bottom: 20px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+.faculty-roster-loading > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.faculty-roster-loading strong {
+  color: #334155;
+
+  font-size: 14px;
+}
+
+.faculty-roster-loading span {
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+.faculty-roster-spinner {
+  width: 30px;
+  height: 30px;
+
+  box-sizing: border-box;
+
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+
+  animation: faculty-roster-spin 700ms linear infinite;
+}
+
+@keyframes faculty-roster-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   CLASS INFO CARD
+   ========================================================= */
+
+.faculty-roster-class-card {
+  display: grid;
+
+  grid-template-columns:
+    minmax(240px, 0.9fr)
+    minmax(0, 2.4fr);
+
+  gap: 20px;
+
+  margin-bottom: 16px;
+  padding: 20px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   SUBJECT
+   ========================================================= */
+
+.faculty-roster-subject {
+  min-width: 0;
+
+  padding: 18px;
+
+  border-radius: 10px;
+
+  background: #f8fafc;
+}
+
+.faculty-roster-subject > span {
+  display: block;
+
+  margin-bottom: 7px;
+
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.faculty-roster-subject > strong {
+  display: block;
+
+  color: #0f172a;
+
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.faculty-roster-subject p {
+  margin: 7px 0 0;
+
+  color: #475569;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   CLASS GRID
+   ========================================================= */
+
+.faculty-roster-class-grid {
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 11px;
+}
+
+.faculty-roster-class-grid > div {
+  min-width: 0;
+
+  padding: 13px 14px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+
+  background: #ffffff;
+}
+
+.faculty-roster-class-grid span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.faculty-roster-class-grid strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #1e293b;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  text-overflow: ellipsis;
+}
+
+.faculty-roster-class-grid small {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #94a3b8;
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   CLASS STATUS
+   ========================================================= */
+
+.faculty-roster-status {
+  display: inline-flex !important;
+  align-items: center;
+
+  width: fit-content;
+  min-height: 24px;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+
+.faculty-roster-status.open {
+  background: #dcfce7;
+  color: #166534 !important;
+}
+
+.faculty-roster-status.closed {
+  background: #e2e8f0;
+  color: #475569 !important;
+}
+
+.faculty-roster-status.cancelled {
+  background: #fee2e2;
+  color: #991b1b !important;
+}
+
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+.faculty-roster-summary {
+  display: grid;
+
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+
+  margin-bottom: 20px;
+}
+
+.faculty-roster-summary > div {
+  min-width: 0;
+
+  padding: 15px 17px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.faculty-roster-summary span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.faculty-roster-summary strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: #0f172a;
+
+  font-size: 14px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* =========================================================
+   ROSTER CONTENT
+   ========================================================= */
+
+.faculty-roster-content {
+  overflow: hidden;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   CONTENT HEADER
+   ========================================================= */
+
+.faculty-roster-content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 18px 20px;
+
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.faculty-roster-content-header > div:first-child {
+  min-width: 0;
+}
+
+.faculty-roster-content-header h2 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.faculty-roster-content-header p {
+  max-width: 700px;
+
+  margin: 5px 0 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+.faculty-roster-search {
+  width: 270px;
+  flex-shrink: 0;
+}
+
+.faculty-roster-search input {
+  width: 100%;
+  min-height: 38px;
+
+  box-sizing: border-box;
+
+  padding: 8px 11px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font: inherit;
+  font-size: 12px;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.faculty-roster-search input::placeholder {
+  color: #94a3b8;
+}
+
+.faculty-roster-search input:focus {
+  border-color: #3b82f6;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.faculty-roster-empty {
+  min-height: 190px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 28px;
+
+  text-align: center;
+}
+
+.faculty-roster-empty strong {
+  color: #334155;
+
+  font-size: 15px;
+}
+
+.faculty-roster-empty p {
+  max-width: 450px;
+
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.faculty-roster-empty button {
+  margin-top: 6px;
+
+  min-height: 35px;
+
+  padding: 7px 12px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+   ========================================================= */
+
+.faculty-roster-table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+.faculty-roster-table {
+  width: 100%;
+
+  min-width: 1000px;
+
+  border-collapse: collapse;
+
+  background: #ffffff;
+}
+
+.faculty-roster-table th {
+  padding: 12px 14px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  background: #f8fafc;
+  color: #475569;
+
+  text-align: left;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  letter-spacing: 0.02em;
+
+  white-space: nowrap;
+}
+
+.faculty-roster-table td {
+  padding: 14px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  vertical-align: middle;
+
+  color: #334155;
+
+  font-size: 12px;
+}
+
+.faculty-roster-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.faculty-roster-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.faculty-roster-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.faculty-roster-table td > strong {
+  color: #0f172a;
+
+  font-weight: 800;
+}
+
+/* =========================================================
+   STUDENT NAME
+   ========================================================= */
+
+.faculty-roster-student-name {
+  min-width: 180px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.faculty-roster-student-name strong {
+  color: #1e293b;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.faculty-roster-student-name small {
+  color: #94a3b8;
+
+  font-size: 10px;
+}
+
+/* =========================================================
+   BADGES
+   ========================================================= */
+
+.faculty-roster-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 24px;
+
+  padding: 3px 8px;
+
+  border-radius: 999px;
+
+  background: #f1f5f9;
+  color: #475569;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+.faculty-roster-badge.approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.faculty-roster-badge.enrolled {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.faculty-roster-id {
+  display: inline-flex;
+
+  padding: 4px 7px;
+
+  border-radius: 6px;
+
+  background: #f8fafc;
+  color: #64748b;
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  font-size: 10px;
+}
+/* =========================================================
+   TABLE SCROLLBAR
+   ========================================================= */
+
+.faculty-roster-table-wrapper::-webkit-scrollbar {
+  height: 9px;
+}
+
+.faculty-roster-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.faculty-roster-table-wrapper::-webkit-scrollbar-thumb {
+  border: 2px solid #f1f5f9;
+  border-radius: 999px;
+
+  background: #cbd5e1;
+}
+
+.faculty-roster-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =========================================================
+   RESPONSIVE - LARGE TABLET
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .faculty-roster-class-card {
+    grid-template-columns: 1fr;
+  }
+
+  .faculty-roster-class-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .faculty-roster-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* =========================================================
+   RESPONSIVE - TABLET
+   ========================================================= */
+
+@media (max-width: 850px) {
+  .faculty-student-list-page {
+    padding: 18px;
+  }
+
+  .faculty-student-list-header {
+    flex-direction: column;
+
+    padding: 19px;
+  }
+
+  .faculty-roster-refresh {
+    width: 100%;
+  }
+
+  .faculty-roster-class-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .faculty-roster-content-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .faculty-roster-search {
+    width: 100%;
+  }
+
+  .faculty-roster-error {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .faculty-roster-error-actions {
+    width: 100%;
+  }
+
+  .faculty-roster-error-actions button {
+    flex: 1;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE - MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+  .faculty-student-list-page {
+    padding: 13px;
+  }
+
+  .faculty-student-list-header {
+    margin-bottom: 14px;
+    padding: 16px;
+  }
+
+  .faculty-student-list-header h1 {
+    font-size: 23px;
+  }
+
+  .faculty-roster-class-card {
+    gap: 12px;
+
+    padding: 14px;
+  }
+
+  .faculty-roster-subject {
+    padding: 15px;
+  }
+
+  .faculty-roster-subject > strong {
+    font-size: 21px;
+  }
+
+  .faculty-roster-class-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .faculty-roster-summary {
+    grid-template-columns: 1fr 1fr;
+
+    gap: 9px;
+  }
+
+  .faculty-roster-content-header {
+    padding: 15px;
+  }
+}
+
+/* =========================================================
+   RESPONSIVE - SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 430px) {
+  .faculty-roster-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .faculty-roster-error-actions {
+    flex-direction: column;
+  }
+
+  .faculty-roster-error-actions button {
+    width: 100%;
+  }
+}

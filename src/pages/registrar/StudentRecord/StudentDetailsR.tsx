@@ -598,7 +598,7 @@ export default function StudentDetailsR() {
                   )
                 }
               >
-                Go to Student Documents
+                Go to Student COG
               </button>
             </div>
           </>
