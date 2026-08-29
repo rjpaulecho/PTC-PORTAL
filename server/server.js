@@ -18,6 +18,9 @@ import usersAnnouncementRoutes from "./routes/announcement/usersAnnouncement.rou
 import registrarRoutes from "./routes/registrar/index.js";
 import studentRoutes from "./routes/student/index.js";
 
+import facultyRouter from "./routes/faculty/index.js";
+import programHeadRouter from "./routes/programhead/index.js";
+
 import authenticate from "./middleware/authenticate.js";
 import requireRole from "./middleware/requireRole.js";
 
@@ -118,6 +121,32 @@ app.use(
   requireRole("Registrar"),
   registrarRoutes,
 );
+
+
+// =====================================================
+// FACULTY ROUTES
+// =====================================================
+
+app.use(
+  "/api/faculty",
+  authenticate,
+  requireRole("Faculty"),
+  facultyRouter,
+);
+
+
+// =====================================================
+// PROGRAM HEAD ROUTES
+// =====================================================
+
+app.use(
+  "/api/program-head",
+  authenticate,
+  requireRole("Program Head"),
+  programHeadRouter,
+);
+
+
 
 // =====================================================
 // STUDENT ROUTES
