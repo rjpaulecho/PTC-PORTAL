@@ -3,6 +3,13 @@
 import express from "express";
 import db from "../../db.js";
 
+import {
+  ELIGIBILITY_TYPE,
+  evaluateCurriculumTerm,
+  getApprovedAcademicHistory,
+  getRetakeCandidates,
+} from "../../services/academicEvaluation.service.js";
+
 const router = express.Router();
 // =====================================================
 // GET CURRENT STUDENT ENROLLMENT
@@ -556,19 +563,21 @@ router.get("/current", async (req, res) => {
 // AUTH:
 // Student JWT required.
 //
-// Purpose:
+// PURPOSE:
+//
 // - Identify Student from req.user
 // - Load active assigned curriculum
 // - Load current Open enrollment period
-// - Load current curriculum subjects
-// - Evaluate previous FINAL grades
+// - Evaluate current curriculum subjects
+// - Use ONLY Approved Grade V2 academic history
 // - Remove already-passed subjects
 // - Detect valid retakes
 // - Validate prerequisites
-// - Show current Draft membership if Draft exists
+// - Show current Draft membership
 //
 // IMPORTANT:
-// Student does NOT choose:
+//
+// Student DOES NOT choose:
 // - section
 // - offering
 // - faculty
@@ -591,19 +600,6 @@ router.get("/subjects", async (req, res) => {
       });
     }
 
-    const userId = Number(req.user.user_id);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({
-        success: false,
-        message: "Authenticated user ID is invalid.",
-      });
-    }
-
-    // =================================================
-    // 2. STUDENT ROLE
-    // =================================================
-
     if (req.user.role_name !== "Student") {
       return res.status(403).json({
         success: false,
@@ -611,37 +607,46 @@ router.get("/subjects", async (req, res) => {
       });
     }
 
+    const userId = Number(req.user.user_id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated Student user ID is invalid.",
+      });
+    }
+
     // =================================================
-    // 3. GET STUDENT PROFILE
+    // 2. GET AUTHENTICATED STUDENT
     //
-    // Identity comes ONLY from req.user.
+    // Student identity comes ONLY from req.user.
     // =================================================
 
     const [studentRows] = await db.execute(
       `
-      SELECT
-          s.student_id,
-          s.user_id,
-          s.student_number,
+        SELECT
+            s.student_id,
+            s.user_id,
+            s.student_number,
 
-          s.first_name,
-          s.middle_name,
-          s.last_name,
+            s.first_name,
+            s.middle_name,
+            s.last_name,
 
-          s.course_id,
-          c.course_code,
-          c.course_name,
+            s.course_id,
+            c.course_code,
+            c.course_name,
 
-          s.year_level
+            s.year_level
 
-      FROM students s
+        FROM students s
 
-      INNER JOIN courses c
-          ON c.course_id = s.course_id
+        INNER JOIN courses c
+            ON c.course_id = s.course_id
 
-      WHERE s.user_id = ?
+        WHERE s.user_id = ?
 
-      LIMIT 1
+        LIMIT 1
       `,
       [userId],
     );
@@ -656,55 +661,49 @@ router.get("/subjects", async (req, res) => {
     const student = studentRows[0];
 
     const studentId = Number(student.student_id);
-
     const studentCourseId = Number(student.course_id);
-
     const yearLevel = Number(student.year_level);
 
     // =================================================
-    // 4. GET ACTIVE ASSIGNED CURRICULUM
+    // 3. ACTIVE ASSIGNED CURRICULUM
     //
     // Must:
     // - belong to Student
-    // - be Active assignment
+    // - have Active assignment
     // - curriculum itself must be active
     // - curriculum must belong to Student's Course
     // =================================================
 
     const [curriculumRows] = await db.execute(
       `
-      SELECT
-          sc.student_curriculum_id,
-          sc.curriculum_id,
-          sc.assigned_date,
-          sc.status AS assignment_status,
-          sc.remarks,
+        SELECT
+            sc.student_curriculum_id,
+            sc.curriculum_id,
+            sc.assigned_date,
+            sc.status AS assignment_status,
+            sc.remarks,
 
-          cur.curriculum_name,
-          cur.effective_year,
-          cur.total_units,
-          cur.is_active,
-          cur.course_id,
+            cur.curriculum_name,
+            cur.effective_year,
+            cur.total_units,
+            cur.is_active,
+            cur.course_id
 
-          c.course_code,
-          c.course_name
+        FROM student_curriculum sc
 
-      FROM student_curriculum sc
+        INNER JOIN curriculum cur
+            ON cur.curriculum_id = sc.curriculum_id
 
-      INNER JOIN curriculum cur
-          ON cur.curriculum_id =
-             sc.curriculum_id
+        WHERE sc.student_id = ?
+          AND sc.status = 'Active'
+          AND cur.is_active = 1
+          AND cur.course_id = ?
 
-      INNER JOIN courses c
-          ON c.course_id =
-             cur.course_id
+        ORDER BY
+            sc.assigned_date DESC,
+            sc.student_curriculum_id DESC
 
-      WHERE sc.student_id = ?
-        AND sc.status = 'Active'
-        AND cur.is_active = 1
-        AND cur.course_id = ?
-
-      LIMIT 1
+        LIMIT 1
       `,
       [studentId, studentCourseId],
     );
@@ -713,10 +712,10 @@ router.get("/subjects", async (req, res) => {
       return res.status(409).json({
         success: false,
 
+        code: "VALID_ACTIVE_CURRICULUM_REQUIRED",
+
         message:
           "Student enrollment cannot continue because there is no valid active curriculum assigned to this Student.",
-
-        code: "VALID_ACTIVE_CURRICULUM_REQUIRED",
       });
     }
 
@@ -725,48 +724,48 @@ router.get("/subjects", async (req, res) => {
     const curriculumId = Number(curriculum.curriculum_id);
 
     // =================================================
-    // 5. GET OPEN ENROLLMENT PERIOD
+    // 4. CURRENT OPEN ENROLLMENT PERIOD
     // =================================================
 
     const [periodRows] = await db.execute(
       `
-      SELECT
-          ep.enrollment_period_id,
+        SELECT
+            ep.enrollment_period_id,
 
-          ep.academic_year_id,
-          ay.academic_year,
+            ep.academic_year_id,
+            ay.academic_year,
 
-          ep.semester_id,
-          sem.semester_name,
+            ep.semester_id,
+            sem.semester_name,
 
-          ep.status,
-          ep.opened_at,
-          ep.remarks
+            ep.status,
+            ep.opened_at,
+            ep.remarks
 
-      FROM enrollment_periods ep
+        FROM enrollment_periods ep
 
-      INNER JOIN academic_years ay
-          ON ay.academic_year_id =
-             ep.academic_year_id
+        INNER JOIN academic_years ay
+            ON ay.academic_year_id =
+               ep.academic_year_id
 
-      INNER JOIN semesters sem
-          ON sem.semester_id =
-             ep.semester_id
+        INNER JOIN semesters sem
+            ON sem.semester_id =
+               ep.semester_id
 
-      WHERE ep.status = 'Open'
+        WHERE ep.status = 'Open'
 
-      ORDER BY
-          ep.enrollment_period_id DESC
+        ORDER BY
+            ep.enrollment_period_id DESC
 
-      LIMIT 1
+        LIMIT 1
       `,
     );
 
     // =================================================
-    // ENROLLMENT CLOSED
+    // 5. ENROLLMENT CLOSED
     //
-    // This is not an authentication error.
-    // Student can still open the page.
+    // This is NOT an authentication error.
+    // Student can still open the enrollment page.
     // =================================================
 
     if (periodRows.length === 0) {
@@ -790,9 +789,7 @@ router.get("/subjects", async (req, res) => {
 
           course: {
             course_id: studentCourseId,
-
             course_code: student.course_code,
-
             course_name: student.course_name,
           },
 
@@ -820,15 +817,11 @@ router.get("/subjects", async (req, res) => {
         },
 
         enrollment_period: null,
-
         enrollment: null,
 
         regular_subjects: [],
-
         retake_candidates: [],
-
         blocked_subjects: [],
-
         completed_subjects: [],
 
         summary: {
@@ -840,20 +833,18 @@ router.get("/subjects", async (req, res) => {
         },
 
         can_prepare: false,
+        can_modify_draft: false,
+        can_submit: false,
       });
     }
 
     const period = periodRows[0];
 
     const academicYearId = Number(period.academic_year_id);
-
     const semesterId = Number(period.semester_id);
 
     // =================================================
-    // 6. GET CURRENT ENROLLMENT
-    //
-    // There should not be duplicate active enrollments
-    // for the same Student + AY + semester.
+    // 6. CURRENT ENROLLMENT
     // =================================================
 
     const [enrollmentRows] = await db.execute(
@@ -884,7 +875,7 @@ router.get("/subjects", async (req, res) => {
             e.enrollment_id DESC
 
         LIMIT 1
-        `,
+      `,
       [studentId, academicYearId, semesterId],
     );
 
@@ -892,490 +883,347 @@ router.get("/subjects", async (req, res) => {
       enrollmentRows.length > 0 ? enrollmentRows[0] : null;
 
     // =================================================
-    // 7. GET FINAL ACADEMIC RESULTS
+    // 7. OFFICIAL APPROVED ACADEMIC HISTORY
     //
-    // IMPORTANT:
+    // Grade Model V2:
     //
-    // We use FINAL GRADE ONLY.
+    // grades
+    //   ↓ enrollment_subject_id
+    // enrollment_subjects
+    //   ↓ enrollment_id
+    // enrollments
     //
-    // NO:
-    // - prelim fallback
-    // - midterm fallback
-    // - remarks-based pass/fail decision
+    // ONLY:
     //
-    // Enrollment must already be Approved.
+    // grade_status = Approved
+    // enrollment_status = Approved
+    //
+    // final_rating is authoritative.
     // =================================================
 
-    const [gradeRows] = await db.execute(
-      `
-        SELECT
-            g.grade_id,
-            g.student_id,
-            g.subject_id,
-            g.enrollment_id,
+    const approvedHistory = await getApprovedAcademicHistory(studentId, db);
 
-            g.final_grade,
-            g.remarks,
-
-            e.created_at AS enrollment_created_at,
-            e.enrollment_status,
-
-            sub.subject_code,
-            sub.subject_name,
-            sub.units,
-            sub.lecture_hours,
-            sub.laboratory_hours
-
-        FROM grades g
-
-        INNER JOIN enrollments e
-            ON e.enrollment_id =
-               g.enrollment_id
-
-        INNER JOIN subjects sub
-            ON sub.subject_id =
-               g.subject_id
-
-        WHERE g.student_id = ?
-          AND g.final_grade IS NOT NULL
-            AND g.grade_status = 'Approved'
-          AND e.enrollment_status = 'Approved'
-
-        ORDER BY
-            g.subject_id ASC,
-            e.created_at DESC,
-            g.grade_id DESC
-        `,
-      [studentId],
-    );
-
-    // =================================================
-    // 8. BUILD LATEST FINAL GRADE MAP
+    // Build latest Approved academic result per subject.
     //
-    // 1.00 - 3.00 = PASSED
-    // 4.00        = INCOMPLETE / RETAKE
-    // 5.00        = FAILED / RETAKE
-    //
-    // Remarks are informational only.
-    // =================================================
+    // getApprovedAcademicHistory() is already newest-first.
+    const latestHistoryMap = new Map();
 
-    const academicMap = new Map();
+    for (const record of approvedHistory) {
+      const subjectId = Number(record.subject_id);
 
-    for (const row of gradeRows) {
-      const subjectId = Number(row.subject_id);
-
-      // First record is latest because query is sorted.
-      if (academicMap.has(subjectId)) {
-        continue;
+      if (!latestHistoryMap.has(subjectId)) {
+        latestHistoryMap.set(subjectId, record);
       }
-
-      const finalGrade = Number(row.final_grade);
-
-      let academicStatus = "UNRESOLVED";
-
-      if (finalGrade >= 1 && finalGrade <= 3) {
-        academicStatus = "PASSED";
-      } else if (finalGrade === 4) {
-        academicStatus = "INCOMPLETE";
-      } else if (finalGrade === 5) {
-        academicStatus = "FAILED";
-      }
-
-      academicMap.set(subjectId, {
-        subject_id: subjectId,
-
-        subject_code: row.subject_code,
-
-        subject_name: row.subject_name,
-
-        units: Number(row.units || 0),
-
-        lecture_hours: row.lecture_hours,
-
-        laboratory_hours: row.laboratory_hours,
-
-        final_grade: finalGrade,
-
-        academic_status: academicStatus,
-
-        remarks: row.remarks || null,
-
-        enrollment_id: Number(row.enrollment_id),
-
-        grade_id: Number(row.grade_id),
-      });
     }
 
     // =================================================
-    // 9. GET ALL SUBJECTS IN ASSIGNED CURRICULUM
+    // 8. EVALUATE CURRENT CURRICULUM TERM
     //
-    // Used to ensure retakes still belong to the
-    // Student's assigned curriculum.
+    // Shared service is now the authoritative source
+    // for:
+    //
+    // - Regular
+    // - Retake
+    // - Already Passed
+    // - Blocked Prerequisite
+    // - Unresolved academic result
+    // =================================================
+
+    const termEvaluation = await evaluateCurriculumTerm(
+      {
+        studentId,
+        curriculumId,
+        yearLevel,
+        semesterId,
+      },
+      db,
+    );
+
+    // =================================================
+    // 9. ALL SUBJECTS IN ASSIGNED CURRICULUM
+    //
+    // Needed to preserve existing response metadata
+    // for retakes from earlier semesters.
     // =================================================
 
     const [allCurriculumRows] = await db.execute(
       `
-        SELECT
-            cs.curriculum_subject_id,
-            cs.subject_id,
+          SELECT
+              cs.curriculum_subject_id,
+              cs.curriculum_id,
+              cs.subject_id,
 
-            cs.year_level,
-            cs.semester_id,
+              cs.year_level,
+              cs.semester_id,
 
-            cs.is_required,
-            cs.display_order,
+              cs.is_required,
+              cs.display_order,
 
-            s.subject_code,
-            s.subject_name,
-            s.units,
-            s.lecture_hours,
-            s.laboratory_hours
+              s.subject_code,
+              s.subject_name,
+              s.units,
+              s.lecture_hours,
+              s.laboratory_hours
 
-        FROM curriculum_subjects cs
+          FROM curriculum_subjects cs
 
-        INNER JOIN subjects s
-            ON s.subject_id =
-               cs.subject_id
+          INNER JOIN subjects s
+              ON s.subject_id =
+                 cs.subject_id
 
-        WHERE cs.curriculum_id = ?
+          WHERE cs.curriculum_id = ?
 
-        ORDER BY
-            cs.year_level ASC,
-            cs.semester_id ASC,
-            cs.display_order ASC,
-            s.subject_code ASC
+          ORDER BY
+              cs.year_level ASC,
+              cs.semester_id ASC,
+              cs.display_order ASC,
+              s.subject_code ASC
         `,
       [curriculumId],
     );
 
-    const assignedCurriculumSubjectMap = new Map();
+    const curriculumSubjectMap = new Map();
 
     for (const row of allCurriculumRows) {
-      assignedCurriculumSubjectMap.set(Number(row.subject_id), row);
+      curriculumSubjectMap.set(Number(row.subject_id), row);
     }
 
     // =================================================
-    // 10. CURRENT YEAR/SEMESTER CURRICULUM SUBJECTS
-    // =================================================
-
-    const currentCurriculumSubjects = allCurriculumRows.filter(
-      (row) =>
-        Number(row.year_level) === yearLevel &&
-        Number(row.semester_id) === semesterId,
-    );
-
-    // =================================================
-    // 11. GET PREREQUISITES
+    // 10. HELPER — FORMAT PREREQUISITES
     //
-    // subject_prerequisites:
-    //
-    // subject_id
-    //       ↓ requires
-    // prerequisite_subject_id
+    // Preserve the frontend's existing prerequisite
+    // response shape.
     // =================================================
 
-    const prerequisiteMap = new Map();
-
-    const currentSubjectIds = currentCurriculumSubjects.map((row) =>
-      Number(row.subject_id),
-    );
-
-    if (currentSubjectIds.length > 0) {
-      const placeholders = currentSubjectIds.map(() => "?").join(",");
-
-      const [prerequisiteRows] = await db.execute(
-        `
-          SELECT
-              sp.prerequisite_id,
-              sp.subject_id,
-              sp.prerequisite_subject_id,
-
-              required.subject_code
-                  AS prerequisite_subject_code,
-
-              required.subject_name
-                  AS prerequisite_subject_name
-
-          FROM subject_prerequisites sp
-
-          INNER JOIN subjects required
-              ON required.subject_id =
-                 sp.prerequisite_subject_id
-
-          WHERE sp.subject_id
-                IN (${placeholders})
-
-          ORDER BY
-              sp.subject_id,
-              required.subject_code
-          `,
-        currentSubjectIds,
-      );
-
-      for (const row of prerequisiteRows) {
-        const subjectId = Number(row.subject_id);
-
-        if (!prerequisiteMap.has(subjectId)) {
-          prerequisiteMap.set(subjectId, []);
-        }
-
-        prerequisiteMap.get(subjectId).push({
-          prerequisite_id: Number(row.prerequisite_id),
-
-          subject_id: Number(row.prerequisite_subject_id),
-
-          subject_code: row.prerequisite_subject_code,
-
-          subject_name: row.prerequisite_subject_name,
-        });
+    function formatPrerequisites(prerequisiteCheck) {
+      if (
+        !prerequisiteCheck ||
+        !Array.isArray(prerequisiteCheck.prerequisites)
+      ) {
+        return [];
       }
+
+      return prerequisiteCheck.prerequisites.map((prerequisite) => {
+        const prerequisiteSubjectId = Number(
+          prerequisite.prerequisite_subject_id,
+        );
+
+        const academicRecord = latestHistoryMap.get(prerequisiteSubjectId);
+
+        return {
+          prerequisite_id: Number(prerequisite.prerequisite_id),
+
+          subject_id: prerequisiteSubjectId,
+
+          subject_code: prerequisite.prerequisite_subject_code,
+
+          subject_name: prerequisite.prerequisite_subject_name,
+
+          passed: Boolean(prerequisite.is_satisfied),
+
+          // Keep old API property name for frontend
+          // compatibility.
+          //
+          // Value now correctly comes from final_rating.
+          final_grade: academicRecord?.final_rating ?? null,
+
+          academic_status: academicRecord?.result
+            ? String(academicRecord.result).toUpperCase()
+            : "NOT_TAKEN",
+        };
+      });
     }
 
     // =================================================
-    // 12. BUILD COMPLETED SUBJECTS
+    // 11. COMPLETED / PASSED SUBJECTS
     // =================================================
 
-    const completedSubjects = [];
+    const completedSubjectMap = new Map();
 
-    for (const academicRecord of academicMap.values()) {
-      if (academicRecord.academic_status !== "PASSED") {
+    for (const record of approvedHistory) {
+      if (record.result !== "Passed") {
         continue;
       }
 
-      completedSubjects.push({
-        subject_id: academicRecord.subject_id,
+      const subjectId = Number(record.subject_id);
 
-        subject_code: academicRecord.subject_code,
+      if (completedSubjectMap.has(subjectId)) {
+        continue;
+      }
 
-        subject_name: academicRecord.subject_name,
+      completedSubjectMap.set(subjectId, {
+        subject_id: subjectId,
 
-        units: academicRecord.units,
+        subject_code: record.subject_code,
 
-        final_grade: academicRecord.final_grade,
+        subject_name: record.subject_name,
+
+        units: Number(record.units || 0),
+
+        // Existing frontend property name preserved.
+        final_grade: record.final_rating,
 
         academic_status: "PASSED",
       });
     }
 
+    const completedSubjects = Array.from(completedSubjectMap.values());
+
     // =================================================
-    // 13. BUILD REGULAR + BLOCKED SUBJECTS
+    // 12. REGULAR ELIGIBLE SUBJECTS
     // =================================================
 
-    const regularSubjects = [];
+    const regularSubjects = termEvaluation.regular.map((subject) => ({
+      subject_id: Number(subject.subject_id),
+
+      subject_code: subject.subject_code,
+
+      subject_name: subject.subject_name,
+
+      units: Number(subject.units || 0),
+
+      lecture_hours: Number(subject.lecture_hours || 0),
+
+      laboratory_hours: Number(subject.laboratory_hours || 0),
+
+      year_level: Number(subject.year_level),
+
+      semester_id: Number(subject.semester_id),
+
+      is_required: Boolean(subject.is_required),
+
+      display_order: Number(subject.display_order),
+
+      curriculum_subject_id: Number(subject.curriculum_subject_id),
+
+      enrollment_type: "Regular",
+
+      academic_status: "NOT_TAKEN",
+
+      eligible: true,
+
+      prerequisites: formatPrerequisites(subject.prerequisites),
+    }));
+
+    // =================================================
+    // 13. BLOCKED SUBJECTS
+    //
+    // Already-passed subjects are NOT blocked.
+    // They belong in completed_subjects.
+    // =================================================
 
     const blockedSubjects = [];
 
-    const retakeCandidateMap = new Map();
-
-    for (const row of currentCurriculumSubjects) {
-      const subjectId = Number(row.subject_id);
-
-      const academicRecord = academicMap.get(subjectId);
-
-      // ===============================================
-      // ALREADY PASSED
-      // ===============================================
-
-      if (academicRecord?.academic_status === "PASSED") {
+    for (const subject of termEvaluation.blocked) {
+      if (subject.eligibility_type === ELIGIBILITY_TYPE.ALREADY_PASSED) {
         continue;
       }
 
-      // ===============================================
-      // CURRENT SUBJECT IS A RETAKE
-      // ===============================================
+      const prerequisites = formatPrerequisites(subject.prerequisites);
 
-      if (
-        academicRecord &&
-        (academicRecord.academic_status === "FAILED" ||
-          academicRecord.academic_status === "INCOMPLETE")
-      ) {
-        retakeCandidateMap.set(subjectId, {
-          subject_id: subjectId,
+      const missingPrerequisites = prerequisites.filter((item) => !item.passed);
 
-          subject_code: row.subject_code,
+      let reason = "ACADEMIC_RESULT_UNRESOLVED";
 
-          subject_name: row.subject_name,
-
-          units: Number(row.units || 0),
-
-          lecture_hours: row.lecture_hours,
-
-          laboratory_hours: row.laboratory_hours,
-
-          previous_final_grade: academicRecord.final_grade,
-
-          previous_status: academicRecord.academic_status,
-
-          curriculum_subject_id: Number(row.curriculum_subject_id),
-
-          original_year_level: Number(row.year_level),
-
-          original_semester_id: Number(row.semester_id),
-
-          eligible_for_retake: true,
-        });
-
-        continue;
+      if (subject.eligibility_type === ELIGIBILITY_TYPE.BLOCKED_PREREQUISITE) {
+        reason = "PREREQUISITE_NOT_PASSED";
       }
 
-      // ===============================================
-      // CHECK PREREQUISITES
-      // ===============================================
+      blockedSubjects.push({
+        subject_id: Number(subject.subject_id),
 
-      const prerequisites = prerequisiteMap.get(subjectId) || [];
+        subject_code: subject.subject_code,
 
-      const prerequisiteResults = prerequisites.map((prerequisite) => {
-        const record = academicMap.get(prerequisite.subject_id);
+        subject_name: subject.subject_name,
 
-        const passed = record?.academic_status === "PASSED";
+        units: Number(subject.units || 0),
 
-        return {
-          ...prerequisite,
+        year_level: Number(subject.year_level),
 
-          passed,
+        semester_id: Number(subject.semester_id),
 
-          final_grade: record?.final_grade ?? null,
+        curriculum_subject_id: Number(subject.curriculum_subject_id),
 
-          academic_status: record?.academic_status ?? "NOT_TAKEN",
-        };
+        reason,
+
+        prerequisites,
+
+        missing_prerequisites: missingPrerequisites,
       });
+    }
 
-      const missingPrerequisites = prerequisiteResults.filter(
-        (item) => !item.passed,
+    // =================================================
+    // 14. VALID RETAKE CANDIDATES
+    //
+    // Can come from an older year/semester.
+    //
+    // Shared service guarantees:
+    //
+    // - subject belongs to assigned curriculum
+    // - latest Approved result is 4.00 or 5.00
+    // - subject has not later been passed
+    // - prerequisites are satisfied
+    // =================================================
+
+    const retakeRows = await getRetakeCandidates(studentId, curriculumId, db);
+
+    const retakeCandidates = retakeRows.map((retake) => {
+      const curriculumSubject = curriculumSubjectMap.get(
+        Number(retake.subject_id),
       );
 
-      // ===============================================
-      // BLOCKED BY PREREQUISITE
-      // ===============================================
+      return {
+        subject_id: Number(retake.subject_id),
 
-      if (missingPrerequisites.length > 0) {
-        blockedSubjects.push({
-          subject_id: subjectId,
+        subject_code: retake.subject_code,
 
-          subject_code: row.subject_code,
+        subject_name: retake.subject_name,
 
-          subject_name: row.subject_name,
+        units: Number(retake.units || 0),
 
-          units: Number(row.units || 0),
+        lecture_hours: curriculumSubject
+          ? Number(curriculumSubject.lecture_hours || 0)
+          : 0,
 
-          year_level: Number(row.year_level),
+        laboratory_hours: curriculumSubject
+          ? Number(curriculumSubject.laboratory_hours || 0)
+          : 0,
 
-          semester_id: Number(row.semester_id),
+        // Keep old frontend property name.
+        // This value now comes from final_rating.
+        previous_final_grade: retake.previous_final_rating,
 
-          curriculum_subject_id: Number(row.curriculum_subject_id),
+        previous_status: String(retake.previous_result).toUpperCase(),
 
-          reason: "PREREQUISITE_NOT_PASSED",
+        previous_grade_id: retake.previous_grade_id,
 
-          prerequisites: prerequisiteResults,
+        curriculum_subject_id: curriculumSubject
+          ? Number(curriculumSubject.curriculum_subject_id)
+          : null,
 
-          missing_prerequisites: missingPrerequisites,
-        });
+        original_year_level: curriculumSubject
+          ? Number(curriculumSubject.year_level)
+          : null,
 
-        continue;
-      }
+        original_semester_id: curriculumSubject
+          ? Number(curriculumSubject.semester_id)
+          : null,
 
-      // ===============================================
-      // REGULAR ELIGIBLE SUBJECT
-      // ===============================================
-
-      regularSubjects.push({
-        subject_id: subjectId,
-
-        subject_code: row.subject_code,
-
-        subject_name: row.subject_name,
-
-        units: Number(row.units || 0),
-
-        lecture_hours: row.lecture_hours,
-
-        laboratory_hours: row.laboratory_hours,
-
-        year_level: Number(row.year_level),
-
-        semester_id: Number(row.semester_id),
-
-        is_required: Boolean(row.is_required),
-
-        display_order: Number(row.display_order),
-
-        curriculum_subject_id: Number(row.curriculum_subject_id),
-
-        enrollment_type: "Regular",
-
-        academic_status: "NOT_TAKEN",
-
-        eligible: true,
-
-        prerequisites: prerequisiteResults,
-      });
-    }
-
-    // =================================================
-    // 14. ADD OLD RETAKE CANDIDATES
-    //
-    // Retakes can come from an earlier year/semester.
-    //
-    // But subject must still belong to the currently
-    // assigned curriculum.
-    // =================================================
-
-    for (const academicRecord of academicMap.values()) {
-      if (
-        academicRecord.academic_status !== "FAILED" &&
-        academicRecord.academic_status !== "INCOMPLETE"
-      ) {
-        continue;
-      }
-
-      const subjectId = Number(academicRecord.subject_id);
-
-      // Must belong to assigned curriculum.
-      const curriculumSubject = assignedCurriculumSubjectMap.get(subjectId);
-
-      if (!curriculumSubject) {
-        continue;
-      }
-
-      if (retakeCandidateMap.has(subjectId)) {
-        continue;
-      }
-
-      retakeCandidateMap.set(subjectId, {
-        subject_id: subjectId,
-
-        subject_code: academicRecord.subject_code,
-
-        subject_name: academicRecord.subject_name,
-
-        units: Number(academicRecord.units || 0),
-
-        lecture_hours: academicRecord.lecture_hours,
-
-        laboratory_hours: academicRecord.laboratory_hours,
-
-        previous_final_grade: academicRecord.final_grade,
-
-        previous_status: academicRecord.academic_status,
-
-        curriculum_subject_id: Number(curriculumSubject.curriculum_subject_id),
-
-        original_year_level: Number(curriculumSubject.year_level),
-
-        original_semester_id: Number(curriculumSubject.semester_id),
+        enrollment_type: "Retake",
 
         eligible_for_retake: true,
-      });
-    }
 
-    const retakeCandidates = Array.from(retakeCandidateMap.values());
+        prerequisites: formatPrerequisites(retake.prerequisites),
+      };
+    });
 
     // =================================================
-    // 15. GET CURRENT DRAFT SUBJECT MEMBERSHIP
+    // 15. CURRENT DRAFT SUBJECT MEMBERSHIP
     //
-    // Student does NOT choose section here.
-    // We only show whether the subject is already in
-    // the existing Draft.
+    // Student does NOT choose placement.
+    //
+    // We only identify whether subjects are already
+    // present in an existing Draft.
     // =================================================
 
     const draftSubjectMap = new Map();
@@ -1386,21 +1234,22 @@ router.get("/subjects", async (req, res) => {
     ) {
       const [draftRows] = await db.execute(
         `
-          SELECT
-              enrollment_subject_id,
-              subject_id,
-              status
+            SELECT
+                enrollment_subject_id,
+                subject_id,
+                status
 
-          FROM enrollment_subjects
+            FROM enrollment_subjects
 
-          WHERE enrollment_id = ?
-            AND status NOT IN (
-              'Dropped',
-              'Withdrawn'
-            )
+            WHERE enrollment_id = ?
 
-          ORDER BY
-              enrollment_subject_id ASC
+              AND status NOT IN (
+                  'Dropped',
+                  'Withdrawn'
+              )
+
+            ORDER BY
+                enrollment_subject_id ASC
           `,
         [Number(currentEnrollment.enrollment_id)],
       );
@@ -1415,7 +1264,7 @@ router.get("/subjects", async (req, res) => {
     }
 
     // =================================================
-    // 16. MARK DRAFT MEMBERSHIP
+    // 16. MARK CURRENT DRAFT MEMBERSHIP
     // =================================================
 
     const finalRegularSubjects = regularSubjects.map((subject) => {
@@ -1605,30 +1454,23 @@ router.get("/subjects", async (req, res) => {
 // AUTH:
 // Student JWT required.
 //
-// Body:
+// BODY:
 //
 // {
-//   "selected_retake_subject_ids": [27]
+//   "selected_retake_subject_ids": [37]
 // }
 //
-// Rules:
+// RULES:
 //
 // - Student identity comes ONLY from req.user.
 // - Open enrollment period is required.
 // - Valid active curriculum is required.
-// - All eligible REGULAR subjects are automatically added.
-// - Student may select only VALID retake candidates.
+// - Eligible Regular subjects are automatically added.
+// - Student may select only valid Retake candidates.
 // - Passed subjects are excluded.
-// - Blocked prerequisite subjects are excluded.
+// - Subjects with unmet prerequisites are excluded.
 // - Student NEVER selects section/offering.
-// - Draft subjects have:
-//      section_id = NULL
-//      offering_id = NULL
-//      section_subject_id = NULL
-//
-// Creates:
-//
-// enrollments.enrollment_status = 'Draft'
+// - Draft placement remains NULL.
 // =====================================================
 
 router.post("/prepare", async (req, res) => {
@@ -1665,7 +1507,7 @@ router.post("/prepare", async (req, res) => {
     // =================================================
     // 2. SELECTED RETAKES
     //
-    // Retakes are OPTIONAL.
+    // Retakes are optional.
     //
     // Regular eligible subjects are automatic.
     // =================================================
@@ -1687,6 +1529,7 @@ router.post("/prepare", async (req, res) => {
       if (!Number.isInteger(subjectId) || subjectId <= 0) {
         return res.status(400).json({
           success: false,
+
           message:
             "Every selected retake subject ID must be a positive integer.",
         });
@@ -1702,37 +1545,37 @@ router.post("/prepare", async (req, res) => {
     await connection.beginTransaction();
 
     // =================================================
-    // 4. AUTHENTICATED STUDENT
+    // 4. AUTHENTICATED STUDENT PROFILE
     // =================================================
 
     const [studentRows] = await connection.execute(
       `
-        SELECT
-            s.student_id,
-            s.user_id,
-            s.student_number,
+          SELECT
+              s.student_id,
+              s.user_id,
+              s.student_number,
 
-            s.first_name,
-            s.middle_name,
-            s.last_name,
+              s.first_name,
+              s.middle_name,
+              s.last_name,
 
-            s.course_id,
-            c.course_code,
-            c.course_name,
+              s.course_id,
+              c.course_code,
+              c.course_name,
 
-            s.year_level
+              s.year_level
 
-        FROM students s
+          FROM students s
 
-        INNER JOIN courses c
-            ON c.course_id =
-               s.course_id
+          INNER JOIN courses c
+              ON c.course_id =
+                 s.course_id
 
-        WHERE s.user_id = ?
+          WHERE s.user_id = ?
 
-        LIMIT 1
+          LIMIT 1
 
-        FOR UPDATE
+          FOR UPDATE
         `,
       [userId],
     );
@@ -1755,37 +1598,43 @@ router.post("/prepare", async (req, res) => {
     const yearLevel = Number(student.year_level);
 
     // =================================================
-    // 5. ACTIVE CURRICULUM
-    //
-    // Must belong to Student's current Course.
+    // 5. ACTIVE ASSIGNED CURRICULUM
     // =================================================
 
     const [curriculumRows] = await connection.execute(
       `
-        SELECT
-            sc.student_curriculum_id,
-            sc.curriculum_id,
+          SELECT
+              sc.student_curriculum_id,
+              sc.curriculum_id,
+              sc.assigned_date,
+              sc.status AS assignment_status,
 
-            sc.assigned_date,
-            sc.status AS assignment_status,
+              cur.curriculum_name,
+              cur.effective_year,
+              cur.total_units,
+              cur.course_id
 
-            cur.curriculum_name,
-            cur.effective_year,
-            cur.total_units,
-            cur.course_id
+          FROM student_curriculum sc
 
-        FROM student_curriculum sc
+          INNER JOIN curriculum cur
+              ON cur.curriculum_id =
+                 sc.curriculum_id
 
-        INNER JOIN curriculum cur
-            ON cur.curriculum_id =
-               sc.curriculum_id
+          WHERE sc.student_id = ?
 
-        WHERE sc.student_id = ?
-          AND sc.status = 'Active'
-          AND cur.is_active = 1
-          AND cur.course_id = ?
+            AND sc.status = 'Active'
 
-        LIMIT 1
+            AND cur.is_active = 1
+
+            AND cur.course_id = ?
+
+          ORDER BY
+              sc.assigned_date DESC,
+              sc.student_curriculum_id DESC
+
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [studentId, courseId],
     );
@@ -1813,37 +1662,37 @@ router.post("/prepare", async (req, res) => {
 
     const [periodRows] = await connection.execute(
       `
-        SELECT
-            ep.enrollment_period_id,
+          SELECT
+              ep.enrollment_period_id,
 
-            ep.academic_year_id,
-            ay.academic_year,
+              ep.academic_year_id,
+              ay.academic_year,
 
-            ep.semester_id,
-            sem.semester_name,
+              ep.semester_id,
+              sem.semester_name,
 
-            ep.status,
-            ep.opened_at,
-            ep.remarks
+              ep.status,
+              ep.opened_at,
+              ep.remarks
 
-        FROM enrollment_periods ep
+          FROM enrollment_periods ep
 
-        INNER JOIN academic_years ay
-            ON ay.academic_year_id =
-               ep.academic_year_id
+          INNER JOIN academic_years ay
+              ON ay.academic_year_id =
+                 ep.academic_year_id
 
-        INNER JOIN semesters sem
-            ON sem.semester_id =
-               ep.semester_id
+          INNER JOIN semesters sem
+              ON sem.semester_id =
+                 ep.semester_id
 
-        WHERE ep.status = 'Open'
+          WHERE ep.status = 'Open'
 
-        ORDER BY
-            ep.enrollment_period_id DESC
+          ORDER BY
+              ep.enrollment_period_id DESC
 
-        LIMIT 1
+          LIMIT 1
 
-        FOR UPDATE
+          FOR UPDATE
         `,
     );
 
@@ -1863,9 +1712,9 @@ router.post("/prepare", async (req, res) => {
     const semesterId = Number(period.semester_id);
 
     // =================================================
-    // 7. CHECK EXISTING ENROLLMENT
+    // 7. PREVENT DUPLICATE CURRENT ENROLLMENT
     //
-    // Never create duplicate:
+    // Do not create another:
     //
     // Draft
     // Pending
@@ -1876,25 +1725,27 @@ router.post("/prepare", async (req, res) => {
 
     const [existingRows] = await connection.execute(
       `
-        SELECT
-            enrollment_id,
-            enrollment_status,
-            remarks,
-            created_at
+          SELECT
+              enrollment_id,
+              enrollment_status,
+              remarks,
+              created_at
 
-        FROM enrollments
+          FROM enrollments
 
-        WHERE student_id = ?
-          AND academic_year_id = ?
-          AND semester_id = ?
+          WHERE student_id = ?
 
-        ORDER BY
-            created_at DESC,
-            enrollment_id DESC
+            AND academic_year_id = ?
 
-        LIMIT 1
+            AND semester_id = ?
 
-        FOR UPDATE
+          ORDER BY
+              created_at DESC,
+              enrollment_id DESC
+
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [studentId, academicYearId, semesterId],
     );
@@ -1902,20 +1753,20 @@ router.post("/prepare", async (req, res) => {
     if (existingRows.length > 0) {
       const existing = existingRows[0];
 
-      const status = String(existing.enrollment_status);
+      const existingStatus = String(existing.enrollment_status);
 
-      if (["Draft", "Pending", "Approved"].includes(status)) {
+      if (["Draft", "Pending", "Approved"].includes(existingStatus)) {
         await connection.rollback();
 
         return res.status(409).json({
           success: false,
 
-          message: `A ${status} enrollment already exists for this enrollment period.`,
+          message: `A ${existingStatus} enrollment already exists for this enrollment period.`,
 
           enrollment: {
             enrollment_id: Number(existing.enrollment_id),
 
-            enrollment_status: status,
+            enrollment_status: existingStatus,
 
             remarks: existing.remarks || null,
 
@@ -1926,292 +1777,125 @@ router.post("/prepare", async (req, res) => {
     }
 
     // =================================================
-    // 8. OFFICIAL FINAL GRADES
+    // 8. EVALUATE CURRENT TERM
     //
-    // Only:
+    // Shared Academic Evaluation Service is now the
+    // authoritative academic eligibility source.
     //
-    // - final_grade
-    // - Approved enrollment
+    // Uses:
     //
-    // NO Prelim/Midterm fallback.
-    // NO remarks-based result.
+    // grades.enrollment_subject_id
+    // enrollment_subjects.enrollment_id
+    // enrollments.student_id
+    //
+    // Only Approved grades/enrollments count.
+    // final_rating is authoritative.
     // =================================================
 
-    const [gradeRows] = await connection.execute(
-      `
-        SELECT
-            g.grade_id,
-            g.subject_id,
-            g.enrollment_id,
-
-            g.final_grade,
-            g.remarks,
-
-            e.created_at
-                AS enrollment_created_at,
-
-            sub.subject_code,
-            sub.subject_name,
-            sub.units
-
-        FROM grades g
-
-        INNER JOIN enrollments e
-            ON e.enrollment_id =
-               g.enrollment_id
-
-        INNER JOIN subjects sub
-            ON sub.subject_id =
-               g.subject_id
-
-        WHERE g.student_id = ?
-          AND g.final_grade IS NOT NULL
-            AND g.grade_status = 'Approved'
-          AND e.enrollment_status = 'Approved'
-
-        ORDER BY
-            g.subject_id ASC,
-            e.created_at DESC,
-            g.grade_id DESC
-        `,
-      [studentId],
+    const termEvaluation = await evaluateCurriculumTerm(
+      {
+        studentId,
+        curriculumId,
+        yearLevel,
+        semesterId,
+      },
+      connection,
     );
 
     // =================================================
-    // 9. LATEST ACADEMIC RESULT MAP
+    // 9. REGULAR ELIGIBLE SUBJECTS
+    //
+    // Automatically included.
     // =================================================
 
-    const academicMap = new Map();
+    const regularEligible = termEvaluation.regular.map((subject) => ({
+      subject_id: Number(subject.subject_id),
 
-    for (const row of gradeRows) {
-      const subjectId = Number(row.subject_id);
+      subject_code: subject.subject_code,
 
-      if (academicMap.has(subjectId)) {
-        continue;
-      }
+      subject_name: subject.subject_name,
 
-      const grade = Number(row.final_grade);
+      units: Number(subject.units || 0),
 
-      let result = "UNRESOLVED";
+      curriculum_subject_id: Number(subject.curriculum_subject_id),
 
-      if (grade >= 1 && grade <= 3) {
-        result = "PASSED";
-      } else if (grade === 4) {
-        result = "INCOMPLETE";
-      } else if (grade === 5) {
-        result = "FAILED";
-      }
-
-      academicMap.set(subjectId, {
-        subject_id: subjectId,
-
-        subject_code: row.subject_code,
-
-        subject_name: row.subject_name,
-
-        units: Number(row.units || 0),
-
-        final_grade: grade,
-
-        result,
-
-        grade_id: Number(row.grade_id),
-
-        enrollment_id: Number(row.enrollment_id),
-      });
-    }
+      enrollment_type: "Regular",
+    }));
 
     // =================================================
-    // 10. ALL SUBJECTS IN ASSIGNED CURRICULUM
+    // 10. LOAD ALL ASSIGNED CURRICULUM SUBJECTS
+    //
+    // Retakes may originate from an older term, so
+    // current-term evaluation alone is not enough.
     // =================================================
 
     const [curriculumSubjectRows] = await connection.execute(
       `
-        SELECT
-            cs.curriculum_subject_id,
+          SELECT
+              cs.curriculum_subject_id,
+              cs.curriculum_id,
+              cs.subject_id,
 
-            cs.subject_id,
-            cs.year_level,
-            cs.semester_id,
+              cs.year_level,
+              cs.semester_id,
 
-            cs.is_required,
-            cs.display_order,
+              cs.is_required,
+              cs.display_order,
 
-            s.subject_code,
-            s.subject_name,
-            s.units,
-            s.lecture_hours,
-            s.laboratory_hours
+              s.subject_code,
+              s.subject_name,
+              s.units
 
-        FROM curriculum_subjects cs
+          FROM curriculum_subjects cs
 
-        INNER JOIN subjects s
-            ON s.subject_id =
-               cs.subject_id
+          INNER JOIN subjects s
+              ON s.subject_id =
+                 cs.subject_id
 
-        WHERE cs.curriculum_id = ?
+          WHERE cs.curriculum_id = ?
 
-        ORDER BY
-            cs.year_level ASC,
-            cs.semester_id ASC,
-            cs.display_order ASC
+          ORDER BY
+              cs.year_level ASC,
+              cs.semester_id ASC,
+              cs.display_order ASC,
+              s.subject_code ASC
         `,
       [curriculumId],
     );
 
     const curriculumSubjectMap = new Map();
 
-    for (const row of curriculumSubjectRows) {
-      curriculumSubjectMap.set(Number(row.subject_id), row);
+    for (const subject of curriculumSubjectRows) {
+      curriculumSubjectMap.set(Number(subject.subject_id), subject);
     }
 
     // =================================================
-    // 11. CURRENT YEAR + SEMESTER SUBJECTS
-    // =================================================
-
-    const currentSubjects = curriculumSubjectRows.filter(
-      (row) =>
-        Number(row.year_level) === yearLevel &&
-        Number(row.semester_id) === semesterId,
-    );
-
-    // =================================================
-    // 12. PREREQUISITES
-    // =================================================
-
-    const prerequisiteMap = new Map();
-
-    const currentSubjectIds = currentSubjects.map((subject) =>
-      Number(subject.subject_id),
-    );
-
-    if (currentSubjectIds.length > 0) {
-      const placeholders = currentSubjectIds.map(() => "?").join(",");
-
-      const [prerequisiteRows] = await connection.execute(
-        `
-          SELECT
-              sp.subject_id,
-              sp.prerequisite_subject_id
-
-          FROM subject_prerequisites sp
-
-          WHERE sp.subject_id
-                IN (${placeholders})
-          `,
-        currentSubjectIds,
-      );
-
-      for (const row of prerequisiteRows) {
-        const subjectId = Number(row.subject_id);
-
-        if (!prerequisiteMap.has(subjectId)) {
-          prerequisiteMap.set(subjectId, []);
-        }
-
-        prerequisiteMap
-          .get(subjectId)
-          .push(Number(row.prerequisite_subject_id));
-      }
-    }
-
-    // =================================================
-    // 13. REGULAR ELIGIBLE SUBJECTS
-    // =================================================
-
-    const regularEligible = [];
-
-    for (const subject of currentSubjects) {
-      const subjectId = Number(subject.subject_id);
-
-      const previousResult = academicMap.get(subjectId);
-
-      // ===============================================
-      // ALREADY PASSED
-      // ===============================================
-
-      if (previousResult?.result === "PASSED") {
-        continue;
-      }
-
-      // ===============================================
-      // FAILED / INCOMPLETE
-      //
-      // This is a retake candidate,
-      // NOT automatic regular enrollment.
-      // ===============================================
-
-      if (
-        previousResult?.result === "FAILED" ||
-        previousResult?.result === "INCOMPLETE"
-      ) {
-        continue;
-      }
-
-      // ===============================================
-      // PREREQUISITE CHECK
-      // ===============================================
-
-      const prerequisiteIds = prerequisiteMap.get(subjectId) || [];
-
-      let prerequisitesPassed = true;
-
-      for (const prerequisiteId of prerequisiteIds) {
-        const prerequisiteResult = academicMap.get(prerequisiteId);
-
-        if (prerequisiteResult?.result !== "PASSED") {
-          prerequisitesPassed = false;
-
-          break;
-        }
-      }
-
-      if (!prerequisitesPassed) {
-        continue;
-      }
-
-      // ===============================================
-      // ELIGIBLE REGULAR SUBJECT
-      // ===============================================
-
-      regularEligible.push({
-        subject_id: subjectId,
-
-        subject_code: subject.subject_code,
-
-        subject_name: subject.subject_name,
-
-        units: Number(subject.units || 0),
-
-        curriculum_subject_id: Number(subject.curriculum_subject_id),
-
-        enrollment_type: "Regular",
-      });
-    }
-
-    // =================================================
-    // 14. VALID RETAKE CANDIDATES
+    // 11. VALID RETAKE CANDIDATES
     //
-    // Requirements:
+    // Shared service guarantees:
     //
-    // - latest official final grade = 4 or 5
-    // - subject belongs to Student's assigned curriculum
+    // - belongs to assigned curriculum
+    // - Approved 4.00 or 5.00 result
+    // - not later passed
+    // - prerequisites satisfied
     // =================================================
+
+    const validRetakeRows = await getRetakeCandidates(
+      studentId,
+      curriculumId,
+      connection,
+    );
 
     const validRetakeMap = new Map();
 
-    for (const academicRecord of academicMap.values()) {
-      if (
-        academicRecord.result !== "FAILED" &&
-        academicRecord.result !== "INCOMPLETE"
-      ) {
-        continue;
-      }
-
-      const subjectId = Number(academicRecord.subject_id);
+    for (const retake of validRetakeRows) {
+      const subjectId = Number(retake.subject_id);
 
       const curriculumSubject = curriculumSubjectMap.get(subjectId);
 
+      // Defensive protection.
+      //
+      // Retake must still belong to assigned curriculum.
       if (!curriculumSubject) {
         continue;
       }
@@ -2219,24 +1903,33 @@ router.post("/prepare", async (req, res) => {
       validRetakeMap.set(subjectId, {
         subject_id: subjectId,
 
-        subject_code: academicRecord.subject_code,
+        subject_code: retake.subject_code,
 
-        subject_name: academicRecord.subject_name,
+        subject_name: retake.subject_name,
 
-        units: Number(academicRecord.units || 0),
+        units: Number(retake.units || 0),
 
         curriculum_subject_id: Number(curriculumSubject.curriculum_subject_id),
 
-        previous_final_grade: academicRecord.final_grade,
+        original_year_level: Number(curriculumSubject.year_level),
 
-        previous_status: academicRecord.result,
+        original_semester_id: Number(curriculumSubject.semester_id),
+
+        // Preserve old API naming.
+        //
+        // Value now correctly comes from final_rating.
+        previous_final_grade: retake.previous_final_rating,
+
+        previous_status: String(retake.previous_result).toUpperCase(),
+
+        previous_grade_id: retake.previous_grade_id,
 
         enrollment_type: "Retake",
       });
     }
 
     // =================================================
-    // 15. VALIDATE STUDENT-SELECTED RETAKES
+    // 12. VALIDATE STUDENT-SELECTED RETAKES
     //
     // Student cannot inject arbitrary subject IDs.
     // =================================================
@@ -2261,7 +1954,7 @@ router.post("/prepare", async (req, res) => {
     }
 
     // =================================================
-    // 16. SELECTED RETAKE SUBJECTS
+    // 13. SELECTED RETAKES
     // =================================================
 
     const selectedRetakes = selectedRetakeIds.map((subjectId) =>
@@ -2269,17 +1962,21 @@ router.post("/prepare", async (req, res) => {
     );
 
     // =================================================
-    // 17. FINAL DRAFT SUBJECT LIST
+    // 14. FINAL DRAFT SUBJECT LIST
+    //
+    // Regular:
+    // automatically included.
+    //
+    // Retake:
+    // optional Student selection.
     // =================================================
 
     const draftSubjectMap = new Map();
 
-    // Regular subjects automatically included.
     for (const subject of regularEligible) {
       draftSubjectMap.set(subject.subject_id, subject);
     }
 
-    // Selected retakes added.
     for (const subject of selectedRetakes) {
       draftSubjectMap.set(subject.subject_id, subject);
     }
@@ -2287,7 +1984,7 @@ router.post("/prepare", async (req, res) => {
     const draftSubjects = Array.from(draftSubjectMap.values());
 
     // =================================================
-    // NO ELIGIBLE SUBJECTS
+    // 15. NO ELIGIBLE SUBJECTS
     // =================================================
 
     if (draftSubjects.length === 0) {
@@ -2302,26 +1999,26 @@ router.post("/prepare", async (req, res) => {
     }
 
     // =================================================
-    // 18. CREATE DRAFT ENROLLMENT
+    // 16. CREATE DRAFT ENROLLMENT
     // =================================================
 
     const [enrollmentResult] = await connection.execute(
       `
-        INSERT INTO enrollments (
-            student_id,
-            academic_year_id,
-            semester_id,
-            enrollment_status,
-            remarks
-        )
+          INSERT INTO enrollments (
+              student_id,
+              academic_year_id,
+              semester_id,
+              enrollment_status,
+              remarks
+          )
 
-        VALUES (
-            ?,
-            ?,
-            ?,
-            'Draft',
-            ?
-        )
+          VALUES (
+              ?,
+              ?,
+              ?,
+              'Draft',
+              ?
+          )
         `,
       [studentId, academicYearId, semesterId, "Prepared by Student."],
     );
@@ -2329,44 +2026,46 @@ router.post("/prepare", async (req, res) => {
     const enrollmentId = Number(enrollmentResult.insertId);
 
     // =================================================
-    // 19. INSERT DRAFT SUBJECTS
+    // 17. INSERT DRAFT SUBJECTS
     //
-    // IMPORTANT:
+    // VERY IMPORTANT:
     //
-    // section_id         = NULL
+    // Student DOES NOT assign placement.
+    //
     // offering_id        = NULL
+    // section_id         = NULL
     // section_subject_id = NULL
     //
-    // Registrar assigns them after submission.
+    // Registrar assigns these after submission.
     // =================================================
 
     for (const subject of draftSubjects) {
       await connection.execute(
         `
-        INSERT INTO enrollment_subjects (
-            enrollment_id,
-            subject_id,
-            offering_id,
-            section_id,
-            section_subject_id,
-            status
-        )
+          INSERT INTO enrollment_subjects (
+              enrollment_id,
+              subject_id,
+              offering_id,
+              section_id,
+              section_subject_id,
+              status
+          )
 
-        VALUES (
-            ?,
-            ?,
-            NULL,
-            NULL,
-            NULL,
-            'Enrolled'
-        )
+          VALUES (
+              ?,
+              ?,
+              NULL,
+              NULL,
+              NULL,
+              'Enrolled'
+          )
         `,
         [enrollmentId, subject.subject_id],
       );
     }
 
     // =================================================
-    // 20. TOTAL UNITS
+    // 18. TOTAL UNITS
     // =================================================
 
     const totalUnits = draftSubjects.reduce(
@@ -2375,13 +2074,13 @@ router.post("/prepare", async (req, res) => {
     );
 
     // =================================================
-    // 21. COMMIT
+    // 19. COMMIT
     // =================================================
 
     await connection.commit();
 
     // =================================================
-    // 22. RESPONSE
+    // 20. RESPONSE
     // =================================================
 
     return res.status(201).json({
@@ -2496,7 +2195,7 @@ router.post("/prepare", async (req, res) => {
 // AUTH:
 // Student JWT required.
 //
-// PURPOSE:
+// FLOW:
 //
 // Draft
 //   ↓
@@ -2504,26 +2203,25 @@ router.post("/prepare", async (req, res) => {
 //   ↓
 // Pending
 //   ↓
-// Registrar reviews and assigns
-// section / offering / section_subject
+// Registrar reviews and assigns placement
 //
 // IMPORTANT:
 //
-// Student identity comes ONLY from req.user.
-//
-// Student DOES NOT need a section before submission.
-//
-// Draft subjects may contain:
-//
-// section_id          = NULL
-// offering_id         = NULL
-// section_subject_id  = NULL
-//
-// Registrar assigns placement AFTER submission.
+// - Student identity comes ONLY from req.user.
+// - Student can submit ONLY their own Draft.
+// - Enrollment period must still be Open.
+// - Active curriculum must still be valid.
+// - Every Draft subject is revalidated.
+// - All currently eligible Regular subjects must exist.
+// - Retakes must still be valid.
+// - Passed subjects cannot be submitted again.
+// - Blocked prerequisite subjects cannot be submitted.
+// - Student does NOT choose placement.
 // =====================================================
 
 router.post("/:enrollment_id/submit", async (req, res) => {
   let connection;
+  let transactionActive = false;
 
   try {
     // =================================================
@@ -2562,17 +2260,20 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(401).json({
         success: false,
+
         message: "Authenticated Student user ID is invalid.",
       });
     }
 
     // =================================================
-    // 3. CONNECTION
+    // 3. CONNECTION + TRANSACTION
     // =================================================
 
     connection = await db.getConnection();
 
     await connection.beginTransaction();
+
+    transactionActive = true;
 
     // =================================================
     // 4. AUTHENTICATED STUDENT
@@ -2580,40 +2281,43 @@ router.post("/:enrollment_id/submit", async (req, res) => {
 
     const [studentRows] = await connection.execute(
       `
-        SELECT
-            s.student_id,
-            s.user_id,
-            s.student_number,
+          SELECT
+              s.student_id,
+              s.user_id,
+              s.student_number,
 
-            s.first_name,
-            s.middle_name,
-            s.last_name,
+              s.first_name,
+              s.middle_name,
+              s.last_name,
 
-            s.course_id,
-            c.course_code,
-            c.course_name,
+              s.course_id,
+              c.course_code,
+              c.course_name,
 
-            s.year_level
+              s.year_level
 
-        FROM students s
+          FROM students s
 
-        INNER JOIN courses c
-            ON c.course_id = s.course_id
+          INNER JOIN courses c
+              ON c.course_id =
+                 s.course_id
 
-        WHERE s.user_id = ?
+          WHERE s.user_id = ?
 
-        LIMIT 1
+          LIMIT 1
 
-        FOR UPDATE
+          FOR UPDATE
         `,
       [userId],
     );
 
     if (studentRows.length === 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(404).json({
         success: false,
+
         message: "No Student profile is connected to this account.",
       });
     }
@@ -2630,51 +2334,54 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     // 5. GET THIS STUDENT'S ENROLLMENT
     //
     // Ownership is enforced here.
-    // Another Student cannot submit it.
+    //
+    // Student A cannot submit Student B's enrollment.
     // =================================================
 
     const [enrollmentRows] = await connection.execute(
       `
-        SELECT
-            e.enrollment_id,
-            e.student_id,
+          SELECT
+              e.enrollment_id,
+              e.student_id,
 
-            e.academic_year_id,
-            ay.academic_year,
+              e.academic_year_id,
+              ay.academic_year,
 
-            e.semester_id,
-            sem.semester_name,
+              e.semester_id,
+              sem.semester_name,
 
-            e.enrollment_status,
-            e.remarks,
+              e.enrollment_status,
+              e.remarks,
 
-            e.approved_by,
-            e.approved_at,
+              e.approved_by,
+              e.approved_at,
 
-            e.created_at
+              e.created_at
 
-        FROM enrollments e
+          FROM enrollments e
 
-        INNER JOIN academic_years ay
-            ON ay.academic_year_id =
-               e.academic_year_id
+          INNER JOIN academic_years ay
+              ON ay.academic_year_id =
+                 e.academic_year_id
 
-        INNER JOIN semesters sem
-            ON sem.semester_id =
-               e.semester_id
+          INNER JOIN semesters sem
+              ON sem.semester_id =
+                 e.semester_id
 
-        WHERE e.enrollment_id = ?
-          AND e.student_id = ?
+          WHERE e.enrollment_id = ?
 
-        LIMIT 1
+            AND e.student_id = ?
 
-        FOR UPDATE
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [enrollmentId, studentId],
     );
 
     if (enrollmentRows.length === 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(404).json({
         success: false,
@@ -2692,6 +2399,7 @@ router.post("/:enrollment_id/submit", async (req, res) => {
 
     if (enrollmentStatus !== "Draft") {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(409).json({
         success: false,
@@ -2709,52 +2417,58 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     // =================================================
     // 7. ENROLLMENT PERIOD MUST STILL BE OPEN
     //
-    // And must match this Draft's AY + semester.
+    // Must match this Draft's:
+    //
+    // academic_year_id
+    // semester_id
     // =================================================
 
     const [periodRows] = await connection.execute(
       `
-        SELECT
-            ep.enrollment_period_id,
+          SELECT
+              ep.enrollment_period_id,
 
-            ep.academic_year_id,
-            ay.academic_year,
+              ep.academic_year_id,
+              ay.academic_year,
 
-            ep.semester_id,
-            sem.semester_name,
+              ep.semester_id,
+              sem.semester_name,
 
-            ep.status,
-            ep.opened_at,
-            ep.remarks
+              ep.status,
+              ep.opened_at,
+              ep.remarks
 
-        FROM enrollment_periods ep
+          FROM enrollment_periods ep
 
-        INNER JOIN academic_years ay
-            ON ay.academic_year_id =
-               ep.academic_year_id
+          INNER JOIN academic_years ay
+              ON ay.academic_year_id =
+                 ep.academic_year_id
 
-        INNER JOIN semesters sem
-            ON sem.semester_id =
-               ep.semester_id
+          INNER JOIN semesters sem
+              ON sem.semester_id =
+                 ep.semester_id
 
-        WHERE ep.academic_year_id = ?
-          AND ep.semester_id = ?
+          WHERE ep.academic_year_id = ?
 
-        ORDER BY
-            ep.enrollment_period_id DESC
+            AND ep.semester_id = ?
 
-        LIMIT 1
+          ORDER BY
+              ep.enrollment_period_id DESC
 
-        FOR UPDATE
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [Number(enrollment.academic_year_id), Number(enrollment.semester_id)],
     );
 
     if (periodRows.length === 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(409).json({
         success: false,
+
         message: "The enrollment period for this Draft no longer exists.",
       });
     }
@@ -2763,6 +2477,7 @@ router.post("/:enrollment_id/submit", async (req, res) => {
 
     if (String(enrollmentPeriod.status) !== "Open") {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(409).json({
         success: false,
@@ -2782,43 +2497,56 @@ router.post("/:enrollment_id/submit", async (req, res) => {
       });
     }
 
+    const semesterId = Number(enrollment.semester_id);
+
     // =================================================
     // 8. ACTIVE ASSIGNED CURRICULUM
     //
-    // Revalidate because Admin may have changed
-    // Student curriculum after Draft preparation.
+    // Revalidate because curriculum/profile state may
+    // have changed after Draft preparation.
     // =================================================
 
     const [curriculumRows] = await connection.execute(
       `
-        SELECT
-            sc.student_curriculum_id,
-            sc.curriculum_id,
-            sc.status,
+          SELECT
+              sc.student_curriculum_id,
+              sc.curriculum_id,
+              sc.assigned_date,
+              sc.status AS assignment_status,
 
-            cur.curriculum_name,
-            cur.effective_year,
-            cur.course_id,
-            cur.is_active
+              cur.curriculum_name,
+              cur.effective_year,
+              cur.course_id,
+              cur.is_active
 
-        FROM student_curriculum sc
+          FROM student_curriculum sc
 
-        INNER JOIN curriculum cur
-            ON cur.curriculum_id =
-               sc.curriculum_id
+          INNER JOIN curriculum cur
+              ON cur.curriculum_id =
+                 sc.curriculum_id
 
-        WHERE sc.student_id = ?
-          AND sc.status = 'Active'
-          AND cur.is_active = 1
-          AND cur.course_id = ?
+          WHERE sc.student_id = ?
 
-        LIMIT 1
+            AND sc.status = 'Active'
+
+            AND cur.is_active = 1
+
+            AND cur.course_id = ?
+
+          ORDER BY
+              sc.assigned_date DESC,
+              sc.student_curriculum_id DESC
+
+          LIMIT 1
+
+          FOR UPDATE
         `,
       [studentId, studentCourseId],
     );
 
     if (curriculumRows.length === 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(409).json({
         success: false,
@@ -2835,75 +2563,84 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     const curriculumId = Number(curriculum.curriculum_id);
 
     // =================================================
-    // 9. GET ACTIVE DRAFT SUBJECTS
-    //
-    // Dropped / Withdrawn are historical and ignored.
-    //
-    // NO SECTION REQUIREMENT HERE.
+    // 9. GET ALL DRAFT SUBJECT MEMBERSHIP
     // =================================================
 
     const [subjectRows] = await connection.execute(
       `
-        SELECT
-            es.enrollment_subject_id,
-            es.enrollment_id,
+          SELECT
+              es.enrollment_subject_id,
+              es.enrollment_id,
 
-            es.subject_id,
+              es.subject_id,
 
-            es.offering_id,
-            es.section_id,
-            es.section_subject_id,
+              es.offering_id,
+              es.section_id,
+              es.section_subject_id,
 
-            es.status,
+              es.status,
 
-            s.subject_code,
-            s.subject_name,
-            s.units
+              s.subject_code,
+              s.subject_name,
+              s.units
 
-        FROM enrollment_subjects es
+          FROM enrollment_subjects es
 
-        INNER JOIN subjects s
-            ON s.subject_id =
-               es.subject_id
+          INNER JOIN subjects s
+              ON s.subject_id =
+                 es.subject_id
 
-        WHERE es.enrollment_id = ?
+          WHERE es.enrollment_id = ?
 
-        ORDER BY
-            es.enrollment_subject_id ASC
+          ORDER BY
+              es.enrollment_subject_id ASC
 
-        FOR UPDATE
+          FOR UPDATE
         `,
       [enrollmentId],
     );
 
-    const activeSubjects = subjectRows.filter((row) => {
-      const status = String(row.status || "");
+    // =================================================
+    // 10. ACTIVE SUBJECTS
+    //
+    // Dropped and Withdrawn are historical.
+    // =================================================
+
+    const activeSubjects = subjectRows.filter((subject) => {
+      const status = String(subject.status || "");
 
       return !["Dropped", "Withdrawn"].includes(status);
     });
 
     if (activeSubjects.length === 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(400).json({
         success: false,
+
         message:
           "Enrollment cannot be submitted because it has no active subjects.",
       });
     }
 
     // =================================================
-    // 10. ACTIVE DRAFT SUBJECT STATUS
+    // 11. DRAFT SUBJECT STATUS
     //
-    // Draft membership currently uses Enrolled.
+    // Before grades exist, Draft membership must still
+    // be Enrolled.
+    //
+    // Completed / Failed / Incomplete belong to
+    // finalized academic attempts, not a new Draft.
     // =================================================
 
     const invalidStatusSubjects = activeSubjects.filter(
-      (subject) => subject.status !== "Enrolled",
+      (subject) => String(subject.status) !== "Enrolled",
     );
 
     if (invalidStatusSubjects.length > 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(400).json({
         success: false,
@@ -2924,7 +2661,7 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     }
 
     // =================================================
-    // 11. DUPLICATE SUBJECT CHECK
+    // 12. DUPLICATE SUBJECT CHECK
     // =================================================
 
     const draftSubjectIds = activeSubjects.map((subject) =>
@@ -2935,295 +2672,94 @@ router.post("/:enrollment_id/submit", async (req, res) => {
 
     if (uniqueDraftSubjectIds.size !== draftSubjectIds.length) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(400).json({
         success: false,
+
         message: "Duplicate subjects were found in the Draft enrollment.",
       });
     }
 
     // =================================================
-    // 12. OFFICIAL FINAL ACADEMIC RESULTS
+    // 13. RE-EVALUATE CURRENT TERM
+    //
+    // This is the authoritative regular-subject check.
+    //
+    // Uses Grade Model V2 through the shared service:
+    //
+    // grades.enrollment_subject_id
+    //        ↓
+    // enrollment_subjects
+    //        ↓
+    // enrollments.student_id
     //
     // Only:
-    // - final_grade
-    // - previous Approved enrollment
     //
-    // NO Midterm fallback.
-    // NO Prelim fallback.
-    // NO remarks-based result.
-    // =================================================
-
-    const [gradeRows] = await connection.execute(
-      `
-        SELECT
-            g.grade_id,
-            g.subject_id,
-            g.enrollment_id,
-
-            g.final_grade,
-            g.remarks,
-
-            e.created_at
-                AS enrollment_created_at,
-
-            sub.subject_code,
-            sub.subject_name,
-            sub.units
-
-        FROM grades g
-
-        INNER JOIN enrollments e
-            ON e.enrollment_id =
-               g.enrollment_id
-
-        INNER JOIN subjects sub
-            ON sub.subject_id =
-               g.subject_id
-
-        WHERE g.student_id = ?
-          AND g.final_grade IS NOT NULL
-            AND g.grade_status = 'Approved'
-          AND e.enrollment_status = 'Approved'
-
-        ORDER BY
-            g.subject_id ASC,
-            e.created_at DESC,
-            g.grade_id DESC
-        `,
-      [studentId],
-    );
-
-    const academicMap = new Map();
-
-    for (const row of gradeRows) {
-      const subjectId = Number(row.subject_id);
-
-      if (academicMap.has(subjectId)) {
-        continue;
-      }
-
-      const finalGrade = Number(row.final_grade);
-
-      let result = "UNRESOLVED";
-
-      if (finalGrade >= 1 && finalGrade <= 3) {
-        result = "PASSED";
-      } else if (finalGrade === 4) {
-        result = "INCOMPLETE";
-      } else if (finalGrade === 5) {
-        result = "FAILED";
-      }
-
-      academicMap.set(subjectId, {
-        subject_id: subjectId,
-
-        subject_code: row.subject_code,
-
-        subject_name: row.subject_name,
-
-        units: Number(row.units || 0),
-
-        final_grade: finalGrade,
-
-        result,
-      });
-    }
-
-    // =================================================
-    // 13. LOAD ASSIGNED CURRICULUM SUBJECTS
-    // =================================================
-
-    const [curriculumSubjectRows] = await connection.execute(
-      `
-        SELECT
-            cs.curriculum_subject_id,
-
-            cs.subject_id,
-            cs.year_level,
-            cs.semester_id,
-
-            cs.is_required,
-            cs.display_order,
-
-            s.subject_code,
-            s.subject_name,
-            s.units
-
-        FROM curriculum_subjects cs
-
-        INNER JOIN subjects s
-            ON s.subject_id =
-               cs.subject_id
-
-        WHERE cs.curriculum_id = ?
-
-        ORDER BY
-            cs.year_level,
-            cs.semester_id,
-            cs.display_order
-        `,
-      [curriculumId],
-    );
-
-    const curriculumSubjectMap = new Map();
-
-    for (const row of curriculumSubjectRows) {
-      curriculumSubjectMap.set(Number(row.subject_id), row);
-    }
-
-    // =================================================
-    // 14. CURRENT YEAR / SEMESTER SUBJECTS
-    // =================================================
-
-    const currentCurriculumSubjects = curriculumSubjectRows.filter(
-      (row) =>
-        Number(row.year_level) === yearLevel &&
-        Number(row.semester_id) === Number(enrollment.semester_id),
-    );
-
-    // =================================================
-    // 15. LOAD PREREQUISITES
-    // =================================================
-
-    const currentSubjectIds = currentCurriculumSubjects.map((subject) =>
-      Number(subject.subject_id),
-    );
-
-    const prerequisiteMap = new Map();
-
-    if (currentSubjectIds.length > 0) {
-      const placeholders = currentSubjectIds.map(() => "?").join(",");
-
-      const [prerequisiteRows] = await connection.execute(
-        `
-          SELECT
-              sp.subject_id,
-              sp.prerequisite_subject_id,
-
-              s.subject_code
-                  AS prerequisite_subject_code,
-
-              s.subject_name
-                  AS prerequisite_subject_name
-
-          FROM subject_prerequisites sp
-
-          INNER JOIN subjects s
-              ON s.subject_id =
-                 sp.prerequisite_subject_id
-
-          WHERE sp.subject_id
-                IN (${placeholders})
-          `,
-        currentSubjectIds,
-      );
-
-      for (const row of prerequisiteRows) {
-        const subjectId = Number(row.subject_id);
-
-        if (!prerequisiteMap.has(subjectId)) {
-          prerequisiteMap.set(subjectId, []);
-        }
-
-        prerequisiteMap.get(subjectId).push({
-          subject_id: Number(row.prerequisite_subject_id),
-
-          subject_code: row.prerequisite_subject_code,
-
-          subject_name: row.prerequisite_subject_name,
-        });
-      }
-    }
-
-    // =================================================
-    // 16. REBUILD ELIGIBLE REGULAR SUBJECT LIST
+    // grade_status = Approved
+    // enrollment_status = Approved
     //
-    // This prevents someone from editing the Draft
-    // directly and injecting an arbitrary regular
-    // subject.
+    // final_rating is authoritative.
+    // =================================================
+
+    const termEvaluation = await evaluateCurriculumTerm(
+      {
+        studentId,
+        curriculumId,
+        yearLevel,
+        semesterId,
+      },
+      connection,
+    );
+
+    // =================================================
+    // 14. ELIGIBLE REGULAR SUBJECT MAP
     // =================================================
 
     const eligibleRegularMap = new Map();
 
-    for (const subject of currentCurriculumSubjects) {
-      const subjectId = Number(subject.subject_id);
-
-      const previous = academicMap.get(subjectId);
-
-      // Already passed.
-      if (previous?.result === "PASSED") {
-        continue;
-      }
-
-      // Failed/Incomplete = retake,
-      // not regular.
-      if (previous?.result === "FAILED" || previous?.result === "INCOMPLETE") {
-        continue;
-      }
-
-      const prerequisites = prerequisiteMap.get(subjectId) || [];
-
-      const missingPrerequisites = prerequisites.filter(
-        (prerequisite) =>
-          academicMap.get(prerequisite.subject_id)?.result !== "PASSED",
-      );
-
-      if (missingPrerequisites.length > 0) {
-        continue;
-      }
-
-      eligibleRegularMap.set(subjectId, subject);
+    for (const subject of termEvaluation.regular) {
+      eligibleRegularMap.set(Number(subject.subject_id), subject);
     }
 
     // =================================================
-    // 17. REBUILD VALID RETAKE LIST
+    // 15. VALID RETAKE SUBJECT MAP
     //
-    // Retake is optional.
+    // Retakes may come from any previous term in the
+    // Student's currently assigned curriculum.
     //
-    // A valid selected retake must:
+    // Shared service validates:
     //
-    // - belong to assigned curriculum
-    // - latest official final result = 4 or 5
+    // - latest Approved rating is 4.00 or 5.00
+    // - no later Approved pass exists
+    // - subject belongs to active curriculum
+    // - prerequisites are satisfied
     // =================================================
+
+    const retakeRows = await getRetakeCandidates(
+      studentId,
+      curriculumId,
+      connection,
+    );
 
     const validRetakeMap = new Map();
 
-    for (const academicRecord of academicMap.values()) {
-      if (
-        academicRecord.result !== "FAILED" &&
-        academicRecord.result !== "INCOMPLETE"
-      ) {
-        continue;
-      }
-
-      const subjectId = Number(academicRecord.subject_id);
-
-      const curriculumSubject = curriculumSubjectMap.get(subjectId);
-
-      if (!curriculumSubject) {
-        continue;
-      }
-
-      validRetakeMap.set(subjectId, {
-        ...curriculumSubject,
-
-        previous_final_grade: academicRecord.final_grade,
-
-        previous_status: academicRecord.result,
-      });
+    for (const retake of retakeRows) {
+      validRetakeMap.set(Number(retake.subject_id), retake);
     }
 
     // =================================================
-    // 18. VALIDATE EVERY DRAFT SUBJECT
+    // 16. VALIDATE EVERY DRAFT SUBJECT
     //
-    // Each subject must be either:
+    // Every active Draft subject must currently be:
     //
-    // 1. eligible regular
+    // 1. Regular eligible
+    //
     // OR
-    // 2. valid selected retake
     //
-    // It does NOT need a section yet.
+    // 2. Valid retake
+    //
+    // Anything else is rejected.
     // =================================================
 
     const invalidAcademicSubjects = [];
@@ -3234,16 +2770,50 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     for (const subject of activeSubjects) {
       const subjectId = Number(subject.subject_id);
 
+      // -----------------------------------------------
+      // REGULAR
+      // -----------------------------------------------
+
       if (eligibleRegularMap.has(subjectId)) {
         regularCount += 1;
-
         continue;
       }
 
+      // -----------------------------------------------
+      // RETAKE
+      // -----------------------------------------------
+
       if (validRetakeMap.has(subjectId)) {
         retakeCount += 1;
-
         continue;
+      }
+
+      // -----------------------------------------------
+      // INVALID / NO LONGER ELIGIBLE
+      // -----------------------------------------------
+
+      const blockedCurrentSubject = termEvaluation.blocked.find(
+        (item) => Number(item.subject_id) === subjectId,
+      );
+
+      let reason = "SUBJECT_NO_LONGER_ELIGIBLE";
+
+      if (blockedCurrentSubject) {
+        if (
+          blockedCurrentSubject.eligibility_type ===
+          ELIGIBILITY_TYPE.ALREADY_PASSED
+        ) {
+          reason = "SUBJECT_ALREADY_PASSED";
+        } else if (
+          blockedCurrentSubject.eligibility_type ===
+          ELIGIBILITY_TYPE.BLOCKED_PREREQUISITE
+        ) {
+          reason = "PREREQUISITE_NOT_PASSED";
+        } else if (
+          blockedCurrentSubject.eligibility_type === ELIGIBILITY_TYPE.UNRESOLVED
+        ) {
+          reason = "ACADEMIC_RESULT_UNRESOLVED";
+        }
       }
 
       invalidAcademicSubjects.push({
@@ -3255,12 +2825,13 @@ router.post("/:enrollment_id/submit", async (req, res) => {
 
         subject_name: subject.subject_name,
 
-        reason: "SUBJECT_NO_LONGER_ELIGIBLE",
+        reason,
       });
     }
 
     if (invalidAcademicSubjects.length > 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(400).json({
         success: false,
@@ -3272,31 +2843,36 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     }
 
     // =================================================
-    // 19. VERIFY ALL ELIGIBLE REGULAR SUBJECTS EXIST
+    // 17. VERIFY ALL ELIGIBLE REGULAR SUBJECTS EXIST
     //
-    // Regular subjects are automatic in /prepare.
+    // Regular subjects are automatic.
     //
-    // Student may choose valid retakes,
-    // but should not remove required eligible regular
-    // subjects from the Draft.
+    // Student may choose whether to take a valid retake,
+    // but must not remove eligible Regular subjects
+    // from the Draft.
     // =================================================
 
     const missingRegularSubjects = [];
 
     for (const [subjectId, subject] of eligibleRegularMap.entries()) {
-      if (!uniqueDraftSubjectIds.has(subjectId)) {
-        missingRegularSubjects.push({
-          subject_id: Number(subjectId),
-
-          subject_code: subject.subject_code,
-
-          subject_name: subject.subject_name,
-        });
+      if (uniqueDraftSubjectIds.has(subjectId)) {
+        continue;
       }
+
+      missingRegularSubjects.push({
+        subject_id: Number(subjectId),
+
+        subject_code: subject.subject_code,
+
+        subject_name: subject.subject_name,
+
+        curriculum_subject_id: Number(subject.curriculum_subject_id),
+      });
     }
 
     if (missingRegularSubjects.length > 0) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(400).json({
         success: false,
@@ -3309,7 +2885,7 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     }
 
     // =================================================
-    // 20. TOTAL UNITS
+    // 18. TOTAL UNITS
     // =================================================
 
     const totalUnits = activeSubjects.reduce(
@@ -3318,7 +2894,7 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     );
 
     // =================================================
-    // 21. IMPORTANT:
+    // 19. PLACEMENT
     //
     // DO NOT REQUIRE:
     //
@@ -3326,34 +2902,48 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     // offering_id
     // section_subject_id
     //
-    // They are intentionally allowed to remain NULL.
+    // Student preparation intentionally leaves them
+    // NULL.
     //
-    // Registrar will assign them while Pending.
+    // Registrar owns placement after submission.
     // =================================================
 
+    const unassignedSubjects = activeSubjects.filter(
+      (subject) =>
+        subject.section_id === null ||
+        subject.offering_id === null ||
+        subject.section_subject_id === null,
+    );
+
     // =================================================
-    // 22. DRAFT → PENDING
+    // 20. DRAFT → PENDING
     // =================================================
 
     const submittedRemarks = enrollment.remarks || "Submitted by Student.";
 
     const [updateResult] = await connection.execute(
       `
-        UPDATE enrollments
+          UPDATE enrollments
 
-        SET
-            enrollment_status = 'Pending',
-            remarks = ?
+          SET
+              enrollment_status =
+                  'Pending',
 
-        WHERE enrollment_id = ?
-          AND student_id = ?
-          AND enrollment_status = 'Draft'
+              remarks = ?
+
+          WHERE enrollment_id = ?
+
+            AND student_id = ?
+
+            AND enrollment_status =
+                'Draft'
         `,
       [submittedRemarks, enrollmentId, studentId],
     );
 
     if (updateResult.affectedRows !== 1) {
       await connection.rollback();
+      transactionActive = false;
 
       return res.status(409).json({
         success: false,
@@ -3364,13 +2954,15 @@ router.post("/:enrollment_id/submit", async (req, res) => {
     }
 
     // =================================================
-    // 23. COMMIT
+    // 21. COMMIT
     // =================================================
 
     await connection.commit();
 
+    transactionActive = false;
+
     // =================================================
-    // 24. RESPONSE
+    // 22. RESPONSE
     // =================================================
 
     return res.status(200).json({
@@ -3391,6 +2983,17 @@ router.post("/:enrollment_id/submit", async (req, res) => {
         ]
           .filter(Boolean)
           .join(" "),
+      },
+
+      curriculum: {
+        curriculum_id: curriculumId,
+
+        curriculum_name: curriculum.curriculum_name,
+
+        effective_year:
+          curriculum.effective_year !== null
+            ? Number(curriculum.effective_year)
+            : null,
       },
 
       enrollment: {
@@ -3429,18 +3032,13 @@ router.post("/:enrollment_id/submit", async (req, res) => {
         message:
           "Registrar must now review the enrollment and assign valid sections and subject offerings.",
 
-        unassigned_subjects: activeSubjects.filter(
-          (subject) =>
-            subject.section_id === null ||
-            subject.offering_id === null ||
-            subject.section_subject_id === null,
-        ).length,
+        unassigned_subjects: unassignedSubjects.length,
       },
 
       next_action: "Registrar reviews this Pending enrollment.",
     });
   } catch (error) {
-    if (connection) {
+    if (connection && transactionActive) {
       try {
         await connection.rollback();
       } catch (rollbackError) {
