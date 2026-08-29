@@ -1,5 +1,11 @@
 export const studentNavGroups = [
   {
+    id: "enrollment",
+    label: "Enrollment Management ",
+    icon: "",
+    children: [{ label: "Enrollment ", path: "/student/enrollment/main" }],
+  },
+  {
     id: "academic",
     label: "Academic Records",
     icon: "",
@@ -9,28 +15,7 @@ export const studentNavGroups = [
       { label: "Academic History", path: "/student/course-history" },
     ],
   },
-  {
-    id: "enrollment",
-    label: "Enrollment System",
-    icon: "",
-    children: [
-      { label: "Available Courses", path: "/student/enrollment/courses" },
-      { label: "Add / Drop Subjects", path: "/student/enrollment/add-drop" },
-      { label: "Submit Enrollment", path: "/student/enrollment/submit" },
-      { label: "Enrollment", path: "/student/enrollment/main" },
-    ],
-  },
-  {
-    id: "financial",
-    label: "Financial",
-    icon: "",
-    children: [
-      { label: "Tuition Fees", path: "/student/financial/tuition" },
-      { label: "Payment History", path: "/student/financial/history" },
-      { label: "Balance Inquiry", path: "/student/financial/balance" },
-      { label: "Online Payment", path: "/student/financial/pay" },
-    ],
-  },
+
   {
     id: "document",
     label: "Document",
@@ -49,6 +34,6 @@ export const studentNavGroups = [
 ];
 export const studentSoloLinks = [
   { label: "Dashboard", path: "/student/dashboard", icon: "" },
-  { label: "Profile", path: "/student/profile", icon: "" },
   { label: "Announcement", path: "/student/announcement", icon: "" },
+  { label: "Profile", path: "/student/profile", icon: "" },
 ];
